@@ -1,0 +1,1 @@
+"""Root configuration for pytest."""
