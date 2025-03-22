@@ -1,20 +1,62 @@
 """The main entry point for fmu-settings-api."""
 
+import asyncio
+
 import uvicorn
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="FMU Settings API")
+from .config import settings
+from .v1.main import api_v1_router
 
 
-@app.get("/health")
+def custom_generate_unique_id(route: APIRoute) -> str:
+    """Generates a unique id per route."""
+    return f"{route.tags[0]}-{route.name}"
+
+
+app = FastAPI(
+    title="FMU Settings API",
+    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
+    generate_unique_id_function=custom_generate_unique_id,
+)
+app.include_router(api_v1_router)
+
+
+@app.get("/health", tags=["app"])
 async def health_check() -> dict[str, str]:
     """Simple health check endpoint."""
     return {"status": "ok"}
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8001) -> None:
+def run_server(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8001,
+    frontend_host: str | None = None,
+    frontend_port: int | None = None,
+    token: str | None = None,
+) -> None:
     """Starts the API server."""
-    uvicorn.run(app, host=host, port=port)
+    if token:
+        settings.TOKEN = token
+    if frontend_host is not None and frontend_port is not None:
+        settings.update_frontend_host(host=frontend_host, port=frontend_port)
+
+    if settings.all_cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.all_cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+    server_config = uvicorn.Config(app=app, host=host, port=port)
+    server = uvicorn.Server(server_config)
+
+    asyncio.run(server.serve())
 
 
 if __name__ == "__main__":

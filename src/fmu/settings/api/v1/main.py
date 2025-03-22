@@ -1,0 +1,18 @@
+"""The main router for /api/v1."""
+
+from fastapi import APIRouter, Depends
+
+from fmu.settings.api.config import settings
+from fmu.settings.api.deps import verify_auth_token
+
+api_v1_router = APIRouter(
+    prefix=settings.API_V1_PREFIX,
+    tags=["v1"],
+    dependencies=[Depends(verify_auth_token)],
+)
+
+
+@api_v1_router.get("/health")
+async def v1_health_check() -> dict[str, str]:
+    """Simple health check endpoint."""
+    return {"status": "ok"}
