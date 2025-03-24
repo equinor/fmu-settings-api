@@ -15,7 +15,7 @@ on:
     - cron: "0 0 * * *"
 
 jobs:
-  check-rmsenv:
+  check-fmu-settings-api:
     runs-on: ubuntu-latest
     strategy:
       matrix:
