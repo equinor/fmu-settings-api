@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends
 
-from fmu.settings.api.config import settings
-from fmu.settings.api.deps import verify_auth_token
+from fmu_settings_api.config import settings
+from fmu_settings_api.deps import verify_auth_token
 
 api_v1_router = APIRouter(
     prefix=settings.API_V1_PREFIX,
