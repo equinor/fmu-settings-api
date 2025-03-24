@@ -3,7 +3,7 @@
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from fmu.settings.api.__main__ import app
+from fmu_settings_api.__main__ import app
 
 client = TestClient(app)
 

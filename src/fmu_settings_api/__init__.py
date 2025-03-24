@@ -1,4 +1,4 @@
-"""The fmu.settings.api package."""
+"""The fmu_settings_api package."""
 
 try:
     from ._version import __version__, version

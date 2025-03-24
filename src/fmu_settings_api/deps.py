@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 
-from fmu.settings.api.config import settings
+from fmu_settings_api.config import settings
 
 api_token_header = APIKeyHeader(name=settings.TOKEN_HEADER_NAME)
 

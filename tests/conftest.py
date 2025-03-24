@@ -6,7 +6,7 @@ import pytest
 @pytest.fixture
 def mock_token() -> str:
     """Sets a token."""
-    from fmu.settings.api.config import settings
+    from fmu_settings_api.config import settings
 
     token = "safe" * 16
     settings.TOKEN = token

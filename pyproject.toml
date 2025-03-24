@@ -6,7 +6,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/fmu/settings/api/_version.py"
+write_to = "src/fmu_settings_api/_version.py"
 
 [project]
 name = "fmu-settings-api"
