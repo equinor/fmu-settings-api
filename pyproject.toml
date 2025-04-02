@@ -117,6 +117,7 @@ select = [
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
+known-third-party = ["fmu.settings"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
