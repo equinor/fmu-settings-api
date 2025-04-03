@@ -45,6 +45,13 @@ jobs:
         if: ${{ always() }}
         run: ruff check --verbose
 
+      - name: Ruff check fix
+        if: ${{ always() }}        
+        run: |
+          ruff check --fix
+          git diff
+          exit 1
+
       - name: Ruff format
         if: ${{ always() }}
         run: ruff format --check
