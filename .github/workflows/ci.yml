@@ -43,7 +43,7 @@ jobs:
 
       - name: Ruff check
         if: ${{ always() }}
-        run: ruff check
+        run: ruff check --verbose
 
       - name: Ruff format
         if: ${{ always() }}
