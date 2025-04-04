@@ -1,0 +1,80 @@
+"""Routes to initialize a .fmu session."""
+
+from fastapi import APIRouter, HTTPException, Response
+from fmu.settings import get_fmu_directory
+from fmu.settings._init import init_fmu_directory
+from fmu.settings.resources.config import Config
+
+from fmu_settings_api.config import settings
+from fmu_settings_api.models.fmu import FMUDirPath
+from fmu_settings_api.session import create_fmu_session
+
+router = APIRouter(prefix="/fmu", tags=["fmu"])
+
+
+@router.post("/", response_model=Config)
+async def get_fmu_directory_session(
+    response: Response, fmu_dir_path: FMUDirPath
+) -> Config:
+    """Returns the configuration for the .fmu directory at 'path'."""
+    path = fmu_dir_path.path
+    try:
+        fmu_dir = get_fmu_directory(path)
+        session_id = await create_fmu_session(fmu_dir)
+        response.set_cookie(
+            key=settings.SESSION_COOKIE_KEY,
+            value=session_id,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
+        return fmu_dir.config.load()
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied accessing .fmu at {path}",
+        ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404, detail=f"No .fmu directory found at {path}"
+        ) from e
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409, detail=f".fmu exists at {path} but is not a directory"
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/init", response_model=Config)
+async def init_fmu_directory_session(
+    response: Response, fmu_dir_path: FMUDirPath
+) -> Config:
+    """Initializes .fmu at 'path' and returns its configuration."""
+    path = fmu_dir_path.path
+    try:
+        fmu_dir = init_fmu_directory(path)
+        session_id = await create_fmu_session(fmu_dir)
+        response.set_cookie(
+            key=settings.SESSION_COOKIE_KEY,
+            value=session_id,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
+        return fmu_dir.config.load()
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied creating .fmu at {path}",
+        ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404, detail=f"Path {path} does not exist"
+        ) from e
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409, detail=f".fmu already exists at {path}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
