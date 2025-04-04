@@ -27,6 +27,8 @@ class APISettings(BaseModel):
 
     API_V1_PREFIX: str = Field(default="/api/v1", frozen=True)
     TOKEN_HEADER_NAME: str = Field(default="x-fmu-settings-api", frozen=True)
+    SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
+    SESSION_EXPIRE_SECONDS: int = Field(default=3600, frozen=True)
     DOMAIN: str = "localhost"
     TOKEN: str = Field(
         default_factory=generate_auth_token, pattern=r"^[a-fA-F0-9]{64}$"
