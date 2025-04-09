@@ -15,7 +15,7 @@ on:
     - cron: "0 0 * * *"
 
 jobs:
-  check-fmu-settings-api:
+  check:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,7 +36,7 @@ jobs:
         if: ${{ always() }}
         run: |
           pip install -U pip
-          pip install -e ../fmu-settings-api[dev]
+          pip install -e ".[dev]"
 
       - name: List all installed packages
         run: pip freeze
