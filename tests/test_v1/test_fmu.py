@@ -8,6 +8,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.settings._init import init_fmu_directory
 from fmu.settings.resources.config import Config
+from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
@@ -30,6 +31,94 @@ def test_get_fmu_invalid_token() -> None:
     response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authorized"}
+
+
+def test_get_cwd_fmu_directory_no_permissions(
+    mock_token: str, fmu_dir_no_permissions: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 403 returns when lacking permissions somewhere in the path tree."""
+    ert_model_path = fmu_dir_no_permissions / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+    response = client.get(
+        ROUTE,
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {"detail": "Permission denied locating .fmu"}
+
+
+def test_get_cwd_fmu_directory_does_not_exist(
+    mock_token: str, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 404 returns when .fmu or directory does not exist from the cwd."""
+    ert_model_path = tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+    response = client.get(
+        ROUTE,
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"No .fmu directory found from {ert_model_path}"
+    }
+
+
+def test_get_cwd_fmu_directory_is_not_directory(
+    mock_token: str, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 404 returns when .fmu exists but is not a directory.
+
+    Although a .fmu file exists, because a .fmu _directory_ is not, it is
+    treated as a 404.
+    """
+    path = tmp_path / ".fmu"
+    path.touch()
+    ert_model_path = tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    response = client.get(
+        ROUTE,
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"No .fmu directory found from {ert_model_path}"
+    }
+
+
+def test_get_cwd_fmu_directory_raises_other_exceptions(mock_token: str) -> None:
+    """Test 500 returns if other exceptions are raised."""
+    with patch(
+        "fmu_settings_api.v1.routes.fmu.find_nearest_fmu_directory",
+        side_effect=Exception("foo"),
+    ):
+        response = client.get(
+            ROUTE,
+            headers={settings.TOKEN_HEADER_NAME: mock_token},
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "foo"}
+
+
+def test_get_cwd_fmu_directory_exists(
+    mock_token: str, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 200 and config returns when .fmu exists."""
+    fmu_dir = init_fmu_directory(tmp_path)
+    ert_model_path = tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    response = client.get(
+        ROUTE,
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    config = Config.model_validate(response.json())
+    assert fmu_dir.config.load() == config
 
 
 def test_get_fmu_directory_no_permissions(
