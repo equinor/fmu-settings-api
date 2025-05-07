@@ -38,10 +38,11 @@ def fmu_dir_path(fmu_dir: FMUDirectory) -> Path:
 
 
 @pytest.fixture
-def fmu_dir_no_permissions(fmu_dir_path: Path) -> Path:
+def fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path, None, None]:
     """Mocks a .fmu in a tmp_path without permissions."""
     (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR)
-    return fmu_dir_path
+    yield fmu_dir_path
+    (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
 @pytest.fixture

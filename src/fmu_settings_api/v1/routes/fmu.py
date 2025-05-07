@@ -1,7 +1,9 @@
 """Routes to initialize a .fmu session."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Response
-from fmu.settings import get_fmu_directory
+from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
 from fmu.settings._init import init_fmu_directory
 from fmu.settings.resources.config import Config
 
@@ -10,6 +12,37 @@ from fmu_settings_api.models.fmu import FMUDirPath
 from fmu_settings_api.session import create_fmu_session
 
 router = APIRouter(prefix="/fmu", tags=["fmu"])
+
+
+@router.get("/", response_model=Config)
+async def get_cwd_fmu_directory_session(response: Response) -> Config:
+    """Returns the configuration for the nearest .fmu directory.
+
+    This directory is searched for above the current working directory.
+    """
+    try:
+        path = Path.cwd()
+        fmu_dir = find_nearest_fmu_directory(path)
+        session_id = await create_fmu_session(fmu_dir)
+        response.set_cookie(
+            key=settings.SESSION_COOKIE_KEY,
+            value=session_id,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
+        return fmu_dir.config.load()
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied locating .fmu",
+        ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404, detail=f"No .fmu directory found from {path}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/", response_model=Config)
