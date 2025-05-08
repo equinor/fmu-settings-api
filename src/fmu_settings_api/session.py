@@ -14,6 +14,7 @@ from fmu_settings_api.config import settings
 class Session:
     """Represents session information when working on an FMU Directory."""
 
+    id: str
     fmu_directory: FMUDirectory
     created_at: datetime
     expires_at: datetime
@@ -52,7 +53,9 @@ class SessionManager:
 
     async def destroy_session(self: Self, session_id: str) -> None:
         """Destroys a session by its session id."""
-        del self.storage[session_id]
+        session = await self._retrieve_session(session_id)
+        if session is not None:
+            del self.storage[session_id]
 
     async def create_session(
         self: Self,
@@ -65,6 +68,7 @@ class SessionManager:
         expiration_duration = timedelta(seconds=expire_seconds)
 
         session = Session(
+            id=session_id,
             fmu_directory=fmu_directory,
             created_at=now,
             expires_at=now + expiration_duration,
