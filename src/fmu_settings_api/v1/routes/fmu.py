@@ -8,8 +8,9 @@ from fmu.settings._init import init_fmu_directory
 from fmu.settings.resources.config import Config
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.models.fmu import FMUDirPath
-from fmu_settings_api.session import create_fmu_session
+from fmu_settings_api.deps import SessionDep
+from fmu_settings_api.models import FMUDirPath, Message
+from fmu_settings_api.session import create_fmu_session, destroy_fmu_session
 
 router = APIRouter(prefix="/fmu", tags=["fmu"])
 
@@ -58,7 +59,7 @@ async def get_fmu_directory_session(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,
             httponly=True,
-            secure=True,
+            secure=False,
             samesite="lax",
         )
         return fmu_dir.config.load()
@@ -79,6 +80,21 @@ async def get_fmu_directory_session(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.delete("/", response_model=Message)
+async def delete_fmu_directory_session(
+    session: SessionDep, response: Response
+) -> Message:
+    """Deletes a .fmu session if it exists."""
+    try:
+        await destroy_fmu_session(session.id)
+        response.delete_cookie(key=session.id)
+        return Message(
+            message=f"FMU directory {session.fmu_directory.path} closed successfully"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.post("/init", response_model=Config)
 async def init_fmu_directory_session(
     response: Response, fmu_dir_path: FMUDirPath
@@ -92,7 +108,7 @@ async def init_fmu_directory_session(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,
             httponly=True,
-            secure=True,
+            secure=False,
             samesite="lax",
         )
         return fmu_dir.config.load()
