@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
-from fmu.settings import FMUDirectory
+from fmu.settings import ProjectFMUDirectory
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.session import (
@@ -21,7 +21,7 @@ def test_session_manager_init() -> None:
 
 
 async def test_create_session(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests creating a new session."""
     session_id = await session_manager.create_session(fmu_dir)
@@ -31,7 +31,7 @@ async def test_create_session(
 
 
 async def test_create_session_wrapper(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests creating a new session with the wrapper."""
     with patch("fmu_settings_api.session.session_manager", session_manager):
@@ -42,7 +42,7 @@ async def test_create_session_wrapper(
 
 
 async def test_get_non_existing_session(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests getting an existing session."""
     await session_manager.create_session(fmu_dir)
@@ -51,7 +51,7 @@ async def test_get_non_existing_session(
 
 
 async def test_get_existing_session(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests getting an existing session."""
     session_id = await session_manager.create_session(fmu_dir)
@@ -61,7 +61,7 @@ async def test_get_existing_session(
 
 
 async def test_get_existing_session_expiration(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests getting an existing session expires."""
     session_id = await session_manager.create_session(fmu_dir)
@@ -78,7 +78,7 @@ async def test_get_existing_session_expiration(
 
 
 async def test_get_existing_session_updates_last_accessed(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests getting an existing session updates its last accessed."""
     session_id = await session_manager.create_session(fmu_dir)
@@ -89,7 +89,7 @@ async def test_get_existing_session_updates_last_accessed(
 
 
 async def test_destroy_fmu_session(
-    session_manager: SessionManager, fmu_dir: FMUDirectory
+    session_manager: SessionManager, fmu_dir: ProjectFMUDirectory
 ) -> None:
     """Tests destroying a session."""
     session_id = await session_manager.create_session(fmu_dir)

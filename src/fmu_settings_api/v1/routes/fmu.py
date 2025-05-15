@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
 from fmu.settings._init import init_fmu_directory
-from fmu.settings.resources.config import Config
+from fmu.settings.models.project_config import ProjectConfig
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import SessionDep
@@ -15,8 +15,8 @@ from fmu_settings_api.session import create_fmu_session, destroy_fmu_session
 router = APIRouter(prefix="/fmu", tags=["fmu"])
 
 
-@router.get("/", response_model=Config)
-async def get_cwd_fmu_directory_session(response: Response) -> Config:
+@router.get("/", response_model=ProjectConfig)
+async def get_cwd_fmu_directory_session(response: Response) -> ProjectConfig:
     """Returns the configuration for the nearest .fmu directory.
 
     This directory is searched for above the current working directory.
@@ -46,10 +46,10 @@ async def get_cwd_fmu_directory_session(response: Response) -> Config:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/", response_model=Config)
+@router.post("/", response_model=ProjectConfig)
 async def get_fmu_directory_session(
     response: Response, fmu_dir_path: FMUDirPath
-) -> Config:
+) -> ProjectConfig:
     """Returns the configuration for the .fmu directory at 'path'."""
     path = fmu_dir_path.path
     try:
@@ -95,10 +95,10 @@ async def delete_fmu_directory_session(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/init", response_model=Config)
+@router.post("/init", response_model=ProjectConfig)
 async def init_fmu_directory_session(
     response: Response, fmu_dir_path: FMUDirPath
-) -> Config:
+) -> ProjectConfig:
     """Initializes .fmu at 'path' and returns its configuration."""
     path = fmu_dir_path.path
     try:

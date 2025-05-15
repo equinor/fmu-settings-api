@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.settings.resources.config import Config, ConfigManager
+from fmu.settings.models.project_config import ProjectConfig
+from fmu.settings.resources.config_managers import ProjectConfigManager
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
@@ -47,7 +48,7 @@ async def test_get_config_with_session(
         headers={settings.TOKEN_HEADER_NAME: mock_token},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert Config.model_validate(response.json())
+    assert ProjectConfig.model_validate(response.json())
 
 
 async def test_get_config_with_session_without_permissions(
@@ -101,7 +102,7 @@ async def test_get_config_with_session_unknown_error(
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
     with patch.object(
-        ConfigManager,
+        ProjectConfigManager,
         "load",
         side_effect=Exception("foo"),
     ):
