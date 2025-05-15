@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from fmu.settings import ProjectFMUDirectory
-from fmu.settings._init import init_fmu_directory
+from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
@@ -38,11 +38,43 @@ def fmu_dir_path(fmu_dir: ProjectFMUDirectory) -> Path:
 
 
 @pytest.fixture
-def fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path, None, None]:
+def fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
     """Mocks a .fmu in a tmp_path without permissions."""
     (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR)
-    yield fmu_dir_path
+
+    mocked_user_home = fmu_dir_path / "home"
+    mocked_user_home.mkdir()
+    with patch("pathlib.Path.home", return_value=mocked_user_home):
+        yield fmu_dir_path
+
     (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+
+@pytest.fixture
+def user_fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
+    """Mocks a user .fmu tmp_path without permissions."""
+    mocked_user_home = fmu_dir_path / "home"
+    mocked_user_home.mkdir()
+    with patch("pathlib.Path.home", return_value=mocked_user_home):
+        user_fmu_dir = init_user_fmu_directory()
+        user_fmu_dir.base_path.chmod(stat.S_IRUSR)
+        yield fmu_dir_path
+    user_fmu_dir.base_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+
+@pytest.fixture
+def tmp_path_mocked_home(tmp_path: Path) -> Generator[Path]:
+    """Mocks Path.home() for routes that depend on UserFMUDirectory.
+
+    This mocks the user .fmu into tmp_path/home/.fmu.
+
+    Returns:
+        The base tmp_path.
+    """
+    mocked_user_home = tmp_path / "home"
+    mocked_user_home.mkdir()
+    with patch("pathlib.Path.home", return_value=mocked_user_home):
+        yield tmp_path
 
 
 @pytest.fixture
