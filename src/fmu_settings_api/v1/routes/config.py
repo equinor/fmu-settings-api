@@ -1,15 +1,15 @@
 """Routes to operate on the .fmu config file."""
 
 from fastapi import APIRouter, HTTPException
-from fmu.settings.resources.config import Config
+from fmu.settings.models.project_config import ProjectConfig
 
 from fmu_settings_api.deps import SessionDep
 
 router = APIRouter(prefix="/config", tags=["config"])
 
 
-@router.get("/", response_model=Config)
-async def get_fmu_directory_config(session: SessionDep) -> Config:
+@router.get("/", response_model=ProjectConfig)
+async def get_fmu_directory_config(session: SessionDep) -> ProjectConfig:
     """Returns the configuration for the currently open FMU Directory session."""
     try:
         config = session.fmu_directory.config

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from fmu.settings import FMUDirectory
+from fmu.settings import ProjectFMUDirectory
 from fmu.settings._init import init_fmu_directory
 
 from fmu_settings_api.__main__ import app
@@ -26,13 +26,13 @@ def mock_token() -> str:
 
 
 @pytest.fixture
-def fmu_dir(tmp_path: Path) -> FMUDirectory:
+def fmu_dir(tmp_path: Path) -> ProjectFMUDirectory:
     """Creates a .fmu directory in a tmp path."""
     return init_fmu_directory(tmp_path)
 
 
 @pytest.fixture
-def fmu_dir_path(fmu_dir: FMUDirectory) -> Path:
+def fmu_dir_path(fmu_dir: ProjectFMUDirectory) -> Path:
     """Returns the tmp path of a .fmu directory."""
     return fmu_dir.base_path
 

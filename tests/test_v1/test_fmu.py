@@ -7,7 +7,7 @@ from unittest.mock import patch
 from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.settings._init import init_fmu_directory
-from fmu.settings.resources.config import Config
+from fmu.settings.models.project_config import ProjectConfig
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -120,7 +120,7 @@ def test_get_cwd_fmu_directory_exists(
         headers={settings.TOKEN_HEADER_NAME: mock_token},
     )
     assert response.status_code == status.HTTP_200_OK
-    config = Config.model_validate(response.json())
+    config = ProjectConfig.model_validate(response.json())
     assert fmu_dir.config.load() == config
 
 
@@ -223,7 +223,7 @@ def test_post_fmu_directory_exists(mock_token: str, tmp_path: Path) -> None:
         json={"path": str(tmp_path)},
     )
     assert response.status_code == status.HTTP_200_OK
-    config = Config.model_validate(response.json())
+    config = ProjectConfig.model_validate(response.json())
     assert fmu_dir.config.load() == config
 
 
@@ -379,7 +379,7 @@ def test_post_init_and_get_fmu_directory_succeeds(
         json={"path": str(tmp_path)},
     )
     assert init_response.status_code == status.HTTP_200_OK
-    init_config = Config.model_validate(init_response.json())
+    init_config = ProjectConfig.model_validate(init_response.json())
     assert (tmp_path / ".fmu").exists()
     assert (tmp_path / ".fmu").is_dir()
     assert (tmp_path / ".fmu/config.json").exists()
@@ -390,7 +390,7 @@ def test_post_init_and_get_fmu_directory_succeeds(
         json={"path": str(tmp_path)},
     )
     assert get_response.status_code == status.HTTP_200_OK
-    get_config = Config.model_validate(get_response.json())
+    get_config = ProjectConfig.model_validate(get_response.json())
     assert init_config == get_config
 
 

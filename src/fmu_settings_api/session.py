@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Self
 from uuid import uuid4
 
-from fmu.settings import FMUDirectory
+from fmu.settings import ProjectFMUDirectory
 
 from fmu_settings_api.config import settings
 
@@ -15,7 +15,7 @@ class Session:
     """Represents session information when working on an FMU Directory."""
 
     id: str
-    fmu_directory: FMUDirectory
+    fmu_directory: ProjectFMUDirectory
     created_at: datetime
     expires_at: datetime
     last_accessed: datetime
@@ -59,7 +59,7 @@ class SessionManager:
 
     async def create_session(
         self: Self,
-        fmu_directory: FMUDirectory,
+        fmu_directory: ProjectFMUDirectory,
         expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
     ) -> str:
         """Creates a new session and stores it to the storage backend."""
@@ -98,7 +98,7 @@ session_manager = SessionManager()
 
 
 async def create_fmu_session(
-    fmu_directory: FMUDirectory,
+    fmu_directory: ProjectFMUDirectory,
     expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
 ) -> str:
     """Creates a new session and stores it in the session mananger."""
