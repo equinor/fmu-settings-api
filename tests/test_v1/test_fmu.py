@@ -7,11 +7,11 @@ from unittest.mock import patch
 from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.settings._init import init_fmu_directory
-from fmu.settings.models.project_config import ProjectConfig
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
+from fmu_settings_api.models.fmu import FMUProject
 
 client = TestClient(app)
 
@@ -120,8 +120,10 @@ def test_get_cwd_fmu_directory_exists(
         headers={settings.TOKEN_HEADER_NAME: mock_token},
     )
     assert response.status_code == status.HTTP_200_OK
-    config = ProjectConfig.model_validate(response.json())
-    assert fmu_dir.config.load() == config
+    fmu_project = FMUProject.model_validate(response.json())
+    assert fmu_project.path == tmp_path
+    assert fmu_project.project_dir_name == tmp_path.name
+    assert fmu_dir.config.load() == fmu_project.config
 
 
 async def test_get_fmu_directory_sets_session_cookie(
@@ -223,8 +225,10 @@ def test_post_fmu_directory_exists(mock_token: str, tmp_path: Path) -> None:
         json={"path": str(tmp_path)},
     )
     assert response.status_code == status.HTTP_200_OK
-    config = ProjectConfig.model_validate(response.json())
-    assert fmu_dir.config.load() == config
+    fmu_project = FMUProject.model_validate(response.json())
+    assert fmu_project.path == tmp_path
+    assert fmu_project.project_dir_name == tmp_path.name
+    assert fmu_dir.config.load() == fmu_project.config
 
 
 async def test_post_fmu_directory_sets_session_cookie(
@@ -379,7 +383,9 @@ def test_post_init_and_get_fmu_directory_succeeds(
         json={"path": str(tmp_path)},
     )
     assert init_response.status_code == status.HTTP_200_OK
-    init_config = ProjectConfig.model_validate(init_response.json())
+    init_fmu_project = FMUProject.model_validate(init_response.json())
+    assert init_fmu_project.path == tmp_path
+    assert init_fmu_project.project_dir_name == tmp_path.name
     assert (tmp_path / ".fmu").exists()
     assert (tmp_path / ".fmu").is_dir()
     assert (tmp_path / ".fmu/config.json").exists()
@@ -390,8 +396,8 @@ def test_post_init_and_get_fmu_directory_succeeds(
         json={"path": str(tmp_path)},
     )
     assert get_response.status_code == status.HTTP_200_OK
-    get_config = ProjectConfig.model_validate(get_response.json())
-    assert init_config == get_config
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert init_fmu_project == get_fmu_project
 
 
 async def test_post_init_succeeds_and_sets_session_cookie(
