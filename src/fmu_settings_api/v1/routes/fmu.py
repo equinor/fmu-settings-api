@@ -7,7 +7,7 @@ from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
 from fmu.settings._init import init_fmu_directory
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.deps import SessionDep
+from fmu_settings_api.deps import SessionDep, UserFMUDirDep
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.session import create_fmu_session, destroy_fmu_session
 
@@ -15,7 +15,9 @@ router = APIRouter(prefix="/fmu", tags=["fmu"])
 
 
 @router.get("/", response_model=FMUProject)
-async def get_cwd_fmu_directory_session(response: Response) -> FMUProject:
+async def get_cwd_fmu_directory_session(
+    response: Response, user_fmu_dir: UserFMUDirDep
+) -> FMUProject:
     """Returns the paths and configuration for the nearest .fmu directory.
 
     This directory is searched for above the current working directory.
@@ -51,7 +53,7 @@ async def get_cwd_fmu_directory_session(response: Response) -> FMUProject:
 
 @router.post("/", response_model=FMUProject)
 async def get_fmu_directory_session(
-    response: Response, fmu_dir_path: FMUDirPath
+    response: Response, fmu_dir_path: FMUDirPath, user_fmu_dir: UserFMUDirDep
 ) -> FMUProject:
     """Returns the paths and configuration for the .fmu directory at 'path'."""
     path = fmu_dir_path.path
@@ -104,7 +106,9 @@ async def delete_fmu_directory_session(
 
 @router.post("/init", response_model=FMUProject)
 async def init_fmu_directory_session(
-    response: Response, fmu_dir_path: FMUDirPath
+    response: Response,
+    fmu_dir_path: FMUDirPath,
+    user_fmu_dir: UserFMUDirDep,
 ) -> FMUProject:
     """Initializes .fmu at 'path' and returns its paths and configuration."""
     path = fmu_dir_path.path

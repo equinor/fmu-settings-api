@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
+from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings._init import init_user_fmu_directory
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.session import Session, session_manager
@@ -18,6 +20,48 @@ async def verify_auth_token(req_token: TokenHeaderDep) -> TokenHeaderDep:
     if req_token != settings.TOKEN:
         raise HTTPException(status_code=401, detail="Not authorized")
     return req_token
+
+
+async def ensure_user_fmu_directory() -> UserFMUDirectory:
+    """Ensures the user's FMU Directory exists.
+
+    Returns:
+        The user's UserFMUDirectory
+    """
+    try:
+        return UserFMUDirectory()
+    except FileNotFoundError:
+        try:
+            return init_user_fmu_directory()
+        except PermissionError as e:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied creating user .fmu",
+            ) from e
+        except FileExistsError as e:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "User .fmu already exists but is invalid (i.e. is not a directory)"
+                ),
+            ) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied creating user .fmu",
+        ) from e
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409,
+            detail="User .fmu already exists but is invalid (i.e. is not a directory)",
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+UserFMUDirDep = Annotated[UserFMUDirectory, Depends(ensure_user_fmu_directory)]
 
 
 async def get_fmu_session(fmu_settings_session: str | None = Cookie(None)) -> Session:
