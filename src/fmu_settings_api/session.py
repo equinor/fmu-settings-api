@@ -6,6 +6,7 @@ from typing import Self
 from uuid import uuid4
 
 from fmu.settings import ProjectFMUDirectory
+from fmu.settings._fmu_dir import UserFMUDirectory
 
 from fmu_settings_api.config import settings
 
@@ -16,6 +17,7 @@ class Session:
 
     id: str
     fmu_directory: ProjectFMUDirectory
+    user_fmu_directory: UserFMUDirectory
     created_at: datetime
     expires_at: datetime
     last_accessed: datetime
@@ -60,6 +62,7 @@ class SessionManager:
     async def create_session(
         self: Self,
         fmu_directory: ProjectFMUDirectory,
+        user_fmu_directory: UserFMUDirectory,
         expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
     ) -> str:
         """Creates a new session and stores it to the storage backend."""
@@ -70,6 +73,7 @@ class SessionManager:
         session = Session(
             id=session_id,
             fmu_directory=fmu_directory,
+            user_fmu_directory=user_fmu_directory,
             created_at=now,
             expires_at=now + expiration_duration,
             last_accessed=now,
@@ -99,10 +103,13 @@ session_manager = SessionManager()
 
 async def create_fmu_session(
     fmu_directory: ProjectFMUDirectory,
+    user_fmu_directory: UserFMUDirectory,
     expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
 ) -> str:
     """Creates a new session and stores it in the session mananger."""
-    return await session_manager.create_session(fmu_directory, expire_seconds)
+    return await session_manager.create_session(
+        fmu_directory, user_fmu_directory, expire_seconds
+    )
 
 
 async def destroy_fmu_session(session_id: str) -> None:

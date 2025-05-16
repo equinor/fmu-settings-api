@@ -25,7 +25,7 @@ async def get_cwd_fmu_directory_session(
     try:
         path = Path.cwd()
         fmu_dir = find_nearest_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir)
+        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
         response.set_cookie(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,
@@ -59,7 +59,7 @@ async def get_fmu_directory_session(
     path = fmu_dir_path.path
     try:
         fmu_dir = get_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir)
+        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
         response.set_cookie(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,
@@ -114,7 +114,7 @@ async def init_fmu_directory_session(
     path = fmu_dir_path.path
     try:
         fmu_dir = init_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir)
+        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
         response.set_cookie(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,

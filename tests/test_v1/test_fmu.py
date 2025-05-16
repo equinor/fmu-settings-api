@@ -444,6 +444,7 @@ async def test_post_fmu_directory_sets_session_cookie(
     session = await session_manager.get_session(session_id)
     assert session is not None
     assert session.fmu_directory.path == fmu_dir.path
+    assert session.user_fmu_directory.path == UserFMUDirectory().path
 
 
 # DELETE fmu/ #
@@ -468,6 +469,7 @@ async def test_delete_fmu_directory_deletes_session_cookie(
     session = await session_manager.get_session(session_id)
     assert session is not None
     assert session.fmu_directory.path == fmu_dir.path
+    assert session.user_fmu_directory.path == UserFMUDirectory().path
 
     # Actual test below
 
@@ -485,22 +487,6 @@ async def test_delete_fmu_directory_deletes_session_cookie(
 
     session = await session_manager.get_session(session_id)
     assert session is None
-
-
-def test_delete_fmu_directory_does_not_create_user_fmu(
-    tmp_path_mocked_home: Path, mock_token: str, client_with_session: TestClient
-) -> None:
-    """Tests deleting a .fmu session does not create a user .fmu directory.
-
-    It does not really matter if it does, but it is unexpected behavior if it does.
-    """
-    assert not (tmp_path_mocked_home / "home/.fmu").exists()
-    response = client_with_session.delete(
-        ROUTE,
-        headers={settings.TOKEN_HEADER_NAME: mock_token},
-    )
-    assert response.status_code == status.HTTP_200_OK
-    assert not (tmp_path_mocked_home / "home/.fmu").exists()
 
 
 # POST fmu/init #
@@ -706,3 +692,4 @@ async def test_post_init_succeeds_and_sets_session_cookie(
     session = await session_manager.get_session(session_id)
     assert session is not None
     assert session.fmu_directory.path == tmp_path_mocked_home / ".fmu"
+    assert session.user_fmu_directory.path == UserFMUDirectory().path

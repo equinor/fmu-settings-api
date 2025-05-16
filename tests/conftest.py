@@ -86,10 +86,13 @@ def session_manager() -> Generator[SessionManager]:
 
 
 @pytest.fixture
-async def session_id(tmp_path: Path, session_manager: SessionManager) -> str:
+async def session_id(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> str:
     """Mocks a valid opened .fmu session."""
-    fmu_dir = init_fmu_directory(tmp_path)
-    return await session_manager.create_session(fmu_dir)
+    fmu_dir = init_fmu_directory(tmp_path_mocked_home)
+    user_fmu_dir = init_user_fmu_directory()
+    return await session_manager.create_session(fmu_dir, user_fmu_dir)
 
 
 @pytest.fixture
