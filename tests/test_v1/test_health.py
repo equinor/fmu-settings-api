@@ -11,23 +11,53 @@ client = TestClient(app)
 ROUTE = "/api/v1/health"
 
 
-def test_health_check_unauthorized() -> None:
-    """Test the health check endpoint with missing token."""
-    response = client.get(ROUTE, headers={})
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json() == {"detail": "Not authenticated"}
+def test_health_check_no_session() -> None:
+    """Test the health check endpoint with missing token and no session."""
+    response = client.get(ROUTE)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "No active session found"}
 
 
-def test_health_check_invalid_token() -> None:
-    """Test the health check endpoint with an invalid token."""
+def test_health_check_no_session_bad_token() -> None:
+    """Test the health check endpoint with an invalid token but no session."""
     token = "no" * 32
     response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    assert response.json() == {"detail": "Not authorized"}
+    assert response.json() == {"detail": "No active session found"}
 
 
-def test_health_check_valid_token(mock_token: str) -> None:
-    """Test the health check endpoint with a valid token."""
+def test_health_check_no_session_valid_token(mock_token: str) -> None:
+    """Test the health check endpoint with a valid token but no session."""
     response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "No active session found"}
+
+
+def test_health_check_no_session_valid_session(client_with_session: TestClient) -> None:
+    """Test the health check endpoint with a valid session."""
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"status": "ok"}
+
+
+def test_health_check_no_session_valid_session_invalid_token(
+    client_with_session: TestClient,
+) -> None:
+    """Test the health check endpoint with a valid session and invalid token."""
+    token = "no" * 32
+    response = client_with_session.get(
+        ROUTE, headers={settings.TOKEN_HEADER_NAME: token}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"status": "ok"}
+
+
+def test_health_check_no_session_valid_session_valid_token(
+    client_with_session: TestClient, mock_token: str
+) -> None:
+    """Test the health check endpoint with a valid session and valid token."""
+    response = client_with_session.get(
+        ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token}
+    )
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "ok"}

@@ -1,6 +1,16 @@
 """Common response models from the API."""
 
+from fmu.settings.models.user_config import UserConfig
 from pydantic import BaseModel, SecretStr
+
+from .project import FMUProject
+
+
+class SessionResponse(BaseModel):
+    """Information returned when a session is initially created."""
+
+    user_config: UserConfig
+    fmu_project: FMUProject | None = None
 
 
 class Message(BaseModel):

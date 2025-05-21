@@ -1,4 +1,4 @@
-"""Routes to initialize a .fmu session."""
+"""Routes to add an FMU project to an existing session."""
 
 from pathlib import Path
 
@@ -6,38 +6,49 @@ from fastapi import APIRouter, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
 from fmu.settings._init import init_fmu_directory
 
-from fmu_settings_api.config import settings
-from fmu_settings_api.deps import SessionDep, UserFMUDirDep
+from fmu_settings_api.deps import (
+    ProjectSessionDep,
+    SessionDep,
+)
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
-from fmu_settings_api.session import create_fmu_session, destroy_fmu_session
+from fmu_settings_api.session import (
+    ProjectSession,
+    SessionNotFoundError,
+    add_fmu_project_to_session,
+    remove_fmu_project_from_session,
+)
 
-router = APIRouter(prefix="/fmu", tags=["fmu"])
+router = APIRouter(prefix="/project", tags=["project"])
 
 
 @router.get("/", response_model=FMUProject)
-async def get_cwd_fmu_directory_session(
-    response: Response, user_fmu_dir: UserFMUDirDep
-) -> FMUProject:
-    """Returns the paths and configuration for the nearest .fmu directory.
+async def get_project(session: SessionDep) -> FMUProject:
+    """Returns the paths and configuration for the nearest project .fmu directory.
 
     This directory is searched for above the current working directory.
+
+    If the session contains a project .fmu directory already details of that project
+    are returned.
     """
-    try:
-        path = Path.cwd()
-        fmu_dir = find_nearest_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
-        response.set_cookie(
-            key=settings.SESSION_COOKIE_KEY,
-            value=session_id,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-        )
+    if isinstance(session, ProjectSession):
+        fmu_dir = session.project_fmu_directory
         return FMUProject(
             path=fmu_dir.base_path,
             project_dir_name=fmu_dir.base_path.name,
             config=fmu_dir.config.load(),
         )
+
+    try:
+        path = Path.cwd()
+        fmu_dir = find_nearest_fmu_directory(path)
+        _ = await add_fmu_project_to_session(session.id, fmu_dir)
+        return FMUProject(
+            path=fmu_dir.base_path,
+            project_dir_name=fmu_dir.base_path.name,
+            config=fmu_dir.config.load(),
+        )
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
@@ -52,21 +63,12 @@ async def get_cwd_fmu_directory_session(
 
 
 @router.post("/", response_model=FMUProject)
-async def get_fmu_directory_session(
-    response: Response, fmu_dir_path: FMUDirPath, user_fmu_dir: UserFMUDirDep
-) -> FMUProject:
-    """Returns the paths and configuration for the .fmu directory at 'path'."""
+async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
+    """Returns the paths and configuration for the project .fmu directory at 'path'."""
     path = fmu_dir_path.path
     try:
         fmu_dir = get_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
-        response.set_cookie(
-            key=settings.SESSION_COOKIE_KEY,
-            value=session_id,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-        )
+        _ = await add_fmu_project_to_session(session.id, fmu_dir)
         return FMUProject(
             path=fmu_dir.base_path,
             project_dir_name=fmu_dir.base_path.name,
@@ -90,43 +92,41 @@ async def get_fmu_directory_session(
 
 
 @router.delete("/", response_model=Message)
-async def delete_fmu_directory_session(
-    session: SessionDep, response: Response
+async def delete_project_session(
+    session: ProjectSessionDep, response: Response
 ) -> Message:
-    """Deletes a .fmu session if it exists."""
+    """Deletes a project .fmu session if it exists."""
     try:
-        await destroy_fmu_session(session.id)
-        response.delete_cookie(key=session.id)
+        await remove_fmu_project_from_session(session.id)
         return Message(
-            message=f"FMU directory {session.fmu_directory.path} closed successfully"
+            message=(
+                f"FMU directory {session.project_fmu_directory.path} closed "
+                "successfully"
+            ),
         )
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/init", response_model=FMUProject)
-async def init_fmu_directory_session(
-    response: Response,
+async def init_project(
+    session: SessionDep,
     fmu_dir_path: FMUDirPath,
-    user_fmu_dir: UserFMUDirDep,
 ) -> FMUProject:
     """Initializes .fmu at 'path' and returns its paths and configuration."""
     path = fmu_dir_path.path
     try:
         fmu_dir = init_fmu_directory(path)
-        session_id = await create_fmu_session(fmu_dir, user_fmu_dir)
-        response.set_cookie(
-            key=settings.SESSION_COOKIE_KEY,
-            value=session_id,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-        )
+        _ = await add_fmu_project_to_session(session.id, fmu_dir)
         return FMUProject(
             path=fmu_dir.base_path,
             project_dir_name=fmu_dir.base_path.name,
             config=fmu_dir.config.load(),
         )
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
