@@ -13,11 +13,11 @@ client = TestClient(app)
 ROUTE = "/api/v1/user"
 
 
-def test_get_user_fmu_unauthenticated() -> None:
+def test_get_user_fmu_no_token() -> None:
     """Tests that user routes required a token."""
-    response = client.get(ROUTE, headers={})
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json() == {"detail": "Not authenticated"}
+    response = client.get(ROUTE)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "No active session found"}
 
 
 def test_get_user_fmu_no_session(mock_token: str) -> None:

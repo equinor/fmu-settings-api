@@ -8,7 +8,7 @@ from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.session import Session, session_manager
+from fmu_settings_api.session import ProjectSession, Session, session_manager
 
 api_token_header = APIKeyHeader(name=settings.TOKEN_HEADER_NAME)
 
@@ -20,6 +20,9 @@ async def verify_auth_token(req_token: TokenHeaderDep) -> TokenHeaderDep:
     if req_token != settings.TOKEN:
         raise HTTPException(status_code=401, detail="Not authorized")
     return req_token
+
+
+AuthTokenDep = Annotated[TokenHeaderDep, Depends(verify_auth_token)]
 
 
 async def ensure_user_fmu_directory() -> UserFMUDirectory:
@@ -64,7 +67,7 @@ async def ensure_user_fmu_directory() -> UserFMUDirectory:
 UserFMUDirDep = Annotated[UserFMUDirectory, Depends(ensure_user_fmu_directory)]
 
 
-async def get_fmu_session(fmu_settings_session: str | None = Cookie(None)) -> Session:
+async def get_session(fmu_settings_session: str | None = Cookie(None)) -> Session:
     """Gets a session from the session manager."""
     if not fmu_settings_session:
         raise HTTPException(
@@ -87,4 +90,20 @@ async def get_fmu_session(fmu_settings_session: str | None = Cookie(None)) -> Se
         raise HTTPException(status_code=500, detail=f"Session error: {e}") from e
 
 
-SessionDep = Annotated[Session, Depends(get_fmu_session)]
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+async def get_project_session(
+    fmu_settings_session: str | None = Cookie(None),
+) -> ProjectSession:
+    """Gets a session with an FMU Project opened from the session manager."""
+    session = await get_session(fmu_settings_session)
+    if not isinstance(session, ProjectSession):
+        raise HTTPException(
+            status_code=401,
+            detail="No FMU project directory open",
+        )
+    return session
+
+
+ProjectSessionDep = Annotated[ProjectSession, Depends(get_project_session)]

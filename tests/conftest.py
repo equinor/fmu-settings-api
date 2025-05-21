@@ -1,18 +1,21 @@
 """Root configuration for pytest."""
 
 import stat
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from fmu.settings import ProjectFMUDirectory
+from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
-from fmu_settings_api.session import SessionManager
+from fmu_settings_api.deps import get_session
+from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
 
 
 @pytest.fixture
@@ -38,16 +41,18 @@ def fmu_dir_path(fmu_dir: ProjectFMUDirectory) -> Path:
 
 
 @pytest.fixture
-def fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
-    """Mocks a .fmu in a tmp_path without permissions."""
-    (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR)
+def no_permissions() -> Callable[[str | Path], AbstractContextManager[None]]:
+    """Returns a context manager to remove permissions on a file or directory."""
 
-    mocked_user_home = fmu_dir_path / "home"
-    mocked_user_home.mkdir()
-    with patch("pathlib.Path.home", return_value=mocked_user_home):
-        yield fmu_dir_path
+    @contextmanager
+    def ctx_manager(filepath: str | Path) -> Iterator[None]:
+        """Removes user permissions on path."""
+        filepath = Path(filepath)
+        filepath.chmod(stat.S_IRUSR)
+        yield
+        filepath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
-    (fmu_dir_path / ".fmu").chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    return ctx_manager
 
 
 @pytest.fixture
@@ -55,6 +60,7 @@ def user_fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
     """Mocks a user .fmu tmp_path without permissions."""
     mocked_user_home = fmu_dir_path / "home"
     mocked_user_home.mkdir()
+
     with patch("pathlib.Path.home", return_value=mocked_user_home):
         user_fmu_dir = init_user_fmu_directory()
         user_fmu_dir.base_path.chmod(stat.S_IRUSR)
@@ -81,7 +87,10 @@ def tmp_path_mocked_home(tmp_path: Path) -> Generator[Path]:
 def session_manager() -> Generator[SessionManager]:
     """Mocks the session manager and returns its replacement."""
     session_manager = SessionManager()
-    with patch("fmu_settings_api.deps.session_manager", session_manager):
+    with (
+        patch("fmu_settings_api.deps.session_manager", session_manager),
+        patch("fmu_settings_api.session.session_manager", session_manager),
+    ):
         yield session_manager
 
 
@@ -89,10 +98,9 @@ def session_manager() -> Generator[SessionManager]:
 async def session_id(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> str:
-    """Mocks a valid opened .fmu session."""
-    fmu_dir = init_fmu_directory(tmp_path_mocked_home)
+    """Mocks a valid user .fmu session."""
     user_fmu_dir = init_user_fmu_directory()
-    return await session_manager.create_session(fmu_dir, user_fmu_dir)
+    return await session_manager.create_session(user_fmu_dir)
 
 
 @pytest.fixture
@@ -101,3 +109,23 @@ async def client_with_session(session_id: str) -> AsyncGenerator[TestClient]:
     with TestClient(app) as c:
         c.cookies[settings.SESSION_COOKIE_KEY] = session_id
         yield c
+
+
+@pytest.fixture
+async def client_with_project_session(session_id: str) -> AsyncGenerator[TestClient]:
+    """Returns a test client with a valid session."""
+    session = await get_session(session_id)
+
+    path = session.user_fmu_directory.path.parent.parent  # tmp_path
+    fmu_dir = init_fmu_directory(path)
+    _ = await add_fmu_project_to_session(session_id, fmu_dir)
+
+    with TestClient(app) as c:
+        c.cookies[settings.SESSION_COOKIE_KEY] = session_id
+        yield c
+
+
+@pytest.fixture
+def session_tmp_path() -> Path:
+    """Returns the tmp_path equivalent from a mocked user .fmu dir."""
+    return UserFMUDirectory().path.parent.parent
