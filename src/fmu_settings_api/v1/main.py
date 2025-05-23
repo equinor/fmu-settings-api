@@ -2,8 +2,9 @@
 
 import contextlib
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory
 from fmu.settings.models.user_config import UserConfig
 
@@ -40,16 +41,22 @@ async def v1_health_check() -> dict[str, str]:
     dependencies=[Depends(verify_auth_token)],
 )
 async def create_session(
-    response: Response, auth_token: AuthTokenDep, user_fmu_dir: UserFMUDirDep
+    response: Response,
+    auth_token: AuthTokenDep,
+    user_fmu_dir: UserFMUDirDep,
+    fmu_settings_session: Annotated[str | None, Cookie()] = None,
 ) -> SessionResponse:
     """Establishes a user session."""
+    if fmu_settings_session:
+        raise HTTPException(status_code=409, detail="A session already exists")
+
     try:
         session_id = await create_fmu_session(user_fmu_dir)
         response.set_cookie(
             key=settings.SESSION_COOKIE_KEY,
             value=session_id,
             httponly=True,
-            secure=True,
+            secure=False,
             samesite="lax",
         )
         config_dict = user_fmu_dir.config.load().model_dump()

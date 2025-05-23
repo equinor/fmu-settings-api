@@ -67,7 +67,9 @@ async def ensure_user_fmu_directory() -> UserFMUDirectory:
 UserFMUDirDep = Annotated[UserFMUDirectory, Depends(ensure_user_fmu_directory)]
 
 
-async def get_session(fmu_settings_session: str | None = Cookie(None)) -> Session:
+async def get_session(
+    fmu_settings_session: Annotated[str | None, Cookie()] = None,
+) -> Session:
     """Gets a session from the session manager."""
     if not fmu_settings_session:
         raise HTTPException(
