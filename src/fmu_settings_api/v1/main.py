@@ -19,7 +19,7 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     create_fmu_session,
 )
-from fmu_settings_api.v1.responses import GetSessionResponses
+from fmu_settings_api.v1.responses import CreateSessionResponses, GetSessionResponses
 
 from .routes import project, user
 
@@ -49,6 +49,17 @@ async def v1_health_check() -> HealthCheck:
     "/session",
     response_model=SessionResponse,
     dependencies=[Depends(verify_auth_token)],
+    summary="Creates a session for the user",
+    description=(
+        "When creating a session the application will ensure that the user "
+        ".fmu directory exists by creating it if it does not. It will also "
+        "check for the nearest project .fmu directory above the current "
+        "working directory, and if one exists, add it to the session. If "
+        "it does not exist its value will be `null`.\n"
+        "The session cookie set by this route is required for all other "
+        "routes. Sessions are not persisted when the API is shut down."
+    ),
+    responses=CreateSessionResponses,
 )
 async def create_session(
     response: Response,
