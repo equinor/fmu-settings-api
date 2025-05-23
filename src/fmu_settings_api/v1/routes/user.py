@@ -14,15 +14,7 @@ async def get_fmu_directory_config(session: SessionDep) -> UserConfig:
     """Returns the user configuration of the current session."""
     try:
         config = session.user_fmu_directory.config
-        config_dict = config.load().model_dump()
-
-        # Overwrite secret keys with obfuscated keys
-        for k, v in config_dict["user_api_keys"].items():
-            if v is not None:
-                # Convert SecretStr("*********") to "*********"
-                config_dict["user_api_keys"][k] = str(v)
-
-        return UserConfig.model_validate(config_dict)
+        return config.load().obfuscate_secrets()
     except PermissionError as e:
         raise HTTPException(
             status_code=403,

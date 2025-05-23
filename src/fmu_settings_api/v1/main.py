@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory
-from fmu.settings.models.user_config import UserConfig
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
@@ -59,17 +58,9 @@ async def create_session(
             secure=False,
             samesite="lax",
         )
-        config_dict = user_fmu_dir.config.load().model_dump()
+        obfuscated_user_config = user_fmu_dir.config.load().obfuscate_secrets()
 
-        # Overwrite secret keys with obfuscated keys
-        for k, v in config_dict["user_api_keys"].items():
-            if v is not None:
-                # Convert SecretStr("*********") to "*********"
-                config_dict["user_api_keys"][k] = str(v)
-
-        user_config = UserConfig.model_validate(config_dict)
-
-        session_response = SessionResponse(user_config=user_config)
+        session_response = SessionResponse(user_config=obfuscated_user_config)
 
         with contextlib.suppress(FileNotFoundError):
             path = Path.cwd()
