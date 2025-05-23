@@ -1,9 +1,17 @@
 """Common response models from the API."""
 
+from typing import Literal
+
 from fmu.settings.models.user_config import UserConfig
 from pydantic import BaseModel, SecretStr
 
 from .project import FMUProject
+
+
+class HealthCheck(BaseModel):
+    """Returns "ok" if the route is functioning correctly."""
+
+    status: Literal["ok"] = "ok"
 
 
 class SessionResponse(BaseModel):
