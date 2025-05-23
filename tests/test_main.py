@@ -4,6 +4,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from fmu_settings_api.__main__ import app
+from fmu_settings_api.models import HealthCheck
 
 client = TestClient(app)
 
@@ -15,5 +16,6 @@ def test_main_invocation() -> None:
 def test_health_check() -> None:
     """Test the health check endpoint."""
     response = client.get("/health")
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
+    assert HealthCheck() == HealthCheck.model_validate(response.json())

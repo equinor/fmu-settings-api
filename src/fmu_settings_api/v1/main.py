@@ -14,11 +14,12 @@ from fmu_settings_api.deps import (
     get_session,
     verify_auth_token,
 )
-from fmu_settings_api.models import FMUProject, SessionResponse
+from fmu_settings_api.models import FMUProject, HealthCheck, SessionResponse
 from fmu_settings_api.session import (
     add_fmu_project_to_session,
     create_fmu_session,
 )
+from fmu_settings_api.v1.responses import GetSessionResponses
 
 from .routes import project, user
 
@@ -28,10 +29,20 @@ api_v1_router.include_router(project.router, dependencies=[Depends(get_session)]
 api_v1_router.include_router(user.router, dependencies=[Depends(get_session)])
 
 
-@api_v1_router.get("/health", dependencies=[Depends(get_session)])
-async def v1_health_check() -> dict[str, str]:
+@api_v1_router.get(
+    "/health",
+    response_model=HealthCheck,
+    dependencies=[Depends(get_session)],
+    summary="A health check on the /v1 routes.",
+    description=(
+        "This route requires a valid session to return 200 OK. it can used to "
+        "check if the user has a valid session."
+    ),
+    responses=GetSessionResponses,
+)
+async def v1_health_check() -> HealthCheck:
     """Simple health check endpoint."""
-    return {"status": "ok"}
+    return HealthCheck()
 
 
 @api_v1_router.post(
