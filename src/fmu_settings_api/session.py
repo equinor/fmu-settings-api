@@ -80,7 +80,15 @@ class SessionManager:
         user_fmu_directory: UserFMUDirectory,
         expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
     ) -> str:
-        """Creates a new session and stores it to the storage backend."""
+        """Creates a new session and stores it to the storage backend.
+
+        Params:
+            user_fmu_directory: The user .fmu directory instance
+            expire_seconds: How long the session should be valid. Optional, defaulted.
+
+        Returns:
+            The session id of the newly created session
+        """
         session_id = str(uuid4())
         now = datetime.now(UTC)
         expiration_duration = timedelta(seconds=expire_seconds)
@@ -96,18 +104,26 @@ class SessionManager:
 
         return session_id
 
-    async def get_session(
-        self: Self, session_id: str
-    ) -> Session | ProjectSession | None:
-        """Get the session data for a session id."""
+    async def get_session(self: Self, session_id: str) -> Session | ProjectSession:
+        """Get the session data for a session id.
+
+        Params:
+            session_id: The session id being requested
+
+        Returns:
+            The session, if it exists and is valid
+
+        Raises:
+            SessionNotFoundError: If the session does not exist or is invalid
+        """
         session = await self._retrieve_session(session_id)
         if not session:
-            return None
+            raise SessionNotFoundError("No active session found")
 
         now = datetime.now(UTC)
         if session.expires_at < now:
             await self.destroy_session(session_id)
-            return None
+            raise SessionNotFoundError("Invalid or expired session")
 
         session.last_accessed = now
         await self._update_session(session_id, session)
@@ -135,11 +151,9 @@ async def add_fmu_project_to_session(
         The updated ProjectSession
 
     Raises:
-        SessionNotFoundError: If no session was found
+        SessionNotFoundError: If no valid session was found
     """
     session = await session_manager.get_session(session_id)
-    if not session:
-        raise SessionNotFoundError(f"No session with id {session_id} found")
 
     if isinstance(session, ProjectSession):
         project_session = session
@@ -159,12 +173,10 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
         The updates session
 
     Raises:
-        SessionNotFoundError: If no session was found
+        SessionNotFoundError: If no valid session was found
     """
     maybe_project_session = await session_manager.get_session(session_id)
 
-    if maybe_project_session is None:
-        raise SessionNotFoundError(f"No session with id {session_id} found")
     if isinstance(maybe_project_session, Session):
         return maybe_project_session
 
