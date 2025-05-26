@@ -1,6 +1,9 @@
 """The main entry point for fmu-settings-api."""
 
 import asyncio
+import signal
+import sys
+from types import FrameType
 
 import uvicorn
 from fastapi import FastAPI
@@ -63,10 +66,20 @@ def run_server(
             allow_headers=["*"],
         )
 
+    def signal_handler(signum: int, frame: FrameType | None) -> None:
+        """Gracefully handles interrupt shutdowns."""
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     server_config = uvicorn.Config(app=app, host=host, port=port)
     server = uvicorn.Server(server_config)
 
-    asyncio.run(server.serve())
+    try:
+        asyncio.run(server.serve())
+    except KeyboardInterrupt:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
