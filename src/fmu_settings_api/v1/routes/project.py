@@ -1,6 +1,7 @@
 """Routes to add an FMU project to an existing session."""
 
 from pathlib import Path
+from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
@@ -17,13 +18,82 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     remove_fmu_project_from_session,
 )
+from fmu_settings_api.v1.responses import GetSessionResponses, Responses
 
 router = APIRouter(prefix="/project", tags=["project"])
 
+ProjectResponses: Final[Responses] = {
+    403: {
+        "description": (
+            "The OS returned a permissions error while locating or creating .fmu"
+        ),
+        "content": {
+            "application/json": {
+                "example": {
+                    "examples": [
+                        {"detail": "Permission denied locating .fmu"},
+                        {"detail": "Permission denied accessing .fmu at {path}"},
+                        {"detail": "Permission denied creating .fmu at {path}"},
+                    ],
+                },
+            },
+        },
+    },
+    404: {
+        "description": (
+            "The .fmu directory was unable to be found at or above a given path, or "
+            "the requested path to create a project .fmu directory at does not exist."
+        ),
+        "content": {
+            "application/json": {
+                "example": {
+                    "examples": [
+                        {"detail": "No .fmu directory found from {path}"},
+                        {"detail": "No .fmu directory found at {path}"},
+                        {"detail": "Path {path} does not exist"},
+                    ],
+                },
+            },
+        },
+    },
+}
 
-@router.get("/", response_model=FMUProject)
+ProjectExistsResponses: Final[Responses] = {
+    409: {
+        "description": (
+            "A project .fmu directory already exist at a given location, or may "
+            "possibly not be a directory, i.e. it may be a .fmu file."
+        ),
+        "content": {
+            "application/json": {
+                "example": {
+                    "examples": [
+                        {"detail": ".fmu exists at {path} but is not a directory"},
+                        {"detail": ".fmu already exists at {path}"},
+                    ],
+                },
+            },
+        },
+    },
+}
+
+
+@router.get(
+    "/",
+    response_model=FMUProject,
+    summary="Returns the paths and configuration of the nearest project .fmu directory",
+    description=(
+        "If a project is not already attached to the session id it will be "
+        "attached after a call to this route. If one is already attached this "
+        "route will return data for the project .fmu directory again."
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+    },
+)
 async def get_project(session: SessionDep) -> FMUProject:
-    """Returns the paths and configuration for the nearest project .fmu directory.
+    """Returns the paths and configuration of the nearest project .fmu directory.
 
     This directory is searched for above the current working directory.
 
@@ -62,7 +132,24 @@ async def get_project(session: SessionDep) -> FMUProject:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/", response_model=FMUProject)
+@router.post(
+    "/",
+    response_model=FMUProject,
+    summary=(
+        "Returns the path and configuration of the project .fmu directory at 'path'"
+    ),
+    description=(
+        "Used for when a user selects a project .fmu directory in a directory not "
+        "found above the user's current working directory. Will overwrite the "
+        "project .fmu directory attached to a session if one exists. If not, it is "
+        "added to the session."
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
 async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
     """Returns the paths and configuration for the project .fmu directory at 'path'."""
     path = fmu_dir_path.path
@@ -91,26 +178,23 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/", response_model=Message)
-async def delete_project_session(
-    session: ProjectSessionDep, response: Response
-) -> Message:
-    """Deletes a project .fmu session if it exists."""
-    try:
-        await remove_fmu_project_from_session(session.id)
-        return Message(
-            message=(
-                f"FMU directory {session.project_fmu_directory.path} closed "
-                "successfully"
-            ),
-        )
-    except SessionNotFoundError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/init", response_model=FMUProject)
+@router.post(
+    "/init",
+    response_model=FMUProject,
+    summary=(
+        "Initializes a project .fmu directory at 'path' and returns its paths and "
+        "configuration"
+    ),
+    description=(
+        "If a project .fmu directory is already attached to the session, this will "
+        "switch to use the newly created .fmu directory."
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
 async def init_project(
     session: SessionDep,
     fmu_dir_path: FMUDirPath,
@@ -140,5 +224,35 @@ async def init_project(
         raise HTTPException(
             status_code=409, detail=f".fmu already exists at {path}"
         ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(
+    "/",
+    response_model=Message,
+    summary="Removes a project .fmu directory from a session",
+    description=(
+        "This route simply removes an opened project .fmu directory from a session. "
+        "It does not affect the user other aside from that."
+    ),
+    responses={
+        **GetSessionResponses,
+    },
+)
+async def delete_project_session(
+    session: ProjectSessionDep, response: Response
+) -> Message:
+    """Deletes a project .fmu session if it exists."""
+    try:
+        await remove_fmu_project_from_session(session.id)
+        return Message(
+            message=(
+                f"FMU directory {session.project_fmu_directory.path} closed "
+                "successfully"
+            ),
+        )
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

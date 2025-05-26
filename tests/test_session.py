@@ -5,11 +5,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from fmu.settings._init import init_user_fmu_directory
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.session import (
     SessionManager,
+    SessionNotFoundError,
     create_fmu_session,
     destroy_fmu_session,
     session_manager,
@@ -50,7 +52,8 @@ async def test_get_non_existing_session(
     """Tests getting an existing session."""
     user_fmu_dir = init_user_fmu_directory()
     await session_manager.create_session(user_fmu_dir)
-    assert await session_manager.get_session("no") is None
+    with pytest.raises(SessionNotFoundError, match="No active session found"):
+        await session_manager.get_session("no")
     assert len(session_manager.storage) == 1
 
 
@@ -77,7 +80,8 @@ async def test_get_existing_session_expiration(
 
     # Pretend it expired a second ago.
     orig_session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
-    assert await session_manager.get_session(session_id) is None
+    with pytest.raises(SessionNotFoundError, match="Invalid or expired session"):
+        assert await session_manager.get_session(session_id)
     # It should also be destroyed.
     assert session_id not in session_manager.storage
     assert len(session_manager.storage) == 0

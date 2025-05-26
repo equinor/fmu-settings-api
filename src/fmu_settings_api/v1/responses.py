@@ -12,7 +12,11 @@ CreateSessionResponses: Final[Responses] = {
         ),
         "content": {
             "application/json": {
-                "example": {"detail": "Not authorized"},
+                "example": {
+                    "examples": [
+                        {"detail": "Not authorized"},
+                    ],
+                },
             },
         },
     },
@@ -24,7 +28,11 @@ CreateSessionResponses: Final[Responses] = {
         ),
         "content": {
             "application/json": {
-                "example": {"detail": "Permission denied creating user .fmu"},
+                "example": {
+                    "examples": [
+                        {"detail": "Permission denied creating user .fmu"},
+                    ],
+                },
             },
         },
     },
@@ -55,7 +63,11 @@ CreateSessionResponses: Final[Responses] = {
         "description": "Something unexpected has happened",
         "content": {
             "application/json": {
-                "example": {"detail": "{string content of exception}"},
+                "example": {
+                    "examples": [
+                        {"detail": "{string content of exception}"},
+                    ],
+                },
             },
         },
     },
@@ -80,7 +92,12 @@ GetSessionResponses: Final[Responses] = {
         "description": "Something unexpected has happened",
         "content": {
             "application/json": {
-                "example": {"detail": "Session error: {string content of exception}"},
+                "example": {
+                    "examples": [
+                        {"detail": "Session error: {string content of exception}"},
+                        {"detail": "{string content of exception}"},
+                    ],
+                },
             },
         },
     },
