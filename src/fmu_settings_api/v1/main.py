@@ -18,6 +18,7 @@ from fmu_settings_api.models import FMUProject, HealthCheck, SessionResponse
 from fmu_settings_api.session import (
     add_fmu_project_to_session,
     create_fmu_session,
+    destroy_fmu_session,
 )
 from fmu_settings_api.v1.responses import CreateSessionResponses, GetSessionResponses
 
@@ -56,6 +57,9 @@ async def v1_health_check() -> HealthCheck:
         "check for the nearest project .fmu directory above the current "
         "working directory, and if one exists, add it to the session. If "
         "it does not exist its value will be `null`.\n"
+        "If a session already exists when POSTing to this route, the existing "
+        "session will be silently destroyed. This will remove any state for "
+        "a project .fmu that may be opened.\n"
         "The session cookie set by this route is required for all other "
         "routes. Sessions are not persisted when the API is shut down."
     ),
@@ -69,7 +73,7 @@ async def create_session(
 ) -> SessionResponse:
     """Establishes a user session."""
     if fmu_settings_session:
-        raise HTTPException(status_code=409, detail="A session already exists")
+        await destroy_fmu_session(fmu_settings_session)
 
     try:
         session_id = await create_fmu_session(user_fmu_dir)
