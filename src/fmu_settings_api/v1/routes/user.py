@@ -1,15 +1,67 @@
 """Routes to operate on the .fmu config file."""
 
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 from fmu.settings.models.user_config import UserAPIKeys, UserConfig
 
 from fmu_settings_api.deps import SessionDep
 from fmu_settings_api.models.common import APIKey, Message
+from fmu_settings_api.v1.responses import GetSessionResponses, Responses
 
 router = APIRouter(prefix="/user", tags=["user"])
 
+UserResponses: Final[Responses] = {
+    403: {
+        "description": (
+            "The OS returned a permissions error while locating or creating .fmu"
+        ),
+        "content": {
+            "application/json": {
+                "example": {
+                    "examples": [
+                        {
+                            "detail": (
+                                "Permission denied loading user .fmu config at "
+                                "{config.path}"
+                            )
+                        },
+                    ],
+                },
+            },
+        },
+    },
+    404: {
+        "description": (
+            "The .fmu directory was unable to be found at or above a given path, or "
+            "the requested path to create a project .fmu directory at does not exist."
+        ),
+        "content": {
+            "application/json": {
+                "example": {
+                    "examples": [
+                        {"detail": "User .fmu config at {config.path} does not exist"},
+                    ],
+                },
+            },
+        },
+    },
+}
 
-@router.get("/", response_model=UserConfig)
+
+@router.get(
+    "/",
+    response_model=UserConfig,
+    summary="Returns the user .fmu configuration",
+    description=(
+        "The user configuration can store API subscription keys or tokens. These are "
+        "obfuscated as '**********' when returned."
+    ),
+    responses={
+        **GetSessionResponses,
+        **UserResponses,
+    },
+)
 async def get_fmu_directory_config(session: SessionDep) -> UserConfig:
     """Returns the user configuration of the current session."""
     try:
@@ -28,7 +80,39 @@ async def get_fmu_directory_config(session: SessionDep) -> UserConfig:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.patch("/api_key")
+@router.patch(
+    "/api_key",
+    response_model=Message,
+    summary="Saves an API key/token to the user .fmu configuration",
+    description=(
+        "Currently only known API's can be saved to the user .fmu configuration. "
+        "Arbitrary API key-value pairs cannot be saved. The currently known APIs are:\n"
+        f"\n{', '.join(UserAPIKeys.model_fields.keys())}"
+    ),
+    responses={
+        **GetSessionResponses,
+        **UserResponses,
+        422: {
+            "description": (
+                "Occurs when trying to save a key to an unknown API. An API is unknown "
+                "if it is not a predefined field in the fmu-settings UserAPIKeys model."
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "examples": [
+                            {
+                                "detail": (
+                                    "API id {api_key.id} is not known or supported"
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    },
+)
 async def patch_api_token_key(
     session: SessionDep,
     api_key: APIKey,
@@ -44,6 +128,14 @@ async def patch_api_token_key(
             f"user_api_keys.{api_key.id}", api_key.key
         )
         return Message(message=f"Saved API key for {api_key.id}")
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Permission denied loading user .fmu config at "
+                f"{session.user_fmu_directory.config.path}"
+            ),
+        ) from e
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=404,
