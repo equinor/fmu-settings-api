@@ -14,7 +14,12 @@ from pytest import MonkeyPatch
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
 from fmu_settings_api.models import FMUProject, SessionResponse
-from fmu_settings_api.session import ProjectSession, Session, SessionManager
+from fmu_settings_api.session import (
+    ProjectSession,
+    Session,
+    SessionManager,
+    SessionNotFoundError,
+)
 
 ROUTE = "/api/v1/session"
 
@@ -215,12 +220,12 @@ async def test_get_session_from_project_path_returns_fmu_project(
     assert session.project_fmu_directory.config.load() == project_fmu_dir.config.load()
 
 
-async def test_getting_two_sessions_returns_error(
+async def test_getting_two_sessions_destroys_existing_session(
     tmp_path_mocked_home: Path,
     mock_token: str,
     session_manager: SessionManager,
 ) -> None:
-    """Tests that user .fmu is created when a session is created."""
+    """Tests that creating a new session destroys the old, if it exists."""
     client = TestClient(app)
     user_home = tmp_path_mocked_home / "home"
     response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
@@ -236,6 +241,18 @@ async def test_getting_two_sessions_returns_error(
     assert isinstance(session, Session)
     assert session.user_fmu_directory.path == user_fmu_dir.path
 
+    # New session
     response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
-    assert response.status_code == status.HTTP_409_CONFLICT, response.json()
-    assert response.json()["detail"] == "A session already exists"
+    assert response.status_code == status.HTTP_200_OK, response.json()
+
+    new_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert new_session_id is not None
+    new_session = await session_manager.get_session(new_session_id)
+    assert new_session is not None
+    assert isinstance(new_session, Session)
+    assert new_session.user_fmu_directory.path == user_fmu_dir.path
+
+    # Ensure not same and destroyed
+    assert session_id != new_session_id
+    with pytest.raises(SessionNotFoundError, match="No active session found"):
+        await session_manager.get_session(session_id)
