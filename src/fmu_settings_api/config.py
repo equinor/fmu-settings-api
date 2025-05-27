@@ -48,8 +48,10 @@ class APISettings(BaseModel):
         default_factory=generate_auth_token,
         pattern=r"^[a-fA-F0-9]{64}$",
     )
+
     SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
-    SESSION_EXPIRE_SECONDS: int = Field(default=3600, frozen=True)
+    # 20 minute session length
+    SESSION_EXPIRE_SECONDS: int = Field(default=1200, frozen=True)
 
     FRONTEND_HOST: HttpUrl = Field(default=HttpUrl("http://localhost:8000"))
     BACKEND_CORS_ORIGINS: Annotated[list[HttpUrl], BeforeValidator(parse_cors)] = []
