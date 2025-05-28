@@ -62,7 +62,7 @@ UserResponses: Final[Responses] = {
         **UserResponses,
     },
 )
-async def get_fmu_directory_config(session: SessionDep) -> UserConfig:
+async def get_user(session: SessionDep) -> UserConfig:
     """Returns the user configuration of the current session."""
     try:
         config = session.user_fmu_directory.config
@@ -113,7 +113,7 @@ async def get_fmu_directory_config(session: SessionDep) -> UserConfig:
         },
     },
 )
-async def patch_api_token_key(
+async def patch_api_key(
     session: SessionDep,
     api_key: APIKey,
 ) -> Message:
