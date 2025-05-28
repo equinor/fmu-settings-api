@@ -8,7 +8,12 @@ from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.session import ProjectSession, Session, session_manager
+from fmu_settings_api.session import (
+    ProjectSession,
+    Session,
+    SessionNotFoundError,
+    session_manager,
+)
 
 api_token_header = APIKeyHeader(name=settings.TOKEN_HEADER_NAME)
 
@@ -78,17 +83,14 @@ async def get_session(
             headers={"WWW-Authenticate": "Cookie-Auth"},
         )
     try:
-        session = await session_manager.get_session(fmu_settings_session)
-        if not session:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired session",
-                headers={"WWW-Authenticate": "Cookie-Auth"},
-            )
-        return session
+        return await session_manager.get_session(fmu_settings_session)
+    except SessionNotFoundError as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session",
+            headers={"WWW-Authenticate": "Cookie-Auth"},
+        ) from e
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise
         raise HTTPException(status_code=500, detail=f"Session error: {e}") from e
 
 
