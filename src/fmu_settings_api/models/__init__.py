@@ -1,6 +1,6 @@
 """Models used for messages and responses at API endpoints."""
 
-from .common import AccessToken, APIKey, HealthCheck, Message, SessionResponse
+from .common import AccessToken, APIKey, HealthCheck, Message
 from .project import FMUDirPath, FMUProject
 
 __all__ = [
@@ -10,5 +10,4 @@ __all__ = [
     "FMUProject",
     "HealthCheck",
     "Message",
-    "SessionResponse",
 ]
