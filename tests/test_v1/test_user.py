@@ -44,7 +44,7 @@ def test_get_user_fmu_config(client_with_session: TestClient, mock_token: str) -
 def test_patch_invalid_api_token_key_to_user_fmu_config(
     client_with_session: TestClient, mock_token: str
 ) -> None:
-    """Tests that submitting an unsupported API does return 422."""
+    """Tests that submitting an unsupported API does return 400."""
     response = client_with_session.patch(
         f"{ROUTE}/api_key",
         headers={settings.TOKEN_HEADER_NAME: mock_token},
@@ -53,7 +53,7 @@ def test_patch_invalid_api_token_key_to_user_fmu_config(
             "key": "secret",
         },
     )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json()["detail"] == "API id foo is not known or supported"
 
 
