@@ -1,6 +1,5 @@
 """Tests the /api/v1/session routes."""
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +13,6 @@ from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
-from fmu_settings_api.models import FMUProject, SessionResponse
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -124,10 +122,7 @@ def test_get_session_creates_user_fmu(
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
-    assert (
-        json.dumps(response.json(), separators=(",", ":"))
-        == SessionResponse(user_config=user_fmu_dir.config.load()).model_dump_json()
-    )
+    assert response.json() == {"message": "Session created"}
     assert user_fmu_dir.path == user_home / ".fmu"
 
 
@@ -194,17 +189,7 @@ async def test_get_session_from_project_path_returns_fmu_project(
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
-    assert (
-        json.dumps(response.json(), separators=(",", ":"))
-        == SessionResponse(
-            user_config=user_fmu_dir.config.load(),
-            fmu_project=FMUProject(
-                path=tmp_path_mocked_home,
-                project_dir_name=tmp_path_mocked_home.name,
-                config=project_fmu_dir.config.load(),
-            ),
-        ).model_dump_json()
-    )
+    assert response.json() == {"message": "Session created"}
     assert user_fmu_dir.path == user_fmu_dir.path
 
     session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)

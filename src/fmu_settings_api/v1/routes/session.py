@@ -15,7 +15,7 @@ from fmu_settings_api.deps import (
     get_session,
     verify_auth_token,
 )
-from fmu_settings_api.models import AccessToken, FMUProject, Message, SessionResponse
+from fmu_settings_api.models import AccessToken, Message
 from fmu_settings_api.session import (
     add_access_token_to_session,
     add_fmu_project_to_session,
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/session", tags=["session"])
 
 @router.post(
     "/",
-    response_model=SessionResponse,
+    response_model=Message,
     dependencies=[Depends(verify_auth_token)],
     summary="Creates a session for the user",
     description=(
@@ -51,7 +51,7 @@ async def create_session(
     auth_token: AuthTokenDep,
     user_fmu_dir: UserFMUDirDep,
     fmu_settings_session: Annotated[str | None, Cookie()] = None,
-) -> SessionResponse:
+) -> Message:
     """Establishes a user session."""
     if fmu_settings_session:
         await destroy_fmu_session(fmu_settings_session)
@@ -65,21 +65,13 @@ async def create_session(
             secure=False,
             samesite="lax",
         )
-        obfuscated_user_config = user_fmu_dir.config.load().obfuscate_secrets()
-
-        session_response = SessionResponse(user_config=obfuscated_user_config)
 
         with contextlib.suppress(FileNotFoundError):
             path = Path.cwd()
             project_fmu_dir = find_nearest_fmu_directory(path)
-            _ = await add_fmu_project_to_session(session_id, project_fmu_dir)
-            session_response.fmu_project = FMUProject(
-                path=project_fmu_dir.base_path,
-                project_dir_name=project_fmu_dir.base_path.name,
-                config=project_fmu_dir.config.load(),
-            )
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-        return session_response
+        return Message(message="Session created")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
