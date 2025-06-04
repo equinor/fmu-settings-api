@@ -92,7 +92,7 @@ async def get_user(session: SessionDep) -> UserConfig:
     responses={
         **GetSessionResponses,
         **UserResponses,
-        422: {
+        400: {
             "description": (
                 "Occurs when trying to save a key to an unknown API. An API is unknown "
                 "if it is not a predefined field in the fmu-settings UserAPIKeys model."
@@ -120,7 +120,7 @@ async def patch_api_key(
     """Patches the API key for a known and supported API."""
     if api_key.id not in UserAPIKeys.model_fields:
         raise HTTPException(
-            status_code=422, detail=f"API id {api_key.id} is not known or supported"
+            status_code=400, detail=f"API id {api_key.id} is not known or supported"
         )
 
     try:
