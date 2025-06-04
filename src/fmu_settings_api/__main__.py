@@ -43,13 +43,14 @@ async def health_check() -> Ok:
     return Ok()
 
 
-def run_server(
+def run_server(  # noqa PLR0913
     *,
     host: str = "127.0.0.1",
     port: int = 8001,
     frontend_host: str | None = None,
     frontend_port: int | None = None,
     token: str | None = None,
+    reload: bool = False,
 ) -> None:
     """Starts the API server."""
     if token:
@@ -73,13 +74,23 @@ def run_server(
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    server_config = uvicorn.Config(app=app, host=host, port=port)
-    server = uvicorn.Server(server_config)
+    if reload:
+        uvicorn.run(
+            app="fmu_settings_api.__main__:app",
+            host=host,
+            port=port,
+            reload=True,
+            reload_dirs=["src"],
+            reload_includes=[".env"],
+        )
+    else:
+        server_config = uvicorn.Config(app=app, host=host, port=port)
+        server = uvicorn.Server(server_config)
 
-    try:
-        asyncio.run(server.serve())
-    except KeyboardInterrupt:
-        sys.exit(0)
+        try:
+            asyncio.run(server.serve())
+        except KeyboardInterrupt:
+            sys.exit(0)
 
 
 if __name__ == "__main__":
