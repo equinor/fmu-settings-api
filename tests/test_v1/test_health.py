@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
-from fmu_settings_api.models import HealthCheck
+from fmu_settings_api.models import Ok
 
 client = TestClient(app)
 
@@ -39,7 +39,7 @@ def test_health_check_no_session_valid_session(client_with_session: TestClient) 
     response = client_with_session.get(ROUTE)
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
-    assert HealthCheck() == HealthCheck.model_validate(response.json())
+    assert Ok() == Ok.model_validate(response.json())
 
 
 def test_health_check_no_session_valid_session_invalid_token(
@@ -52,7 +52,7 @@ def test_health_check_no_session_valid_session_invalid_token(
     )
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
-    assert HealthCheck() == HealthCheck.model_validate(response.json())
+    assert Ok() == Ok.model_validate(response.json())
 
 
 def test_health_check_no_session_valid_session_valid_token(
@@ -64,4 +64,4 @@ def test_health_check_no_session_valid_session_valid_token(
     )
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
-    assert HealthCheck() == HealthCheck.model_validate(response.json())
+    assert Ok() == Ok.model_validate(response.json())
