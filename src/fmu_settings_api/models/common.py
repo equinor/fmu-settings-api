@@ -32,3 +32,10 @@ class APIKey(BaseModel):
 
     id: str
     key: SecretStr
+
+
+class AccessToken(BaseModel):
+    """A key-value pair for a known and supported access scope."""
+
+    id: str
+    key: SecretStr

@@ -7,11 +7,14 @@ from unittest.mock import patch
 
 import pytest
 from fmu.settings._init import init_user_fmu_directory
+from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
+from fmu_settings_api.models.common import AccessToken
 from fmu_settings_api.session import (
     SessionManager,
     SessionNotFoundError,
+    add_access_token_to_session,
     create_fmu_session,
     destroy_fmu_session,
     session_manager,
@@ -109,3 +112,38 @@ async def test_destroy_fmu_session(
         await destroy_fmu_session(session_id)
     assert session_id not in session_manager.storage
     assert len(session_manager.storage) == 0
+
+
+async def test_add_valid_access_token_to_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests adding an access token to a session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    session = await session_manager.get_session(session_id)
+    assert session.access_tokens.smda_api is None
+
+    token = AccessToken(id="smda_api", key=SecretStr("secret"))
+    await add_access_token_to_session(session_id, token)
+
+    session = await session_manager.get_session(session_id)
+    assert session.access_tokens.smda_api is not None
+
+    # Assert obfuscated
+    assert str(session.access_tokens.smda_api) == "*" * 10
+
+
+async def test_add_invalid_access_token_to_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests adding an invalid access token to a session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    session = await session_manager.get_session(session_id)
+    assert session.access_tokens.smda_api is None
+
+    token = AccessToken(id="foo", key=SecretStr("secret"))
+    with pytest.raises(ValueError, match="Invalid access token id"):
+        await add_access_token_to_session(session_id, token)

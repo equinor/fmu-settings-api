@@ -9,6 +9,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from pydantic import SecretStr
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -256,3 +257,47 @@ async def test_getting_two_sessions_destroys_existing_session(
     assert session_id != new_session_id
     with pytest.raises(SessionNotFoundError, match="No active session found"):
         await session_manager.get_session(session_id)
+
+
+def test_patch_invalid_access_token_key_to_session(
+    client_with_session: TestClient, mock_token: str
+) -> None:
+    """Tests that submitting an unsupported access token/scope does return 400."""
+    response = client_with_session.patch(
+        f"{ROUTE}/access_token",
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+        json={
+            "id": "foo",
+            "key": "secret",
+        },
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["detail"] == "Access token id foo is not known or supported"
+
+
+async def test_patch_access_token_to_user_fmu_session(
+    client_with_session: TestClient, mock_token: str
+) -> None:
+    """Tests that submitting a valid access token key pair is saved to the session."""
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
+    assert session_id is not None
+
+    from fmu_settings_api.session import session_manager
+
+    session = await session_manager.get_session(session_id)
+    assert session is not None
+    assert session.access_tokens.smda_api is None
+
+    response = client_with_session.patch(
+        f"{ROUTE}/access_token",
+        headers={settings.TOKEN_HEADER_NAME: mock_token},
+        json={
+            "id": "smda_api",
+            "key": "secret",
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["message"] == "Set session access token for smda_api"
+
+    session = await session_manager.get_session(session_id)
+    assert session.access_tokens.smda_api == SecretStr("secret")

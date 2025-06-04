@@ -7,12 +7,21 @@ from uuid import uuid4
 
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
+from pydantic import BaseModel, SecretStr
 
 from fmu_settings_api.config import settings
+from fmu_settings_api.models.common import AccessToken
 
 
 class SessionNotFoundError(ValueError):
     """Raised when getting a session id that does not exist."""
+
+
+class AccessTokens(BaseModel):
+    """Known access tokens that can be set by the GUI."""
+
+    fmu_settings: SecretStr | None = None
+    smda_api: SecretStr | None = None
 
 
 @dataclass
@@ -24,6 +33,7 @@ class Session:
     created_at: datetime
     expires_at: datetime
     last_accessed: datetime
+    access_tokens: AccessTokens
 
 
 @dataclass
@@ -99,6 +109,7 @@ class SessionManager:
             created_at=now,
             expires_at=now + expiration_duration,
             last_accessed=now,
+            access_tokens=AccessTokens(),
         )
         await self._store_session(session_id, session)
 
@@ -184,6 +195,24 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session
+
+
+async def add_access_token_to_session(session_id: str, token: AccessToken) -> None:
+    """Adds a known access token to the current session.
+
+    Raises:
+        SessionNotFoundError: If no valid session was found
+    """
+    if token.id not in AccessTokens.model_fields:
+        raise ValueError("Invalid access token id")
+
+    session = await session_manager.get_session(session_id)
+
+    access_tokens_dict = session.access_tokens.model_dump()
+    access_tokens_dict[token.id] = token.key
+    session.access_tokens = AccessTokens.model_validate(access_tokens_dict)
+
+    await session_manager._store_session(session_id, session)
 
 
 async def destroy_fmu_session(session_id: str) -> None:
