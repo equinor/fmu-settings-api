@@ -11,7 +11,7 @@ from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .models import HealthCheck
+from .models import Ok
 from .v1.main import api_v1_router
 
 
@@ -31,16 +31,16 @@ app.include_router(api_v1_router)
 @app.get(
     "/health",
     tags=["app"],
-    response_model=HealthCheck,
+    response_model=Ok,
     summary="A health check on the application",
     description=(
         "This route requires no form of authentication or authorization. "
         "It can be used to check if the application is running and responsive."
     ),
 )
-async def health_check() -> HealthCheck:
+async def health_check() -> Ok:
     """Simple health check endpoint."""
-    return HealthCheck()
+    return Ok()
 
 
 def run_server(

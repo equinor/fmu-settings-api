@@ -111,3 +111,24 @@ async def get_project_session(
 
 
 ProjectSessionDep = Annotated[ProjectSession, Depends(get_project_session)]
+
+
+async def get_smda_session(
+    fmu_settings_session: str | None = Cookie(None),
+) -> Session:
+    """Gets a session capable of querying SMDA from the session manager."""
+    session = await get_session(fmu_settings_session)
+    if (
+        session.user_fmu_directory.get_config_value("user_api_keys.smda_subscription")
+        is None
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="User SMDA API key is not configured",
+        )
+    if session.access_tokens.smda_api is None:
+        raise HTTPException(
+            status_code=401,
+            detail="SMDA access token is not set",
+        )
+    return session

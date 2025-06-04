@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, SecretStr
 
 
-class HealthCheck(BaseModel):
+class Ok(BaseModel):
     """Returns "ok" if the route is functioning correctly."""
 
     status: Literal["ok"] = "ok"

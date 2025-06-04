@@ -126,6 +126,26 @@ async def client_with_project_session(session_id: str) -> AsyncGenerator[TestCli
 
 
 @pytest.fixture
+async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient]:
+    """Returns a test client with a valid session."""
+    session = await get_session(session_id)
+
+    path = session.user_fmu_directory.path.parent.parent  # tmp_path
+    fmu_dir = init_fmu_directory(path)
+    _ = await add_fmu_project_to_session(session_id, fmu_dir)
+
+    with TestClient(app) as c:
+        c.cookies[settings.SESSION_COOKIE_KEY] = session_id
+        c.patch(
+            "/api/v1/user/api_key", json={"id": "smda_subscription", "key": "secret"}
+        )
+        c.patch(
+            "/api/v1/session/access_token", json={"id": "smda_api", "key": "secret"}
+        )
+        yield c
+
+
+@pytest.fixture
 def session_tmp_path() -> Path:
     """Returns the tmp_path equivalent from a mocked user .fmu dir."""
     return UserFMUDirectory().path.parent.parent
