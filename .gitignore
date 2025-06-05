@@ -76,6 +76,7 @@ __pypackages__/
 
 # Environments
 .env
+.token
 .venv
 env/
 venv/

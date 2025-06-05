@@ -31,11 +31,13 @@ dependencies = [
     "fastapi",
     "fmu-settings @ git+https://github.com/equinor/fmu-settings",
     "pydantic",
+    "requests",
     "uvicorn",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "python-dotenv",
     "httpx",
     "mypy",
     "pytest",
@@ -44,6 +46,7 @@ dev = [
     "pytest-mock",
     "pytest-xdist",
     "ruff",
+    "types-requests",
     "watchfiles",
 ]
 
