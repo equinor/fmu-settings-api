@@ -2,8 +2,10 @@
 
 from textwrap import dedent
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
+from fmu_settings_api.deps import SessionDep
+from fmu_settings_api.interfaces import SmdaAPI
 from fmu_settings_api.models import Ok
 from fmu_settings_api.v1.responses import GetSessionResponses
 
@@ -11,7 +13,7 @@ router = APIRouter(prefix="/smda", tags=["smda"])
 
 
 @router.get(
-    "/check",
+    "/health",
     response_model=Ok,
     summary="Checks whether or not the current session is capable of querying SMDA",
     description=dedent(
@@ -31,6 +33,20 @@ router = APIRouter(prefix="/smda", tags=["smda"])
         **GetSessionResponses,
     },
 )
-async def get_check() -> Ok:
+async def get_health(session: SessionDep) -> Ok:
     """Returns a simple 200 OK if able to query SMDA."""
-    return Ok()
+    # Handled on the route dependency, duplicated for typing
+    if session.access_tokens.smda_api is None:
+        raise HTTPException(status_code=401, detail="SMDA access token is not set")
+
+    try:
+        smda = SmdaAPI(
+            session.access_tokens.smda_api.get_secret_value(),
+            session.user_fmu_directory.get_config_value(
+                "user_api_keys.smda_subscription"
+            ).get_secret_value(),
+        )
+        await smda.health()
+        return Ok()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
