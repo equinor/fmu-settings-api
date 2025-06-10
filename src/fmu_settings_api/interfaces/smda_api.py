@@ -1,6 +1,6 @@
 """Interface for querying SMDA's API."""
 
-from typing import Final
+from typing import Any, Final
 
 import requests
 
@@ -10,6 +10,7 @@ class SmdaRoutes:
 
     BASE_URL: Final[str] = "https://api.gateway.equinor.com/smda/v2.0"
     HEALTH: Final[str] = "actuator/health"
+    FIELD_SEARCH: Final[str] = "smda-api/fields/search"
 
 
 class SmdaAPI:
@@ -39,7 +40,30 @@ class SmdaAPI:
         res.raise_for_status()
         return res
 
+    async def post(
+        self, route: str, json: dict[str, Any] | None = None
+    ) -> requests.Response:
+        """Makes a POST request to SMDA.
+
+        Returns:
+            The requests response on success
+
+        Raises:
+            requests.exceptions.HTTPError if not 200
+        """
+        url = f"{SmdaRoutes.BASE_URL}/{route}"
+        res = requests.post(url, headers=self._headers, json=json)
+        res.raise_for_status()
+        return res
+
     async def health(self) -> bool:
         """Checks if the access token and subscription key are valid."""
         res = await self.get(SmdaRoutes.HEALTH)
         return res.status_code == requests.codes.ok
+
+    async def field(self, field_identifier: str) -> requests.Response:
+        """Searches for a field identifier in SMDA."""
+        return await self.post(
+            SmdaRoutes.FIELD_SEARCH,
+            json={"_projection": "identifier,uuid", "identifier": field_identifier},
+        )

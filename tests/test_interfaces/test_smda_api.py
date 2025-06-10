@@ -19,6 +19,17 @@ def mock_requests_get() -> Generator[MagicMock]:
         yield get
 
 
+@pytest.fixture
+def mock_requests_post() -> Generator[MagicMock]:
+    """Mocks methods on SmdaAPI."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    with patch(
+        "fmu_settings_api.interfaces.smda_api.requests.post", return_value=mock_response
+    ) as post:
+        yield post
+
+
 async def test_smda_get(mock_requests_get: MagicMock) -> None:
     """Tests the GET method on the SMDA interface."""
     api = SmdaAPI("token", "key")
@@ -31,5 +42,39 @@ async def test_smda_get(mock_requests_get: MagicMock) -> None:
             "authorization": "Bearer token",
             "Ocp-Apim-Subscription-Key": "key",
         },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_post_with_json(mock_requests_post: MagicMock) -> None:
+    """Tests the POST method on the SMDA interface with json."""
+    api = SmdaAPI("token", "key")
+    res = await api.post(SmdaRoutes.HEALTH, json={"a": "b"})
+
+    mock_requests_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
+        headers={
+            "Content-Type": "application/json",
+            "authorization": "Bearer token",
+            "Ocp-Apim-Subscription-Key": "key",
+        },
+        json={"a": "b"},
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_post_without_json(mock_requests_post: MagicMock) -> None:
+    """Tests the POST method on the SMDA interface without."""
+    api = SmdaAPI("token", "key")
+    res = await api.post(SmdaRoutes.HEALTH)
+
+    mock_requests_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
+        headers={
+            "Content-Type": "application/json",
+            "authorization": "Bearer token",
+            "Ocp-Apim-Subscription-Key": "key",
+        },
+        json=None,
     )
     res.raise_for_status.assert_called_once()  # type: ignore
