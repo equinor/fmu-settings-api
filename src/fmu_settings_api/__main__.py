@@ -25,12 +25,12 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     generate_unique_id_function=custom_generate_unique_id,
 )
-app.include_router(api_v1_router)
+app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get(
     "/health",
-    tags=["app"],
+    tags=["health"],
     response_model=Ok,
     summary="A health check on the application",
     description=(
