@@ -30,15 +30,14 @@ dynamic = ["version"]
 dependencies = [
     "fastapi",
     "fmu-settings @ git+https://github.com/equinor/fmu-settings",
+    "httpx",
     "pydantic",
-    "requests",
     "uvicorn",
 ]
 
 [project.optional-dependencies]
 dev = [
     "python-dotenv",
-    "httpx",
     "mypy",
     "pytest",
     "pytest-asyncio",

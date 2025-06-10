@@ -9,33 +9,35 @@ from fmu_settings_api.interfaces.smda_api import SmdaAPI, SmdaRoutes
 
 
 @pytest.fixture
-def mock_requests_get() -> Generator[MagicMock]:
+def mock_httpx_get() -> Generator[MagicMock]:
     """Mocks methods on SmdaAPI."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     with patch(
-        "fmu_settings_api.interfaces.smda_api.requests.get", return_value=mock_response
+        "fmu_settings_api.interfaces.smda_api.httpx.AsyncClient.get",
+        return_value=mock_response,
     ) as get:
         yield get
 
 
 @pytest.fixture
-def mock_requests_post() -> Generator[MagicMock]:
+def mock_httpx_post() -> Generator[MagicMock]:
     """Mocks methods on SmdaAPI."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     with patch(
-        "fmu_settings_api.interfaces.smda_api.requests.post", return_value=mock_response
+        "fmu_settings_api.interfaces.smda_api.httpx.AsyncClient.post",
+        return_value=mock_response,
     ) as post:
         yield post
 
 
-async def test_smda_get(mock_requests_get: MagicMock) -> None:
+async def test_smda_get(mock_httpx_get: MagicMock) -> None:
     """Tests the GET method on the SMDA interface."""
     api = SmdaAPI("token", "key")
     res = await api.get(SmdaRoutes.HEALTH)
 
-    mock_requests_get.assert_called_with(
+    mock_httpx_get.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
             "Content-Type": "application/json",
@@ -46,12 +48,12 @@ async def test_smda_get(mock_requests_get: MagicMock) -> None:
     res.raise_for_status.assert_called_once()  # type: ignore
 
 
-async def test_smda_post_with_json(mock_requests_post: MagicMock) -> None:
+async def test_smda_post_with_json(mock_httpx_post: MagicMock) -> None:
     """Tests the POST method on the SMDA interface with json."""
     api = SmdaAPI("token", "key")
     res = await api.post(SmdaRoutes.HEALTH, json={"a": "b"})
 
-    mock_requests_post.assert_called_with(
+    mock_httpx_post.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
             "Content-Type": "application/json",
@@ -63,12 +65,12 @@ async def test_smda_post_with_json(mock_requests_post: MagicMock) -> None:
     res.raise_for_status.assert_called_once()  # type: ignore
 
 
-async def test_smda_post_without_json(mock_requests_post: MagicMock) -> None:
+async def test_smda_post_without_json(mock_httpx_post: MagicMock) -> None:
     """Tests the POST method on the SMDA interface without."""
     api = SmdaAPI("token", "key")
     res = await api.post(SmdaRoutes.HEALTH)
 
-    mock_requests_post.assert_called_with(
+    mock_httpx_post.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
             "Content-Type": "application/json",
