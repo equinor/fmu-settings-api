@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
-import requests
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -67,8 +67,8 @@ async def test_get_health_has_user_api_key_and_access_token(
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
     """Test 401 returns when an API key exists but an SMDA access token is not set."""
-    mock_response = MagicMock(spec=requests.Response)
-    mock_response.status_code = requests.codes.ok
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = httpx.codes.OK
     mock_response.json.return_value = {"status": "ok"}
 
     mock_SmdaAPI_get.return_value = mock_response
@@ -84,9 +84,7 @@ async def test_get_health_request_failure_raises_exception(
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
     """Tests the request to SMDA failing as a 500 error."""
-    mock_SmdaAPI_get.side_effect = requests.exceptions.HTTPError(
-        "401 Client Error: Access Denied"
-    )
+    mock_SmdaAPI_get.side_effect = httpx.HTTPError("401 Client Error: Access Denied")
 
     response = client_with_smda_session.get(f"{ROUTE}/health")
 
@@ -103,7 +101,7 @@ async def test_post_field_succeeds_with_one(
 ) -> None:
     """Tests that posting a valid search returns a valid result."""
     uuid = uuid4()
-    mock_response = MagicMock(spec=requests.Response)
+    mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -141,7 +139,7 @@ async def test_post_field_succeeds_with_none(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting a valid but non-existent search returns an empty result."""
-    mock_response = MagicMock(spec=requests.Response)
+    mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -173,7 +171,7 @@ async def test_post_field_with_no_identifier_raises(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting an empty field identifier is valid but returns no data."""
-    mock_response = MagicMock(spec=requests.Response)
+    mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -202,7 +200,7 @@ async def test_post_field_has_bad_response_raises(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting a valid response with an invalid response from SMDA fails."""
-    mock_response = MagicMock(spec=requests.Response)
+    mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {}
 
