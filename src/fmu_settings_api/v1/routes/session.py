@@ -2,6 +2,7 @@
 
 import contextlib
 from pathlib import Path
+from textwrap import dedent
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
@@ -22,7 +23,11 @@ from fmu_settings_api.session import (
     create_fmu_session,
     destroy_fmu_session,
 )
-from fmu_settings_api.v1.responses import CreateSessionResponses, GetSessionResponses
+from fmu_settings_api.v1.responses import (
+    CreateSessionResponses,
+    GetSessionResponses,
+    inline_add_response,
+)
 
 router = APIRouter(prefix="/session", tags=["session"])
 
@@ -32,17 +37,21 @@ router = APIRouter(prefix="/session", tags=["session"])
     response_model=Message,
     dependencies=[Depends(verify_auth_token)],
     summary="Creates a session for the user",
-    description=(
-        "When creating a session the application will ensure that the user "
-        ".fmu directory exists by creating it if it does not. It will also "
-        "check for the nearest project .fmu directory above the current "
-        "working directory, and if one exists, add it to the session. If "
-        "it does not exist its value will be `null`.\n"
-        "If a session already exists when POSTing to this route, the existing "
-        "session will be silently destroyed. This will remove any state for "
-        "a project .fmu that may be opened.\n"
-        "The session cookie set by this route is required for all other "
-        "routes. Sessions are not persisted when the API is shut down."
+    description=dedent(
+        """
+        When creating a session the application will ensure that the user
+        .fmu directory exists by creating it if it does not. It will also
+        heck for the nearest project .fmu directory above the current
+        working directory, and if one exists, add it to the session. If
+        it does not exist its value will be `null`.
+
+        If a session already exists when POSTing to this route, the existing
+        session will be silently destroyed. This will remove any state for
+        a project .fmu that may be opened.
+
+        The session cookie set by this route is required for all other
+        routes. Sessions are not persisted when the API is shut down.
+        """
     ),
     responses=CreateSessionResponses,
 )
@@ -81,34 +90,32 @@ async def create_session(
     response_model=Message,
     dependencies=[Depends(get_session)],
     summary="Adds a known access token to the session",
-    description=(
-        "This route should be used to add a scoped access token to the current "
-        "session. The token applied via this route is typically a depndency for "
-        "other routes."
+    description=dedent(
+        """
+        This route should be used to add a scoped access token to the current
+        session. The token applied via this route is typically a depndency for
+        other routes."
+        """
     ),
     responses={
         **GetSessionResponses,
-        400: {
-            "description": (
-                "Occurs when trying to save a key to an unknown access scope. An "
-                "access scope/token is unknown if it is not a predefined field in the "
-                "the session manager's 'AccessTokens' model."
+        **inline_add_response(
+            400,
+            dedent(
+                """
+                Occurs when trying to save a key to an unknown access scope. An
+                access scope/token is unknown if it is not a predefined field in the
+                the session manager's 'AccessTokens' model.
+                """
             ),
-            "content": {
-                "application/json": {
-                    "example": {
-                        "examples": [
-                            {
-                                "detail": (
-                                    "Access token id {acess_token.id} is not known or "
-                                    "supported"
-                                ),
-                            },
-                        ],
-                    },
+            [
+                {
+                    "detail": (
+                        "Access token id {access_token.id} is not known or supported"
+                    ),
                 },
-            },
-        },
+            ],
+        ),
     },
 )
 async def patch_access_token(session: SessionDep, access_token: AccessToken) -> Message:

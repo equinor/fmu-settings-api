@@ -1,5 +1,6 @@
 """Routes to operate on the .fmu config file."""
 
+from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException
@@ -7,45 +8,34 @@ from fmu.settings.models.user_config import UserAPIKeys, UserConfig
 
 from fmu_settings_api.deps import SessionDep
 from fmu_settings_api.models.common import APIKey, Message
-from fmu_settings_api.v1.responses import GetSessionResponses, Responses
+from fmu_settings_api.v1.responses import (
+    GetSessionResponses,
+    Responses,
+    inline_add_response,
+)
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 UserResponses: Final[Responses] = {
-    403: {
-        "description": (
-            "The OS returned a permissions error while locating or creating .fmu"
+    **inline_add_response(
+        403,
+        "The OS returned a permissions error while locating or creating .fmu",
+        [
+            {"detail": "Permission denied loading user .fmu config at {config.path}"},
+        ],
+    ),
+    **inline_add_response(
+        404,
+        dedent(
+            """
+            The .fmu directory was unable to be found at or above a given path, or
+            the requested path to create a project .fmu directory at does not exist.
+            """
         ),
-        "content": {
-            "application/json": {
-                "example": {
-                    "examples": [
-                        {
-                            "detail": (
-                                "Permission denied loading user .fmu config at "
-                                "{config.path}"
-                            )
-                        },
-                    ],
-                },
-            },
-        },
-    },
-    404: {
-        "description": (
-            "The .fmu directory was unable to be found at or above a given path, or "
-            "the requested path to create a project .fmu directory at does not exist."
-        ),
-        "content": {
-            "application/json": {
-                "example": {
-                    "examples": [
-                        {"detail": "User .fmu config at {config.path} does not exist"},
-                    ],
-                },
-            },
-        },
-    },
+        [
+            {"detail": "User .fmu config at {config.path} does not exist"},
+        ],
+    ),
 }
 
 
@@ -53,9 +43,11 @@ UserResponses: Final[Responses] = {
     "/",
     response_model=UserConfig,
     summary="Returns the user .fmu configuration",
-    description=(
-        "The user configuration can store API subscription keys or tokens. These are "
-        "obfuscated as '**********' when returned."
+    description=dedent(
+        """
+        The user configuration can store API subscription keys or tokens. These are
+        obfuscated as '**********' when returned.
+        """
     ),
     responses={
         **GetSessionResponses,
@@ -84,33 +76,29 @@ async def get_user(session: SessionDep) -> UserConfig:
     "/api_key",
     response_model=Message,
     summary="Saves an API key/token to the user .fmu configuration",
-    description=(
-        "Currently only known API's can be saved to the user .fmu configuration. "
-        "Arbitrary API key-value pairs cannot be saved. The currently known APIs are:\n"
-        f"\n{', '.join(UserAPIKeys.model_fields.keys())}"
+    description=dedent(
+        f"""
+        Currently only known API's can be saved to the user .fmu configuration.
+        Arbitrary API key-value pairs cannot be saved. The currently known APIs are:
+
+        {", ".join(UserAPIKeys.model_fields.keys())}
+        """
     ),
     responses={
         **GetSessionResponses,
         **UserResponses,
-        400: {
-            "description": (
-                "Occurs when trying to save a key to an unknown API. An API is unknown "
-                "if it is not a predefined field in the fmu-settings UserAPIKeys model."
+        **inline_add_response(
+            400,
+            dedent(
+                """
+                Occurs when trying to save a key to an unknown API. An API is unknown
+                if it is not a predefined field in the fmu-settings UserAPIKeys model.
+                """
             ),
-            "content": {
-                "application/json": {
-                    "example": {
-                        "examples": [
-                            {
-                                "detail": (
-                                    "API id {api_key.id} is not known or supported"
-                                ),
-                            },
-                        ],
-                    },
-                },
-            },
-        },
+            [
+                {"detail": "API id {api_key.id} is not known or supported"},
+            ],
+        ),
     },
 )
 async def patch_api_key(
