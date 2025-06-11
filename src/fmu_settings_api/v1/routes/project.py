@@ -1,6 +1,7 @@
 """Routes to add an FMU project to an existing session."""
 
 from pathlib import Path
+from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
@@ -18,63 +19,54 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     remove_fmu_project_from_session,
 )
-from fmu_settings_api.v1.responses import GetSessionResponses, Responses
+from fmu_settings_api.v1.responses import (
+    GetSessionResponses,
+    Responses,
+    inline_add_response,
+)
 
 router = APIRouter(prefix="/project", tags=["project"])
 
 ProjectResponses: Final[Responses] = {
-    403: {
-        "description": (
-            "The OS returned a permissions error while locating or creating .fmu"
+    **inline_add_response(
+        403,
+        "The OS returned a permissions error while locating or creating .fmu",
+        [
+            {"detail": "Permission denied locating .fmu"},
+            {"detail": "Permission denied accessing .fmu at {path}"},
+            {"detail": "Permission denied creating .fmu at {path}"},
+        ],
+    ),
+    **inline_add_response(
+        404,
+        dedent(
+            """
+            The .fmu directory was unable to be found at or above a given path, or
+            the requested path to create a project .fmu directory at does not exist.
+            """
         ),
-        "content": {
-            "application/json": {
-                "example": {
-                    "examples": [
-                        {"detail": "Permission denied locating .fmu"},
-                        {"detail": "Permission denied accessing .fmu at {path}"},
-                        {"detail": "Permission denied creating .fmu at {path}"},
-                    ],
-                },
-            },
-        },
-    },
-    404: {
-        "description": (
-            "The .fmu directory was unable to be found at or above a given path, or "
-            "the requested path to create a project .fmu directory at does not exist."
-        ),
-        "content": {
-            "application/json": {
-                "example": {
-                    "examples": [
-                        {"detail": "No .fmu directory found from {path}"},
-                        {"detail": "No .fmu directory found at {path}"},
-                        {"detail": "Path {path} does not exist"},
-                    ],
-                },
-            },
-        },
-    },
+        [
+            {"detail": "No .fmu directory found from {path}"},
+            {"detail": "No .fmu directory found at {path}"},
+            {"detail": "Path {path} does not exist"},
+        ],
+    ),
 }
 
 ProjectExistsResponses: Final[Responses] = {
-    409: {
-        "description": (
-            "A project .fmu directory already exist at a given location, or may "
-            "possibly not be a directory, i.e. it may be a .fmu file."
+    **inline_add_response(
+        409,
+        dedent(
+            """
+            A project .fmu directory already exist at a given location, or may
+            possibly not be a directory, i.e. it may be a .fmu file.
+            """
         ),
-        "content": {
-            "application/json": {
-                "example": {
-                    "examples": [
-                        {"detail": ".fmu exists at {path} but is not a directory"},
-                        {"detail": ".fmu already exists at {path}"},
-                    ],
-                },
-            },
-        },
-    },
+        [
+            {"detail": ".fmu exists at {path} but is not a directory"},
+            {"detail": ".fmu already exists at {path}"},
+        ],
+    ),
 }
 
 
@@ -82,10 +74,12 @@ ProjectExistsResponses: Final[Responses] = {
     "/",
     response_model=FMUProject,
     summary="Returns the paths and configuration of the nearest project .fmu directory",
-    description=(
-        "If a project is not already attached to the session id it will be "
-        "attached after a call to this route. If one is already attached this "
-        "route will return data for the project .fmu directory again."
+    description=dedent(
+        """
+        If a project is not already attached to the session id it will be
+        attached after a call to this route. If one is already attached this
+        route will return data for the project .fmu directory again.
+        """
     ),
     responses={
         **GetSessionResponses,
@@ -138,11 +132,13 @@ async def get_project(session: SessionDep) -> FMUProject:
     summary=(
         "Returns the path and configuration of the project .fmu directory at 'path'"
     ),
-    description=(
-        "Used for when a user selects a project .fmu directory in a directory not "
-        "found above the user's current working directory. Will overwrite the "
-        "project .fmu directory attached to a session if one exists. If not, it is "
-        "added to the session."
+    description=dedent(
+        """
+        Used for when a user selects a project .fmu directory in a directory not
+        found above the user's current working directory. Will overwrite the
+        project .fmu directory attached to a session if one exists. If not, it is
+        added to the session.
+        """
     ),
     responses={
         **GetSessionResponses,
@@ -185,9 +181,11 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         "Initializes a project .fmu directory at 'path' and returns its paths and "
         "configuration"
     ),
-    description=(
-        "If a project .fmu directory is already attached to the session, this will "
-        "switch to use the newly created .fmu directory."
+    description=dedent(
+        """
+        If a project .fmu directory is already attached to the session, this will
+       switch to use the newly created .fmu directory.
+       """
     ),
     responses={
         **GetSessionResponses,
@@ -232,9 +230,11 @@ async def init_project(
     "/",
     response_model=Message,
     summary="Removes a project .fmu directory from a session",
-    description=(
-        "This route simply removes an opened project .fmu directory from a session. "
-        "It does not affect the user other aside from that."
+    description=dedent(
+        """
+        This route simply removes (closes) a project .fmu directory from a session.
+        This has no other side effects on the session.
+        """
     ),
     responses={
         **GetSessionResponses,

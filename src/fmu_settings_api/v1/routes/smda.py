@@ -11,7 +11,7 @@ from fmu_settings_api.models.smda import (
     SMDAField,
     SMDAFieldSearchResult,
 )
-from fmu_settings_api.v1.responses import GetSessionResponses
+from fmu_settings_api.v1.responses import GetSessionResponses, add_response_example
 
 router = APIRouter(prefix="/smda", tags=["smda"])
 
@@ -76,7 +76,11 @@ async def get_health(session: SessionDep) -> Ok:
         """
     ),
     responses={
-        **GetSessionResponses,
+        **add_response_example(
+            GetSessionResponses,
+            500,
+            {"detail": "Malformed response from SMDA: no 'data' field present"},
+        )
     },
 )
 async def post_field(session: SessionDep, field: SMDAField) -> SMDAFieldSearchResult:
