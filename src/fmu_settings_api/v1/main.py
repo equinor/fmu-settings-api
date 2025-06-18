@@ -6,7 +6,8 @@ from fmu_settings_api.deps import get_session, get_smda_session
 from fmu_settings_api.models import Ok
 from fmu_settings_api.v1.responses import GetSessionResponses
 
-from .routes import project, session, smda, user
+from .routes import project, session, user
+from .routes.smda import main as smda
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(project.router, dependencies=[Depends(get_session)])
