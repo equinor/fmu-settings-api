@@ -76,7 +76,7 @@ def run_server(  # noqa PLR0913
 
     if reload:
         uvicorn.run(
-            app="fmu_settings_api.__main__:app",
+            app=app,
             host=host,
             port=port,
             reload=True,

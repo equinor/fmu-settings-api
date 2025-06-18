@@ -1,5 +1,6 @@
 """Interface for querying SMDA's API."""
 
+from collections.abc import Sequence
 from typing import Any, Final
 
 import httpx
@@ -10,7 +11,11 @@ class SmdaRoutes:
 
     BASE_URL: Final[str] = "https://api.gateway.equinor.com/smda/v2.0"
     HEALTH: Final[str] = "actuator/health"
-    FIELD_SEARCH: Final[str] = "smda-api/fields/search"
+    FIELDS_SEARCH: Final[str] = "smda-api/fields/search"
+    COUNTRIES_SEARCH: Final[str] = "smda-api/countries/search"
+    DISCOVERIES_SEARCH: Final[str] = "smda-api/discoveries/search"
+    STRAT_COLUMN_AREAS_SEARCH: Final[str] = "smda-api/strat-column-areas/search"
+    COORDINATE_SYSTEM_SEARCH: Final[str] = "smda-api/crs/search"
 
 
 class SmdaAPI:
@@ -63,9 +68,61 @@ class SmdaAPI:
         res = await self.get(SmdaRoutes.HEALTH)
         return res.status_code == httpx.codes.OK
 
-    async def field(self, field_identifier: str) -> httpx.Response:
+    async def field(
+        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx.Response:
         """Searches for a field identifier in SMDA."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+
         return await self.post(
-            SmdaRoutes.FIELD_SEARCH,
-            json={"_projection": "identifier,uuid", "identifier": field_identifier},
+            SmdaRoutes.FIELDS_SEARCH,
+            json={"_projection": _projection, "identifier": field_identifiers},
         )
+
+    async def country(
+        self, country_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx.Response:
+        """Searches for a country identifier in SMDA."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        return await self.post(
+            SmdaRoutes.COUNTRIES_SEARCH,
+            json={"_projection": _projection, "identifier": country_identifiers},
+        )
+
+    async def discovery(
+        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx.Response:
+        """Searches for discoveries related to a field identifier."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        return await self.post(
+            SmdaRoutes.DISCOVERIES_SEARCH,
+            json={"_projection": _projection, "field_identifier": field_identifiers},
+        )
+
+    async def strat_column_areas(
+        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx.Response:
+        """Searches for the stratigraphic column related to a field identifier."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        return await self.post(
+            SmdaRoutes.STRAT_COLUMN_AREAS_SEARCH,
+            json={
+                "_projection": _projection,
+                "strat_area_identifier": field_identifiers,
+                "strat_column_status": "official",
+            },
+        )
+
+    async def coordinate_system(
+        self,
+        crs_identifier: Sequence[str] | None = None,
+        columns: Sequence[str] | None = None,
+    ) -> httpx.Response:
+        """Searches for the stratigraphic column related to a field identifier."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+
+        json: dict[str, Any] = {"_projection": _projection, "_items": 9999}
+        if crs_identifier:
+            json["identifier"] = crs_identifier
+
+        return await self.post(SmdaRoutes.COORDINATE_SYSTEM_SEARCH, json=json)

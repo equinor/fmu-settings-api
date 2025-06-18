@@ -9,10 +9,16 @@ import httpx
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from fmu.settings.models.smda import (
+    CoordinateSystem,
+    CountryItem,
+    DiscoveryItem,
+    StratigraphicColumn,
+)
 
 from fmu_settings_api.models.smda import (
-    SMDAFieldSearchResult,
-    SMDAFieldUUID,
+    SmdaFieldSearchResult,
+    SmdaFieldUUID,
 )
 
 ROUTE = "/api/v1/smda"
@@ -22,7 +28,7 @@ ROUTE = "/api/v1/smda"
 async def mock_SmdaAPI_get() -> AsyncGenerator[AsyncMock]:
     """Mocks the get() method on SmdaAPI."""
     with patch(
-        "fmu_settings_api.v1.routes.smda.SmdaAPI.get", new_callable=AsyncMock
+        "fmu_settings_api.v1.routes.smda.main.SmdaAPI.get", new_callable=AsyncMock
     ) as get_mock:
         yield get_mock
 
@@ -31,7 +37,7 @@ async def mock_SmdaAPI_get() -> AsyncGenerator[AsyncMock]:
 async def mock_SmdaAPI_post() -> AsyncGenerator[AsyncMock]:
     """Mocks the post() method on SmdaAPI."""
     with patch(
-        "fmu_settings_api.v1.routes.smda.SmdaAPI.post", new_callable=AsyncMock
+        "fmu_settings_api.v1.routes.smda.main.SmdaAPI.post", new_callable=AsyncMock
     ) as post_mock:
         yield post_mock
 
@@ -122,13 +128,13 @@ async def test_post_field_succeeds_with_one(
         f"{ROUTE}/field", json={"identifier": "TROLL"}
     )
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert SMDAFieldSearchResult.model_validate(
+    assert SmdaFieldSearchResult.model_validate(
         response.json()
-    ) == SMDAFieldSearchResult(
+    ) == SmdaFieldSearchResult(
         hits=1,
         pages=1,
         results=[
-            SMDAFieldUUID(identifier="TROLL", uuid=uuid),
+            SmdaFieldUUID(identifier="TROLL", uuid=uuid),
         ],
     )
 
@@ -156,9 +162,9 @@ async def test_post_field_succeeds_with_none(
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert SMDAFieldSearchResult.model_validate(
+    assert SmdaFieldSearchResult.model_validate(
         response.json()
-    ) == SMDAFieldSearchResult(
+    ) == SmdaFieldSearchResult(
         hits=0,
         pages=0,
         results=[],
@@ -185,9 +191,9 @@ async def test_post_field_with_no_identifier_raises(
     response = client_with_smda_session.post(f"{ROUTE}/field", json={"identifier": ""})
 
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert SMDAFieldSearchResult.model_validate(
+    assert SmdaFieldSearchResult.model_validate(
         response.json()
-    ) == SMDAFieldSearchResult(
+    ) == SmdaFieldSearchResult(
         hits=0,
         pages=0,
         results=[],
@@ -212,7 +218,7 @@ async def test_post_field_has_bad_response_raises(
     )
     assert (
         response.json()["detail"]
-        == "500: Malformed response from SMDA: no 'data' field present"
+        == "Malformed response from SMDA: no 'data' field present"
     )
 
 
@@ -233,3 +239,319 @@ async def test_post_field_with_no_json_fails(
             "type": "missing",
         }
     ]
+
+
+async def test_post_masterdata_success(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests successful post to masterdata."""
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 1,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": uuid4(),
+                }
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.v1.routes.smda.main.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",
+                uuid=uuid4(),
+            ),
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32638",
+                uuid=uuid4(),
+            ),
+        ]
+        mock_get_countries.return_value = [
+            CountryItem(identifier="Norway", uuid=uuid4())
+        ]
+        mock_get_discoveries.return_value = [
+            DiscoveryItem(short_identifier="Drogon West", uuid=uuid4()),
+            DiscoveryItem(short_identifier="Drogon East", uuid=uuid4()),
+        ]
+        mock_get_strat_column_areas.return_value = [
+            StratigraphicColumn(identifier="LITHO_DROGON", uuid=uuid4()),
+            StratigraphicColumn(identifier="LITHO_VISERION", uuid=uuid4()),
+        ]
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+    assert len(response_data["field"]) == 1
+    assert response_data["field"][0]["identifier"] == "DROGON"
+    assert (
+        response_data["field_coordinate_system"]["identifier"]
+        == "ST_WGS84_UTM37N_P32637"
+    )
+
+    mock_smda_instance.field.assert_called_once_with(
+        ["DROGON"],
+        columns=[
+            "country_identifier",
+            "identifier",
+            "projected_coordinate_system",
+            "uuid",
+        ],
+    )
+
+
+async def test_post_masterdata_missing_coordinate_system(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests error when field coordinate system is not found."""
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 0,
+            "pages": 0,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "UNKNOWN_CRS",
+                    "uuid": uuid4(),
+                }
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.v1.routes.smda.main.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        # Coordinate systems do not contain field's coordinate system
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",
+                uuid=uuid4(),
+            ),
+        ]
+
+        mock_get_countries.return_value = []
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()
+    assert "Projected field coordinate system not found" in response.json()["detail"]
+
+
+async def test_post_masterdata_malformed_response(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests error handling for malformed SMDA response."""
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "malformed": "response",
+    }
+
+    with patch("fmu_settings_api.v1.routes.smda.main.SmdaAPI") as mock_smda_class:
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+        )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
+        response.json()
+    )
+    assert "Malformed response from SMDA" in response.json()["detail"]
+
+
+async def test_post_masterdata_multiple_fields(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests posting multiple fields with duplicate removal."""
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 2,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": uuid4(),
+                },
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "VISERION",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": uuid4(),
+                },
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.v1.routes.smda.main.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",
+                uuid=uuid4(),
+            ),
+        ]
+        mock_get_countries.return_value = [
+            CountryItem(identifier="Norway", uuid=uuid4())
+        ]
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[
+                {"identifier": "DROGON"},
+                {"identifier": "VISERION"},
+                {"identifier": "DROGON"},
+            ],
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+    assert len(response_data["field"]) == 2  # noqa
+
+    mock_smda_instance.field.assert_called_once_with(
+        ["DROGON", "VISERION"],
+        columns=[
+            "country_identifier",
+            "identifier",
+            "projected_coordinate_system",
+            "uuid",
+        ],
+    )
+
+
+async def test_post_masterdata_empty_field_list(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when a post with no fields is sent."""
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 0,
+            "pages": 0,
+            "results": [],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.v1.routes.smda.main.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = []
+        mock_get_countries.return_value = []
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[],
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()

@@ -113,11 +113,8 @@ async def get_project_session(
 ProjectSessionDep = Annotated[ProjectSession, Depends(get_project_session)]
 
 
-async def get_smda_session(
-    fmu_settings_session: str | None = Cookie(None),
-) -> Session:
-    """Gets a session capable of querying SMDA from the session manager."""
-    session = await get_session(fmu_settings_session)
+async def ensure_smda_session(session: Session) -> None:
+    """Raises exceptions if a session is not SMDA-query capable."""
     if (
         session.user_fmu_directory.get_config_value("user_api_keys.smda_subscription")
         is None
@@ -131,4 +128,24 @@ async def get_smda_session(
             status_code=401,
             detail="SMDA access token is not set",
         )
+
+
+async def get_smda_session(
+    fmu_settings_session: str | None = Cookie(None),
+) -> Session:
+    """Gets a session capable of querying SMDA from the session manager."""
+    session = await get_session(fmu_settings_session)
+    await ensure_smda_session(session)
     return session
+
+
+async def get_project_smda_session(
+    fmu_settings_session: str | None = Cookie(None),
+) -> ProjectSession:
+    """Returns a project .fmu session that is SMDA-querying capable."""
+    session = await get_project_session(fmu_settings_session)
+    await ensure_smda_session(session)
+    return session
+
+
+ProjectSmdaSessionDep = Annotated[ProjectSession, Depends(get_project_smda_session)]
