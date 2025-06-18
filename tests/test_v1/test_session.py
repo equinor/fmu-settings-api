@@ -266,7 +266,7 @@ async def test_patch_access_token_to_user_fmu_session(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager
+    from fmu_settings_api.session import session_manager  # noqa PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -297,7 +297,7 @@ async def test_patch_access_token_unknown_failure(
         session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
         assert session_id is not None
 
-        from fmu_settings_api.session import session_manager
+        from fmu_settings_api.session import session_manager  # noqa PLC0415
 
         session = await session_manager.get_session(session_id)
         assert session is not None
