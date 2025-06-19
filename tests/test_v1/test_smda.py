@@ -90,14 +90,21 @@ async def test_get_health_request_failure_raises_exception(
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
     """Tests the request to SMDA failing as a 500 error."""
-    mock_SmdaAPI_get.side_effect = httpx.HTTPError("401 Client Error: Access Denied")
+    mock_request = MagicMock(spec=httpx.Request)
+    mock_request.url = "https://smda"
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 401
+    mock_SmdaAPI_get.side_effect = httpx.HTTPStatusError(
+        "401 Client Error: Access Denied",
+        request=mock_request,
+        response=mock_response,
+    )
 
     response = client_with_smda_session.get(f"{ROUTE}/health")
 
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
-        response.json()
-    )
-    assert response.json()["detail"] == "401 Client Error: Access Denied"
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "SMDA error requesting https://smda"
+    assert response.headers["x-upstream-source"] == "SMDA"
 
 
 async def test_post_field_succeeds_with_one(
@@ -555,3 +562,29 @@ async def test_post_masterdata_empty_field_list(
         )
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+
+
+async def test_post_masterdata_request_fails(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests when a post when the fields initial request fails."""
+    mock_request = MagicMock(spec=httpx.Request)
+    mock_request.url = "https://smda"
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 401
+    mock_SmdaAPI_post.side_effect = httpx.HTTPStatusError(
+        "401 Client Error: Access Denied",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/masterdata",
+        json=[{"identifier": "DROGON"}],
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "SMDA error requesting https://smda"
+    assert response.headers["x-upstream-source"] == "SMDA"

@@ -3,6 +3,7 @@
 import asyncio
 from textwrap import dedent
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from fmu.settings.models.smda import (
     CoordinateSystem,
@@ -67,6 +68,12 @@ async def get_health(session: SessionDep) -> Ok:
         )
         await smda.health()
         return Ok()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url}",
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -110,6 +117,12 @@ async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchRe
         res = await smda.field([field.identifier])
         data = res.json()["data"]
         return SmdaFieldSearchResult(**data)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url!r}",
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
     except KeyError as e:
         raise HTTPException(
             status_code=500,
@@ -241,6 +254,12 @@ async def post_masterdata(
         )
     except HTTPException as e:
         raise e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url}",
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
     except KeyError as e:
         raise HTTPException(
             status_code=500,
