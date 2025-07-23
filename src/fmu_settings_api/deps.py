@@ -122,11 +122,13 @@ async def ensure_smda_session(session: Session) -> None:
         raise HTTPException(
             status_code=401,
             detail="User SMDA API key is not configured",
+            headers={"x-upstream-source": "SMDA"},
         )
     if session.access_tokens.smda_api is None:
         raise HTTPException(
             status_code=401,
             detail="SMDA access token is not set",
+            headers={"x-upstream-source": "SMDA"},
         )
 
 

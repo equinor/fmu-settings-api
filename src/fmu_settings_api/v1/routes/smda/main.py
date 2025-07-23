@@ -1,10 +1,11 @@
 """Routes for querying SMDA's API."""
 
 import asyncio
+from collections.abc import Generator
 from textwrap import dedent
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fmu.settings.models.smda import (
     CoordinateSystem,
     FieldItem,
@@ -29,7 +30,16 @@ from fmu_settings_api.services.smda import (
 )
 from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_response
 
-router = APIRouter(prefix="/smda", tags=["smda"])
+
+def _add_response_headers(response: Response) -> Generator[None]:
+    """Adds headers specific to the /smda route."""
+    response.headers["x-upstream-source"] = "SMDA"
+    yield
+
+
+router = APIRouter(
+    prefix="/smda", tags=["smda"], dependencies=[Depends(_add_response_headers)]
+)
 
 
 @router.get(
@@ -57,7 +67,11 @@ async def get_health(session: SessionDep) -> Ok:
     """Returns a simple 200 OK if able to query SMDA."""
     # Handled on the route dependency, duplicated for typing
     if session.access_tokens.smda_api is None:
-        raise HTTPException(status_code=401, detail="SMDA access token is not set")
+        raise HTTPException(
+            status_code=401,
+            detail="SMDA access token is not set",
+            headers={"x-upstream-source": "SMDA"},
+        )
 
     try:
         smda = SmdaAPI(
@@ -75,7 +89,11 @@ async def get_health(session: SessionDep) -> Ok:
             headers={"x-upstream-source": "SMDA"},
         ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
 
 
 @router.post(
@@ -104,7 +122,11 @@ async def get_health(session: SessionDep) -> Ok:
 async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchResult:
     """Searches for a field identifier in SMDA."""
     if session.access_tokens.smda_api is None:
-        raise HTTPException(status_code=401, detail="SMDA access token is not set")
+        raise HTTPException(
+            status_code=401,
+            detail="SMDA access token is not set",
+            headers={"x-upstream-source": "SMDA"},
+        )
 
     try:
         smda = SmdaAPI(
@@ -127,13 +149,20 @@ async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchRe
         raise HTTPException(
             status_code=500,
             detail="Malformed response from SMDA: no 'data' field present",
+            headers={"x-upstream-source": "SMDA"},
         ) from e
     except TimeoutError as e:
         raise HTTPException(
-            status_code=503, detail="SMDA API request timed out. Please try again."
+            status_code=503,
+            detail="SMDA API request timed out. Please try again.",
+            headers={"x-upstream-source": "SMDA"},
         ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
 
 
 @router.post(
@@ -183,7 +212,11 @@ async def post_masterdata(
         )
     # Handled on the route dependency, duplicated for typing
     if session.access_tokens.smda_api is None:
-        raise HTTPException(status_code=401, detail="SMDA access token is not set")
+        raise HTTPException(
+            status_code=401,
+            detail="SMDA access token is not set",
+            headers={"x-upstream-source": "SMDA"},
+        )
 
     # Sorted for tests as sets don't guarantee order
     unique_field_identifiers = sorted({field.identifier for field in smda_fields})
@@ -210,6 +243,7 @@ async def post_masterdata(
             raise HTTPException(
                 status_code=404,
                 detail=f"No fields found for identifiers: {unique_field_identifiers}",
+                headers={"x-upstream-source": "SMDA"},
             )
 
         field_items = [FieldItem(**field) for field in field_results]
@@ -241,7 +275,9 @@ async def post_masterdata(
 
         if field_coordinate_system is None:
             raise HTTPException(
-                status_code=404, detail="Projected field coordinate system not found"
+                status_code=404,
+                detail="Projected field coordinate system not found",
+                headers={"x-upstream-source": "SMDA"},
             )
 
         return SmdaMasterdataResult(
@@ -264,10 +300,17 @@ async def post_masterdata(
         raise HTTPException(
             status_code=500,
             detail="Malformed response from SMDA: {e}",
+            headers={"x-upstream-source": "SMDA"},
         ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+            headers={"x-upstream-source": "SMDA"},
+        ) from e
     except TimeoutError as e:
         raise HTTPException(
-            status_code=503, detail="SMDA API request timed out. Please try again."
+            status_code=503,
+            detail="SMDA API request timed out. Please try again.",
+            headers={"x-upstream-source": "SMDA"},
         ) from e

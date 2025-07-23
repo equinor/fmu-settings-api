@@ -46,6 +46,7 @@ def test_get_health(client_with_session: TestClient, session_tmp_path: Path) -> 
     """Test 401 returns when the user has no SMDA API key set in their configuration."""
     response = client_with_session.get(f"{ROUTE}/health")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert response.json()["detail"] == "User SMDA API key is not configured"
 
 
@@ -64,6 +65,7 @@ def test_get_health_has_user_api_key(
 
     response = client_with_session.get(f"{ROUTE}/health")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert response.json()["detail"] == "SMDA access token is not set"
 
 
@@ -72,7 +74,7 @@ async def test_get_health_has_user_api_key_and_access_token(
     session_tmp_path: Path,
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
-    """Test 401 returns when an API key exists but an SMDA access token is not set."""
+    """Test 200 returns when an API key and SMDA access token are set."""
     mock_response = MagicMock(spec=httpx.Response)
     mock_response.status_code = httpx.codes.OK
     mock_response.json.return_value = {"status": "ok"}
@@ -81,6 +83,7 @@ async def test_get_health_has_user_api_key_and_access_token(
 
     response = client_with_smda_session.get(f"{ROUTE}/health")
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert response.json()["status"] == "ok"
 
 
@@ -103,8 +106,8 @@ async def test_get_health_request_failure_raises_exception(
     response = client_with_smda_session.get(f"{ROUTE}/health")
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
-    assert response.json()["detail"] == "SMDA error requesting https://smda"
     assert response.headers["x-upstream-source"] == "SMDA"
+    assert response.json()["detail"] == "SMDA error requesting https://smda"
 
 
 async def test_post_field_succeeds_with_one(
@@ -135,6 +138,7 @@ async def test_post_field_succeeds_with_one(
         f"{ROUTE}/field", json={"identifier": "TROLL"}
     )
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert SmdaFieldSearchResult.model_validate(
         response.json()
     ) == SmdaFieldSearchResult(
@@ -169,6 +173,7 @@ async def test_post_field_succeeds_with_none(
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert SmdaFieldSearchResult.model_validate(
         response.json()
     ) == SmdaFieldSearchResult(
@@ -198,6 +203,7 @@ async def test_post_field_with_no_identifier_raises(
     response = client_with_smda_session.post(f"{ROUTE}/field", json={"identifier": ""})
 
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert SmdaFieldSearchResult.model_validate(
         response.json()
     ) == SmdaFieldSearchResult(
@@ -223,6 +229,7 @@ async def test_post_field_has_bad_response_raises(
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
         response.json()
     )
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert (
         response.json()["detail"]
         == "Malformed response from SMDA: no 'data' field present"
@@ -319,6 +326,7 @@ async def test_post_masterdata_success(
         )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     response_data = response.json()
     assert len(response_data["field"]) == 1
     assert response_data["field"][0]["identifier"] == "DROGON"
@@ -399,6 +407,7 @@ async def test_post_masterdata_missing_coordinate_system(
         )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert "Projected field coordinate system not found" in response.json()["detail"]
 
 
@@ -425,6 +434,7 @@ async def test_post_masterdata_malformed_response(
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
         response.json()
     )
+    assert response.headers["x-upstream-source"] == "SMDA"
     assert "Malformed response from SMDA" in response.json()["detail"]
 
 
@@ -500,6 +510,7 @@ async def test_post_masterdata_multiple_fields(
         )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.headers["x-upstream-source"] == "SMDA"
     response_data = response.json()
     assert len(response_data["field"]) == 2  # noqa
 
@@ -586,5 +597,5 @@ async def test_post_masterdata_request_fails(
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
-    assert response.json()["detail"] == "SMDA error requesting https://smda"
     assert response.headers["x-upstream-source"] == "SMDA"
+    assert response.json()["detail"] == "SMDA error requesting https://smda"
