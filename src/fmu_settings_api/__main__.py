@@ -65,7 +65,7 @@ def run_server(  # noqa PLR0913
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["x-upstream-source"],
+            expose_headers=[settings.X_UPSTREAM_SOURCE_HEADER_KEY],
         )
 
     def signal_handler(signum: int, frame: FrameType | None) -> None:

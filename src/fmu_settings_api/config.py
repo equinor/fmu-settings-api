@@ -55,6 +55,7 @@ class APISettings(BaseModel):
 
     FRONTEND_HOST: HttpUrl = Field(default=HttpUrl("http://localhost:8000"))
     BACKEND_CORS_ORIGINS: Annotated[list[HttpUrl], BeforeValidator(parse_cors)] = []
+    X_UPSTREAM_SOURCE_HEADER_KEY: str = Field(default="x-upstream-source", frozen=True)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
