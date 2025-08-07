@@ -12,7 +12,7 @@ from fmu.settings._init import init_fmu_directory
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
-from fmu_settings_api.config import settings
+from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.models.project import FMUProject
 from fmu_settings_api.session import ProjectSession, Session
 
@@ -30,11 +30,11 @@ def test_get_project_does_not_care_about_token(mock_token: str) -> None:
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "No active session found"}
 
-    response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.get(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "No active session found"}
 
-    response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: "no" * 32})
+    response = client.get(ROUTE, headers={HttpHeader.API_TOKEN_KEY: "no" * 32})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "No active session found"}
 

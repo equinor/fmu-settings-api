@@ -5,6 +5,8 @@ from typing import Any, Final
 
 import httpx
 
+from fmu_settings_api.config import HttpHeader
+
 
 class SmdaRoutes:
     """Contains routes used by routes in this API."""
@@ -26,9 +28,9 @@ class SmdaAPI:
         self._access_token = access_token
         self._subscription_key = subscription_key
         self._headers = {
-            "Content-Type": "application/json",
-            "authorization": f"Bearer {self._access_token}",
-            "Ocp-Apim-Subscription-Key": self._subscription_key,
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: f"Bearer {self._access_token}",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: self._subscription_key,
         }
 
     async def get(self, route: str) -> httpx.Response:

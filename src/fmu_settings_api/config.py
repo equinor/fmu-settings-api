@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Final, Self
 
 from pydantic import (
     BaseModel,
@@ -39,11 +39,24 @@ def parse_cors(v: Any) -> list[HttpUrl]:
     raise ValueError(f"Invalid list of origins: {v}")
 
 
+class HttpHeader:
+    """Contains Http header keys and values for API requests."""
+
+    API_TOKEN_KEY: Final[str] = "x-fmu-settings-api"
+    UPSTREAM_SOURCE_KEY: Final[str] = "x-upstream-source"
+    UPSTREAM_SOURCE_SMDA: Final[str] = "SMDA"
+    WWW_AUTHENTICATE_KEY: Final[str] = "WWW-Authenticate"
+    WWW_AUTHENTICATE_COOKIE: Final[str] = "Cookie-Auth"
+    CONTENT_TYPE_KEY: Final[str] = "Content-Type"
+    CONTENT_TYPE_JSON: Final[str] = "application/json"
+    AUTHORIZATION_KEY: Final[str] = "authorization"
+    OCP_APIM_SUBSCRIPTION_KEY: Final[str] = "Ocp-Apim-Subscription-Key"
+
+
 class APISettings(BaseModel):
     """Settings used for the API."""
 
     API_V1_PREFIX: str = Field(default="/api/v1", frozen=True)
-    TOKEN_HEADER_NAME: str = Field(default="x-fmu-settings-api", frozen=True)
     TOKEN: str = Field(
         default_factory=generate_auth_token,
         pattern=r"^[a-fA-F0-9]{64}$",
@@ -55,7 +68,6 @@ class APISettings(BaseModel):
 
     FRONTEND_HOST: HttpUrl = Field(default=HttpUrl("http://localhost:8000"))
     BACKEND_CORS_ORIGINS: Annotated[list[HttpUrl], BeforeValidator(parse_cors)] = []
-    X_UPSTREAM_SOURCE_HEADER_KEY: str = Field(default="x-upstream-source", frozen=True)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

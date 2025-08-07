@@ -11,7 +11,7 @@ from fmu.settings.models.smda import (
     FieldItem,
 )
 
-from fmu_settings_api.config import settings
+from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.deps import (
     ProjectSmdaSessionDep,
     SessionDep,
@@ -34,7 +34,7 @@ from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_respon
 
 def _add_response_headers(response: Response) -> Generator[None]:
     """Adds headers specific to the /smda route."""
-    response.headers[settings.X_UPSTREAM_SOURCE_HEADER_KEY] = "SMDA"
+    response.headers[HttpHeader.UPSTREAM_SOURCE_KEY] = HttpHeader.UPSTREAM_SOURCE_SMDA
     yield
 
 
@@ -71,7 +71,7 @@ async def get_health(session: SessionDep) -> Ok:
         raise HTTPException(
             status_code=401,
             detail="SMDA access token is not set",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         )
 
     try:
@@ -87,13 +87,13 @@ async def get_health(session: SessionDep) -> Ok:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
 
 
@@ -126,7 +126,7 @@ async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchRe
         raise HTTPException(
             status_code=401,
             detail="SMDA access token is not set",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         )
 
     try:
@@ -144,25 +144,25 @@ async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchRe
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url!r}",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except KeyError as e:
         raise HTTPException(
             status_code=500,
             detail="Malformed response from SMDA: no 'data' field present",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except TimeoutError as e:
         raise HTTPException(
             status_code=503,
             detail="SMDA API request timed out. Please try again.",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
 
 
@@ -216,7 +216,7 @@ async def post_masterdata(
         raise HTTPException(
             status_code=401,
             detail="SMDA access token is not set",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         )
 
     # Sorted for tests as sets don't guarantee order
@@ -244,7 +244,9 @@ async def post_masterdata(
             raise HTTPException(
                 status_code=404,
                 detail=f"No fields found for identifiers: {unique_field_identifiers}",
-                headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+                headers={
+                    HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
+                },
             )
 
         field_items = [FieldItem(**field) for field in field_results]
@@ -278,7 +280,9 @@ async def post_masterdata(
             raise HTTPException(
                 status_code=404,
                 detail="Projected field coordinate system not found",
-                headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+                headers={
+                    HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
+                },
             )
 
         return SmdaMasterdataResult(
@@ -295,23 +299,23 @@ async def post_masterdata(
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except KeyError as e:
         raise HTTPException(
             status_code=500,
             detail="Malformed response from SMDA: {e}",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except TimeoutError as e:
         raise HTTPException(
             status_code=503,
             detail="SMDA API request timed out. Please try again.",
-            headers={settings.X_UPSTREAM_SOURCE_HEADER_KEY: "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
