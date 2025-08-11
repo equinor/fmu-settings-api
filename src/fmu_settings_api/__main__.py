@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
 
-from .config import settings
+from .config import HttpHeader, settings
 from .models import Ok
 from .v1.main import api_v1_router
 
@@ -65,7 +65,7 @@ def run_server(  # noqa PLR0913
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["x-upstream-source"],
+            expose_headers=[HttpHeader.UPSTREAM_SOURCE_KEY],
         )
 
     def signal_handler(signum: int, frame: FrameType | None) -> None:

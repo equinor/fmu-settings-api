@@ -7,7 +7,7 @@ from fastapi.security import APIKeyHeader
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 
-from fmu_settings_api.config import settings
+from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -15,7 +15,7 @@ from fmu_settings_api.session import (
     session_manager,
 )
 
-api_token_header = APIKeyHeader(name=settings.TOKEN_HEADER_NAME)
+api_token_header = APIKeyHeader(name=HttpHeader.API_TOKEN_KEY)
 
 TokenHeaderDep = Annotated[str, Security(api_token_header)]
 
@@ -80,7 +80,9 @@ async def get_session(
         raise HTTPException(
             status_code=401,
             detail="No active session found",
-            headers={"WWW-Authenticate": "Cookie-Auth"},
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
         )
     try:
         return await session_manager.get_session(fmu_settings_session)
@@ -88,7 +90,9 @@ async def get_session(
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired session",
-            headers={"WWW-Authenticate": "Cookie-Auth"},
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Session error: {e}") from e
@@ -122,13 +126,13 @@ async def ensure_smda_session(session: Session) -> None:
         raise HTTPException(
             status_code=401,
             detail="User SMDA API key is not configured",
-            headers={"x-upstream-source": "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         )
     if session.access_tokens.smda_api is None:
         raise HTTPException(
             status_code=401,
             detail="SMDA access token is not set",
-            headers={"x-upstream-source": "SMDA"},
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         )
 
 

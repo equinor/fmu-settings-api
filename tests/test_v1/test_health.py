@@ -4,7 +4,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from fmu_settings_api.__main__ import app
-from fmu_settings_api.config import settings
+from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.models import Ok
 
 client = TestClient(app)
@@ -22,14 +22,14 @@ def test_health_check_no_session() -> None:
 def test_health_check_no_session_bad_token() -> None:
     """Test the health check endpoint with an invalid token but no session."""
     token = "no" * 32
-    response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: token})
+    response = client.get(ROUTE, headers={HttpHeader.API_TOKEN_KEY: token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
     assert response.json() == {"detail": "No active session found"}
 
 
 def test_health_check_no_session_valid_token(mock_token: str) -> None:
     """Test the health check endpoint with a valid token but no session."""
-    response = client.get(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.get(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
     assert response.json() == {"detail": "No active session found"}
 
@@ -47,9 +47,7 @@ def test_health_check_no_session_valid_session_invalid_token(
 ) -> None:
     """Test the health check endpoint with a valid session and invalid token."""
     token = "no" * 32
-    response = client_with_session.get(
-        ROUTE, headers={settings.TOKEN_HEADER_NAME: token}
-    )
+    response = client_with_session.get(ROUTE, headers={HttpHeader.API_TOKEN_KEY: token})
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
     assert Ok() == Ok.model_validate(response.json())
@@ -60,7 +58,7 @@ def test_health_check_no_session_valid_session_valid_token(
 ) -> None:
     """Test the health check endpoint with a valid session and valid token."""
     response = client_with_session.get(
-        ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token}
+        ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token}
     )
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}

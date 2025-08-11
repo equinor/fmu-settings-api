@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.interfaces.smda_api import SmdaAPI, SmdaRoutes
 
 
@@ -40,9 +41,9 @@ async def test_smda_get(mock_httpx_get: MagicMock) -> None:
     mock_httpx_get.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
-            "Content-Type": "application/json",
-            "authorization": "Bearer token",
-            "Ocp-Apim-Subscription-Key": "key",
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
@@ -56,9 +57,9 @@ async def test_smda_post_with_json(mock_httpx_post: MagicMock) -> None:
     mock_httpx_post.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
-            "Content-Type": "application/json",
-            "authorization": "Bearer token",
-            "Ocp-Apim-Subscription-Key": "key",
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
         },
         json={"a": "b"},
     )
@@ -73,9 +74,9 @@ async def test_smda_post_without_json(mock_httpx_post: MagicMock) -> None:
     mock_httpx_post.assert_called_with(
         f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HEALTH}",
         headers={
-            "Content-Type": "application/json",
-            "authorization": "Bearer token",
-            "Ocp-Apim-Subscription-Key": "key",
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
         },
         json=None,
     )

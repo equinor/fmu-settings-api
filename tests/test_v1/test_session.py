@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
-from fmu_settings_api.config import settings
+from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -35,7 +35,7 @@ def test_get_session_invalid_token() -> None:
     """Tests the fmu routes require a session."""
     client = TestClient(app)
     bad_token = "no" * 32
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: bad_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: bad_token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authorized"}
 
@@ -57,7 +57,7 @@ def test_get_session_invalid_token_does_not_create_user_fmu(
     """Tests unauthorized requests do not create a user .fmu."""
     client = TestClient(app)
     bad_token = "no" * 32
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: bad_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: bad_token})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authorized"}
     assert not (tmp_path_mocked_home / "home/.fmu").exists()
@@ -68,7 +68,7 @@ def test_get_session_create_user_fmu_no_permissions(
 ) -> None:
     """Tests that user .fmu directory permissions errors return a 403."""
     client = TestClient(app)
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json() == {"detail": "Permission denied creating user .fmu"}
 
@@ -80,7 +80,7 @@ def test_get_session_creating_user_fmu_exists_as_a_file(
     client = TestClient(app)
     (tmp_path_mocked_home / "home/.fmu").touch()
     monkeypatch.chdir(tmp_path_mocked_home)
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json() == {
         "detail": "User .fmu already exists but is invalid (i.e. is not a directory)"
@@ -101,7 +101,7 @@ def test_get_session_creating_user_unknown_failure(
 
         monkeypatch.chdir(tmp_path_mocked_home)
         init_fmu_directory(tmp_path_mocked_home)
-        response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+        response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
@@ -118,7 +118,7 @@ def test_get_session_creates_user_fmu(
     ):
         UserFMUDirectory()
 
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
@@ -134,7 +134,7 @@ async def test_get_session_creates_session(
     """Tests that user .fmu is created when a session is created."""
     client = TestClient(app)
     user_home = tmp_path_mocked_home / "home"
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
 
     user_fmu_dir = UserFMUDirectory()
@@ -158,7 +158,7 @@ async def test_get_session_finds_existing_user_fmu(
     client = TestClient(app)
     user_fmu_dir = init_user_fmu_directory()
 
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
 
     session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
@@ -185,7 +185,7 @@ async def test_get_session_from_project_path_returns_fmu_project(
     ert_model_path.mkdir(parents=True)
     monkeypatch.chdir(ert_model_path)
 
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
@@ -214,7 +214,7 @@ async def test_getting_two_sessions_destroys_existing_session(
     """Tests that creating a new session destroys the old, if it exists."""
     client = TestClient(app)
     user_home = tmp_path_mocked_home / "home"
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
 
     user_fmu_dir = UserFMUDirectory()
@@ -228,7 +228,7 @@ async def test_getting_two_sessions_destroys_existing_session(
     assert session.user_fmu_directory.path == user_fmu_dir.path
 
     # New session
-    response = client.post(ROUTE, headers={settings.TOKEN_HEADER_NAME: mock_token})
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
 
     new_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
