@@ -106,7 +106,6 @@ async def test_get_discoveries(given: list[str], mock_val: list[DiscoveryItem]) 
         }
         for i, item in enumerate(mock_val)
     ]
-    print(results)
     discovery_resp.json.return_value = {"data": {"results": results}}
     mock_smda.discovery.return_value = discovery_resp
 

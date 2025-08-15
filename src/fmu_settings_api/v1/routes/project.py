@@ -5,6 +5,7 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
+from fmu.datamodels.fmu_results.fields import Smda
 from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
 from fmu.settings._init import init_fmu_directory
 
@@ -254,5 +255,38 @@ async def delete_project_session(
         )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/masterdata",
+    response_model=Message,
+    summary=("Saves SMDA masterdata to the project .fmu directory"),
+    description=dedent(
+        """
+        Saves masterdata from SMDA to the project .fmu directory.
+        If existing masterdata is present, it will be updated with the new masterdata.
+       """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
+async def patch_masterdata(
+    project_session: ProjectSessionDep, smda_masterdata: Smda
+) -> Message:
+    """Saves SMDA masterdata to the project .fmu directory."""
+    fmu_dir = project_session.project_fmu_directory
+    try:
+        fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
+        return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

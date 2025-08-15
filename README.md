@@ -29,7 +29,7 @@ fmu-settings api --print-token
 It's useful to be able to reload while developing.
 
 ```sh
-fmu-settings-api --print-token --reload
+fmu-settings api --print-token --reload
 ```
 
 ## API Documentation

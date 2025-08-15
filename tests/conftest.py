@@ -4,6 +4,7 @@ import stat
 from collections.abc import AsyncGenerator, Callable, Generator, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -149,3 +150,30 @@ async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient
 def session_tmp_path() -> Path:
     """Returns the tmp_path equivalent from a mocked user .fmu dir."""
     return UserFMUDirectory().path.parent.parent
+
+
+@pytest.fixture
+def smda_masterdata() -> dict[str, Any]:
+    """Returns an example SMDA masterdata for the .fmu project."""
+    return {
+        "stratigraphic_column": {
+            "identifier": "DROGON_2020",
+            "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+        },
+        "coordinate_system": {
+            "identifier": "ST_WGS84_UTM37N_P32637",
+            "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+        },
+        "country": [
+            {"identifier": "Norway", "uuid": "15ce3b84-766f-4c93-9050-b154861f9100"}
+        ],
+        "discovery": [
+            {
+                "short_identifier": "SomeDiscovery",
+                "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+            }
+        ],
+        "field": [
+            {"identifier": "OseFax", "uuid": "15ce3b84-766f-4c93-9050-b154861f9100"}
+        ],
+    }
