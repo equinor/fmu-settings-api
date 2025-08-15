@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from fmu.settings.models.smda import (
+from fmu.datamodels.fmu_results.fields import (
     CoordinateSystem,
     CountryItem,
     DiscoveryItem,
