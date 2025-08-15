@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from fmu.settings.models.smda import (
+from fmu.datamodels.fmu_results.fields import (
     CoordinateSystem,
     CountryItem,
     DiscoveryItem,

@@ -6,7 +6,7 @@ from textwrap import dedent
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fmu.settings.models.smda import (
+from fmu.datamodels.fmu_results.fields import (
     CoordinateSystem,
     FieldItem,
 )
