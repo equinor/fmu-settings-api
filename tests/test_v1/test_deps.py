@@ -1,17 +1,25 @@
 """Tests dependencies (middleware)."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import create_autospec, patch
 from uuid import uuid4
 
 import pytest
 from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.settings._init import init_user_fmu_directory
+from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.deps import get_session
-from fmu_settings_api.session import SessionManager
+from fmu_settings_api.deps import (
+    ProjectSmdaSessionDep,
+    SmdaInterfaceDep,
+    get_project_smda_interface,
+    get_session,
+)
+from fmu_settings_api.interfaces.smda_api import SmdaAPI
+from fmu_settings_api.session import AccessTokens, SessionManager
 
 ROUTE = "/api/v1/health"
 
@@ -48,3 +56,69 @@ def test_get_session_dep_from_request(
     client_with_session.cookies.set(settings.SESSION_COOKIE_KEY, str(uuid4()))
     response = client_with_session.get(ROUTE)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+
+
+async def test_get_smda_interface(tmp_path_mocked_home: Path) -> None:
+    """Tests the get_smda_interface dependency."""
+    smda_api_token_mock = "test_token"
+    smda_subscription_mock = "test_subscription"
+    user_fmu_directory = init_user_fmu_directory()
+    user_fmu_directory.set_config_value(
+        "user_api_keys.smda_subscription", smda_subscription_mock
+    )
+
+    session_mock = create_autospec(SmdaInterfaceDep, instance=True)
+    session_mock.id = str(uuid4())
+    session_mock.created_at = datetime.now(UTC)
+    session_mock.expires_at = timedelta(seconds=60)
+    session_mock.last_accessed = datetime.now(UTC)
+    session_mock.access_tokens = AccessTokens(
+        fmu_settings=SecretStr("fmu_settings_token")
+    )
+    session_mock.user_fmu_directory = user_fmu_directory
+
+    with pytest.raises(HTTPException, match="401: SMDA access token is not set"):
+        await get_project_smda_interface(session_mock)
+
+    session_mock.access_tokens = AccessTokens(
+        fmu_settings=SecretStr("fmu_settings_token"),
+        smda_api=SecretStr(smda_api_token_mock),
+    )
+
+    smda_project_interface: SmdaAPI = await get_project_smda_interface(session_mock)
+    assert isinstance(smda_project_interface, SmdaAPI)
+    assert smda_project_interface._access_token == smda_api_token_mock
+    assert smda_project_interface._subscription_key == smda_subscription_mock
+
+
+async def test_get_project_smda_interface(tmp_path_mocked_home: Path) -> None:
+    """Tests the get_project_smda_interface dependency."""
+    smda_api_token_mock = "test_token"
+    smda_subscription_mock = "test_subscription"
+    user_fmu_directory = init_user_fmu_directory()
+    user_fmu_directory.set_config_value(
+        "user_api_keys.smda_subscription", smda_subscription_mock
+    )
+
+    project_session_mock = create_autospec(ProjectSmdaSessionDep, instance=True)
+    project_session_mock.id = str(uuid4())
+    project_session_mock.created_at = datetime.now(UTC)
+    project_session_mock.expires_at = timedelta(seconds=60)
+    project_session_mock.last_accessed = datetime.now(UTC)
+    project_session_mock.access_tokens = AccessTokens(
+        fmu_settings=SecretStr("fmu_settings_token")
+    )
+    project_session_mock.user_fmu_directory = user_fmu_directory
+
+    with pytest.raises(HTTPException, match="401: SMDA access token is not set"):
+        await get_project_smda_interface(project_session_mock)
+
+    project_session_mock.access_tokens = AccessTokens(
+        fmu_settings=SecretStr("fmu_settings_token"),
+        smda_api=SecretStr(smda_api_token_mock),
+    )
+
+    smda_interface = await get_project_smda_interface(project_session_mock)
+    assert isinstance(smda_interface, SmdaAPI)
+    assert smda_interface._access_token == smda_api_token_mock
+    assert smda_interface._subscription_key == smda_subscription_mock
