@@ -13,10 +13,9 @@ from fmu.datamodels.fmu_results.fields import (
 
 from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.deps import (
-    ProjectSmdaSessionDep,
-    SessionDep,
+    ProjectSmdaInterfaceDep,
+    SmdaInterfaceDep,
 )
-from fmu_settings_api.interfaces import SmdaAPI
 from fmu_settings_api.models import Ok
 from fmu_settings_api.models.smda import (
     SmdaField,
@@ -64,24 +63,10 @@ router = APIRouter(
         **GetSessionResponses,
     },
 )
-async def get_health(session: SessionDep) -> Ok:
+async def get_health(smda_interface: SmdaInterfaceDep) -> Ok:
     """Returns a simple 200 OK if able to query SMDA."""
-    # Handled on the route dependency, duplicated for typing
-    if session.access_tokens.smda_api is None:
-        raise HTTPException(
-            status_code=401,
-            detail="SMDA access token is not set",
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        )
-
     try:
-        smda = SmdaAPI(
-            session.access_tokens.smda_api.get_secret_value(),
-            session.user_fmu_directory.get_config_value(
-                "user_api_keys.smda_subscription"
-            ).get_secret_value(),
-        )
-        await smda.health()
+        await smda_interface.health()
         return Ok()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -120,24 +105,12 @@ async def get_health(session: SessionDep) -> Ok:
         **GetSessionResponses,
     },
 )
-async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchResult:
+async def post_field(
+    smda_interface: SmdaInterfaceDep, field: SmdaField
+) -> SmdaFieldSearchResult:
     """Searches for a field identifier in SMDA."""
-    if session.access_tokens.smda_api is None:
-        raise HTTPException(
-            status_code=401,
-            detail="SMDA access token is not set",
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        )
-
     try:
-        smda = SmdaAPI(
-            session.access_tokens.smda_api.get_secret_value(),
-            session.user_fmu_directory.get_config_value(
-                "user_api_keys.smda_subscription"
-            ).get_secret_value(),
-        )
-
-        res = await smda.field([field.identifier])
+        res = await smda_interface.field([field.identifier])
         data = res.json()["data"]
         return SmdaFieldSearchResult(**data)
     except httpx.HTTPStatusError as e:
@@ -204,33 +177,20 @@ async def post_field(session: SessionDep, field: SmdaField) -> SmdaFieldSearchRe
     },
 )
 async def post_masterdata(
-    session: ProjectSmdaSessionDep, smda_fields: list[SmdaField]
+    smda_fields: list[SmdaField],
+    smda_interface: ProjectSmdaInterfaceDep,
 ) -> SmdaMasterdataResult:
     """Queries SMDA masterdata for .fmu project configuration."""
     if not smda_fields:
         raise HTTPException(
             status_code=400, detail="At least one SMDA field must be provided"
         )
-    # Handled on the route dependency, duplicated for typing
-    if session.access_tokens.smda_api is None:
-        raise HTTPException(
-            status_code=401,
-            detail="SMDA access token is not set",
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        )
 
     # Sorted for tests as sets don't guarantee order
     unique_field_identifiers = sorted({field.identifier for field in smda_fields})
     try:
-        smda = SmdaAPI(
-            session.access_tokens.smda_api.get_secret_value(),
-            session.user_fmu_directory.get_config_value(
-                "user_api_keys.smda_subscription"
-            ).get_secret_value(),
-        )
-
         # Query initial list of fields (with duplicates removed)
-        field_res = await smda.field(
+        field_res = await smda_interface.field(
             unique_field_identifiers,
             columns=[
                 "country_identifier",
@@ -256,11 +216,17 @@ async def post_masterdata(
         )
 
         async with asyncio.TaskGroup() as tg:
-            coordinate_systems_task = tg.create_task(get_coordinate_systems(smda))
-            country_task = tg.create_task(get_countries(smda, country_identifiers))
-            discovery_task = tg.create_task(get_discoveries(smda, field_identifiers))
+            coordinate_systems_task = tg.create_task(
+                get_coordinate_systems(smda_interface)
+            )
+            country_task = tg.create_task(
+                get_countries(smda_interface, country_identifiers)
+            )
+            discovery_task = tg.create_task(
+                get_discoveries(smda_interface, field_identifiers)
+            )
             strat_column_task = tg.create_task(
-                get_strat_column_areas(smda, field_identifiers)
+                get_strat_column_areas(smda_interface, field_identifiers)
             )
 
         country_items = country_task.result()
