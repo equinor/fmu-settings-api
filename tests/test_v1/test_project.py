@@ -60,7 +60,7 @@ def test_get_project_no_directory_permissions(
         response = client_with_session.get(ROUTE)
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json() == {"detail": "Permission denied locating .fmu"}
+    assert response.json() == {"detail": "Permission denied accessing .fmu"}
 
 
 def test_get_project_directory_does_not_exist(
@@ -108,6 +108,42 @@ def test_get_project_raises_other_exceptions(client_with_session: TestClient) ->
         response = client_with_session.get(ROUTE)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "foo"}
+
+
+def test_get_project_directory_config_missing(
+    client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 500 returns when project .fmu has missing config."""
+    monkeypatch.chdir(session_tmp_path)
+
+    fmu_dir = init_fmu_directory(session_tmp_path)
+    assert fmu_dir.config.exists
+
+    fmu_dir.config.path.unlink()
+    assert not fmu_dir.config.exists
+
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"].startswith(
+        f"Corrupt project found at {session_tmp_path}"
+    )
+
+
+def test_get_project_directory_corrupt(
+    client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 500 returns when project .fmu has invalid config."""
+    monkeypatch.chdir(session_tmp_path)
+
+    fmu_dir = init_fmu_directory(session_tmp_path)
+    with open(fmu_dir.config.path, "w") as f:
+        f.write("incorrect")
+
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"].startswith(
+        f"Corrupt project found at {session_tmp_path}"
+    )
 
 
 def test_get_project_directory_exists(
@@ -229,6 +265,38 @@ def test_post_fmu_directory_is_not_directory(
     assert response.json() == {
         "detail": f".fmu exists at {session_tmp_path} but is not a directory"
     }
+
+
+def test_post_project_directory_config_missing(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 500 returns when project .fmu has missing config."""
+    fmu_dir = init_fmu_directory(session_tmp_path)
+    assert fmu_dir.config.exists
+
+    fmu_dir.config.path.unlink()
+    assert not fmu_dir.config.exists
+
+    response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"].startswith(
+        f"Corrupt project found at {session_tmp_path}"
+    )
+
+
+def test_post_project_directory_corrupt(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 500 returns when project .fmu has invalid config."""
+    fmu_dir = init_fmu_directory(session_tmp_path)
+    with open(fmu_dir.config.path, "w") as f:
+        f.write("incorrect")
+
+    response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"].startswith(
+        f"Corrupt project found at {session_tmp_path}"
+    )
 
 
 def test_post_fmu_directory_raises_other_exceptions(

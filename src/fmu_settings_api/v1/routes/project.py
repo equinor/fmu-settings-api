@@ -6,7 +6,11 @@ from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
 from fmu.datamodels.fmu_results.fields import Smda
-from fmu.settings import find_nearest_fmu_directory, get_fmu_directory
+from fmu.settings import (
+    ProjectFMUDirectory,
+    find_nearest_fmu_directory,
+    get_fmu_directory,
+)
 from fmu.settings._init import init_fmu_directory
 
 from fmu_settings_api.deps import (
@@ -97,21 +101,12 @@ async def get_project(session: SessionDep) -> FMUProject:
     """
     if isinstance(session, ProjectSession):
         fmu_dir = session.project_fmu_directory
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-        )
+        return _get_project_details(fmu_dir)
 
     try:
         path = Path.cwd()
         fmu_dir = find_nearest_fmu_directory(path)
-        _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-        )
+        await add_fmu_project_to_session(session.id, fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -125,6 +120,8 @@ async def get_project(session: SessionDep) -> FMUProject:
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return _get_project_details(fmu_dir)
 
 
 @router.post(
@@ -152,12 +149,9 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     path = fmu_dir_path.path
     try:
         fmu_dir = get_fmu_directory(path)
-        _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-        )
+        await add_fmu_project_to_session(session.id, fmu_dir)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
@@ -173,6 +167,8 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return _get_project_details(fmu_dir)
 
 
 @router.post(
@@ -262,7 +258,7 @@ async def delete_project_session(
 @router.patch(
     "/masterdata",
     response_model=Message,
-    summary=("Saves SMDA masterdata to the project .fmu directory"),
+    summary="Saves SMDA masterdata to the project .fmu directory",
     description=dedent(
         """
         Saves masterdata from SMDA to the project .fmu directory.
@@ -287,6 +283,27 @@ async def patch_masterdata(
         raise HTTPException(
             status_code=403,
             detail=f"Permission denied updating .fmu at {fmu_dir.path}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
+    """Returns the paths and configuration of a project FMU directory."""
+    try:
+        return FMUProject(
+            path=fmu_dir.base_path,
+            project_dir_name=fmu_dir.base_path.name,
+            config=fmu_dir.config.load(),
+        )
+    except (FileNotFoundError, ValueError) as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Corrupt project found at {fmu_dir.path}: {e}",
+        ) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403, detail="Permission denied accessing .fmu"
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
