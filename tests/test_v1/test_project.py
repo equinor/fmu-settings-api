@@ -1,11 +1,13 @@
 """Tests the /api/v1/project routes."""
 
+import json
 import shutil
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from uuid import UUID
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -640,3 +642,165 @@ def test_patch_masterdata_no_directory(
     assert get_fmu_project.config.masterdata.smda == Smda.model_validate(
         smda_masterdata
     )
+
+
+def test_load_global_config_from_default_path(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    global_variables_mock: dict[str, Any],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test loading masterdata from the default global variables path.
+
+    When a valid global_variables file exists at the default path and
+    no custom path is provided in the request, loading masterdata from
+    the global config into the project masterdata should be sucessfull.
+    """
+    # Get project session and check that masterdata is not set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    assert fmu_project.config.masterdata is None
+
+    # Create fmuconfig folders at default path
+    relative_path = Path("fmuconfig/output/")
+    monkeypatch.chdir(session_tmp_path)
+    global_config_default_folder = session_tmp_path / relative_path
+    global_config_default_folder.mkdir(parents=True, exist_ok=True)
+
+    # Write the global_variables mock to the default location
+    global_config_path = global_config_default_folder / Path("global_variables.yml")
+    with open(global_config_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_variables_mock, indent=2, sort_keys=True))
+
+    # Do the post request and check that it response is OK
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    assert response.status_code == status.HTTP_200_OK
+
+    # Get project data and check that masterdata has been set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    expected_field_uuid = UUID(
+        global_variables_mock["masterdata"]["smda"]["field"][0]["uuid"]
+    )
+    expected_field_identifier = global_variables_mock["masterdata"]["smda"]["field"][0][
+        "identifier"
+    ]
+    expected_smda_country = global_variables_mock["masterdata"]["smda"]["country"][0][
+        "identifier"
+    ]
+
+    assert fmu_project.config.masterdata is not None
+    assert fmu_project.config.masterdata.smda.field[0].uuid == expected_field_uuid
+    assert (
+        fmu_project.config.masterdata.smda.field[0].identifier
+        == expected_field_identifier
+    )
+    assert (
+        fmu_project.config.masterdata.smda.country[0].identifier
+        == expected_smda_country
+    )
+
+
+def test_load_global_config_from_provided_path(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    global_variables_mock: dict[str, Any],
+) -> None:
+    """Test loading masterdata from a provided global variables path.
+
+    When a valid global_variables file exists at the path
+    provided in the request, loading masterdata from
+    the global config into the project masterdata should be sucessfull.
+    """
+    # Get project session and check that masterdata is not set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    assert fmu_project.config.masterdata is None
+
+    # Write the global_variables mock to a custom path
+    global_config_path = session_tmp_path / Path("global_variables.yml")
+    with open(global_config_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_variables_mock, indent=2, sort_keys=True))
+
+    # Do the post request and check that response is OK
+    response = client_with_project_session.post(
+        f"{ROUTE}/global_config/?global_config_path={global_config_path}"
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    # Get project data and check that masterdata has been set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    expected_field_uuid = UUID(
+        global_variables_mock["masterdata"]["smda"]["field"][0]["uuid"]
+    )
+    expected_field_identifier = global_variables_mock["masterdata"]["smda"]["field"][0][
+        "identifier"
+    ]
+    expected_smda_country = global_variables_mock["masterdata"]["smda"]["country"][0][
+        "identifier"
+    ]
+
+    assert fmu_project.config.masterdata is not None
+    assert fmu_project.config.masterdata.smda.field[0].uuid == expected_field_uuid
+    assert (
+        fmu_project.config.masterdata.smda.field[0].identifier
+        == expected_field_identifier
+    )
+    assert (
+        fmu_project.config.masterdata.smda.country[0].identifier
+        == expected_smda_country
+    )
+
+
+def test_load_global_config_file_not_found(
+    client_with_project_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 404 is returned when no file is found."""
+    mode = "default"
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"Could not find the global_variables.yml file at the {mode} path."
+    }
+
+    mode = "provided"
+    global_config_path = session_tmp_path / Path("global_variables.yml")
+    response = client_with_project_session.post(
+        f"{ROUTE}/global_config/?global_config_path={global_config_path}"
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"Could not find the global_variables.yml file at the {mode} path."
+    }
+
+
+def test_load_global_config_invalid_model(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    global_variables_mock: dict[str, Any],
+) -> None:
+    """Test 500 returned when the data in global_variables is invalid."""
+    del global_variables_mock["masterdata"]
+    global_config_path = session_tmp_path / Path("global_variables.yml")
+    with open(global_config_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_variables_mock, indent=2, sort_keys=True))
+
+    response = client_with_project_session.post(
+        f"{ROUTE}/global_config/?global_config_path={global_config_path}"
+    )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "validation error for GlobalConfiguration" in str(response.json())
+
+
+def test_load_global_config_with_no_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test 401 returned when user does not have a project session."""
+    response = client_with_session.post(f"{ROUTE}/global_config/")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "No FMU project directory open"}

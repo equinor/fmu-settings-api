@@ -5,6 +5,8 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
+from fmu.config import utilities
+from fmu.datamodels.fmu_results import global_configuration
 from fmu.datamodels.fmu_results.fields import Smda
 from fmu.settings import (
     ProjectFMUDirectory,
@@ -12,12 +14,14 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
+from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
     ProjectSessionDep,
     SessionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
+from fmu_settings_api.models.common import Ok
 from fmu_settings_api.session import (
     ProjectSession,
     SessionNotFoundError,
@@ -30,6 +34,7 @@ from fmu_settings_api.v1.responses import (
     inline_add_response,
 )
 
+GLOBAL_CONFIG_DEFAULT_PATH: Final[Path] = Path("fmuconfig/output/global_variables.yml")
 router = APIRouter(prefix="/project", tags=["project"])
 
 ProjectResponses: Final[Responses] = {
@@ -219,6 +224,57 @@ async def init_project(
         raise HTTPException(
             status_code=409, detail=f".fmu already exists at {path}"
         ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/global_config",
+    response_model=Ok,
+    summary=("Loads the global config into the project masterdata."),
+    description=dedent(
+        """
+        Loads the global config into the project masterdata. If the
+        global config does not validate, or is not found, a failed status code is
+        returned. The global config is searched for at the default project path,
+        or at the path provided as a parameter in the request.
+       """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
+async def load_global_config(
+    project_session: ProjectSessionDep, global_config_path: Path | None = None
+) -> Ok:
+    """Loads the global config into the project masterdata if found and valid."""
+    try:
+        fmu_dir = project_session.project_fmu_directory
+        mode = "provided"
+        if global_config_path is None:
+            project_path = fmu_dir.get_file_path(
+                fmu_dir.config.relative_path
+            ).parent.parent
+            global_config_path = project_path / GLOBAL_CONFIG_DEFAULT_PATH
+            mode = "default"
+
+        if not global_config_path.exists():
+            raise FileExistsError(
+                f"Could not find the global_variables.yml file at the {mode} path."
+            )
+
+        global_config_dict = utilities.yaml_load(global_config_path)
+        global_config = global_configuration.GlobalConfiguration.model_validate(
+            global_config_dict
+        )
+        fmu_dir.set_config_value("masterdata", global_config.masterdata.model_dump())
+        return Ok()
+    except FileExistsError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
