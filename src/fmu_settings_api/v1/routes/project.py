@@ -5,7 +5,7 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
-from fmu.config import utilities
+from fmu.config import utilities  # type: ignore
 from fmu.datamodels.fmu_results import global_configuration
 from fmu.datamodels.fmu_results.fields import Smda
 from fmu.settings import (
