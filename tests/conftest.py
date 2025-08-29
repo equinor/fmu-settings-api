@@ -177,3 +177,54 @@ def smda_masterdata() -> dict[str, Any]:
             {"identifier": "OseFax", "uuid": "15ce3b84-766f-4c93-9050-b154861f9100"}
         ],
     }
+
+
+@pytest.fixture
+def global_variables_mock() -> dict[str, Any]:
+    """Returns an example of the global_variables.yml file with smda masterdata."""
+    return {
+        "masterdata": {
+            "smda": {
+                "stratigraphic_column": {
+                    "identifier": "DROGON_2020",
+                    "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                },
+                "coordinate_system": {
+                    "identifier": "ST_WGS84_UTM37N_P32637",
+                    "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                },
+                "country": [
+                    {
+                        "identifier": "Norway",
+                        "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                    }
+                ],
+                "discovery": [
+                    {
+                        "short_identifier": "SomeDiscovery",
+                        "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                    }
+                ],
+                "field": [
+                    {
+                        "identifier": "OseFax",
+                        "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                    }
+                ],
+            }
+        },
+        "access": {"asset": {"name": "Drogon"}, "classification": "internal"},
+        "model": {"name": "ff", "revision": "21.1.0.dev"},
+        "stratigraphy": {
+            "MSL": {"stratigraphic": False, "name": "MSL"},
+            "Seabase": {"stratigraphic": False, "name": "Seabase"},
+            "TopTherys": {"stratigraphic": True, "name": "Therys Fm. Top"},
+        },
+        "global": {"GLOBAL_VARS_EXAMPLE": 99, "OTHER": "skipped"},
+        "rms": {
+            "horizons": {
+                "TOP_RES": ["TopVolantis", "TopTherys", "TopVolon", "BaseVolantis"]
+            },
+            "zones": {"ZONE_RES": ["Valysar", "Therys", "Volon"]},
+        },
+    }
