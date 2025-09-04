@@ -809,7 +809,9 @@ def test_load_global_config_invalid_model(
     response = client_with_project_session.post(f"{ROUTE}/global_config/")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "validation error for GlobalConfiguration" in str(response.json())
+    assert response.json() == {
+        "detail": f"The global config file is not valid at path {global_config_path}."
+    }
 
 
 def test_load_global_config_with_no_project_session(

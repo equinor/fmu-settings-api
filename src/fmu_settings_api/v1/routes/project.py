@@ -80,6 +80,49 @@ ProjectExistsResponses: Final[Responses] = {
     ),
 }
 
+GlobalConfigResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        dedent(
+            """
+            The global config file was not found at a given location.
+            """
+        ),
+        [
+            {"detail": "No file exists at path {global_config_path}."},
+        ],
+    ),
+    **inline_add_response(
+        409,
+        dedent(
+            """
+            The project .fmu config already contains masterdata.
+            """
+        ),
+        [
+            {
+                "detail": "A config file with masterdata "
+                "already exists in .fmu at {fmu_dir.config.path}."
+            },
+        ],
+    ),
+    **inline_add_response(
+        500,
+        dedent(
+            """
+            The global config file did not validate against the
+            GlobalConfiguration Pydantic model.
+            """
+        ),
+        [
+            {
+                "detail": "The global config file is not valid "
+                "at path {global_config_path}"
+            },
+        ],
+    ),
+}
+
 
 @router.get(
     "/",
@@ -232,7 +275,7 @@ async def init_project(
 @router.post(
     "/global_config",
     response_model=Ok,
-    summary=("Loads the global config into the project masterdata."),
+    summary="Loads the global config into the project masterdata.",
     description=dedent(
         """
         Loads the global config into the project masterdata. If the global config does
@@ -242,13 +285,9 @@ async def init_project(
         for at this path. If not, the default project path will be used.
        """
     ),
-    responses={
-        **GetSessionResponses,
-        **ProjectResponses,
-        **ProjectExistsResponses,
-    },
+    responses={**GetSessionResponses, **GlobalConfigResponses},
 )
-async def load_global_config(
+async def post_global_config(
     project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
 ) -> Ok:
     """Loads the global config into the .fmu config."""
@@ -279,10 +318,13 @@ async def load_global_config(
         raise HTTPException(
             status_code=409,
             detail="A config file with masterdata already exists in "
-                    f".fmu at {fmu_dir.config.path}.",
+            f".fmu at {fmu_dir.config.path}.",
         ) from e
     except ValidationError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"The global config file is not valid at path {global_config_path}.",
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

@@ -26,5 +26,5 @@ class FMUProject(FMUDirPath):
 class GlobalConfigPath(BaseModel):
     """A relative path to a global config file, relative to the project root."""
 
-    relative_path: Path = Field(examples=["relative_path/to/global_variables.yml"])
+    relative_path: Path = Field(examples=["relative_path/to/global_config_file"])
     """Relative path in the project to a global config file."""
