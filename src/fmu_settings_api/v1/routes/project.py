@@ -22,6 +22,7 @@ from fmu_settings_api.deps import (
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
+from fmu_settings_api.models.project import GlobalConfigPath
 from fmu_settings_api.session import (
     ProjectSession,
     SessionNotFoundError,
@@ -234,10 +235,11 @@ async def init_project(
     summary=("Loads the global config into the project masterdata."),
     description=dedent(
         """
-        Loads the global config into the project masterdata. If the
-        global config does not validate, or is not found, a failed status code is
-        returned. The global config is searched for at the default project path,
-        or at the path provided as a parameter in the request.
+        Loads the global config into the project masterdata. If the global config does
+        not validate, or is not found, a failed status code is returned. The endpoint
+        takes an optional parameter, `path` as input: This should be given as a relative
+        path, relative to the project root. If provided, the global config is searched
+        for at this path. If not, the default project path will be used.
        """
     ),
     responses={
@@ -247,32 +249,38 @@ async def init_project(
     },
 )
 async def load_global_config(
-    project_session: ProjectSessionDep, global_config_path: Path | None = None
+    project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
 ) -> Ok:
-    """Loads the global config into the project masterdata if found and valid."""
+    """Loads the global config into the .fmu config."""
     try:
         fmu_dir = project_session.project_fmu_directory
-        mode = "provided"
-        if global_config_path is None:
-            project_path = fmu_dir.get_file_path(
-                fmu_dir.config.relative_path
-            ).parent.parent
-            global_config_path = project_path / GLOBAL_CONFIG_DEFAULT_PATH
-            mode = "default"
+        relative_path = GLOBAL_CONFIG_DEFAULT_PATH
+        if path is not None:
+            relative_path = path.relative_path
 
+        project_root = fmu_dir.path.parent
+        global_config_path = project_root / relative_path
         if not global_config_path.exists():
-            raise FileExistsError(
-                f"Could not find the global_variables.yml file at the {mode} path."
-            )
+            raise FileNotFoundError(f"No file exists at path {global_config_path}.")
+
+        if fmu_dir.config.load().masterdata is not None:
+            raise FileExistsError("Masterdata exists in the project config.")
 
         global_config_dict = utilities.yaml_load(global_config_path)
         global_config = global_configuration.GlobalConfiguration.model_validate(
             global_config_dict
         )
+
         fmu_dir.set_config_value("masterdata", global_config.masterdata.model_dump())
         return Ok()
-    except FileExistsError as e:
+    except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409,
+            detail="A config file with masterdata already exists in "
+                    f".fmu at {fmu_dir.config.path}.",
+        ) from e
     except ValidationError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
