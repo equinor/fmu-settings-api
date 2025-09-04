@@ -181,7 +181,7 @@ def smda_masterdata() -> dict[str, Any]:
 
 @pytest.fixture
 def global_variables_mock() -> dict[str, Any]:
-    """Returns an example of the global_variables.yml file with smda masterdata."""
+    """Returns an example of the global_variables.yml file with SMDA masterdata."""
     return {
         "masterdata": {
             "smda": {
