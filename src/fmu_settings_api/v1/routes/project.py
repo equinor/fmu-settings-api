@@ -21,7 +21,6 @@ from fmu_settings_api.deps import (
     SessionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
-from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath
 from fmu_settings_api.session import (
     ProjectSession,
@@ -107,7 +106,7 @@ GlobalConfigResponses: Final[Responses] = {
         ],
     ),
     **inline_add_response(
-        500,
+        422,
         dedent(
             """
             The global config file did not validate against the
@@ -274,7 +273,7 @@ async def init_project(
 
 @router.post(
     "/global_config",
-    response_model=Ok,
+    response_model=Message,
     summary="Loads the global config into the project masterdata.",
     description=dedent(
         """
@@ -289,7 +288,7 @@ async def init_project(
 )
 async def post_global_config(
     project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
-) -> Ok:
+) -> Message:
     """Loads the global config into the .fmu config."""
     try:
         fmu_dir = project_session.project_fmu_directory
@@ -311,7 +310,13 @@ async def post_global_config(
         )
 
         fmu_dir.set_config_value("masterdata", global_config.masterdata.model_dump())
-        return Ok()
+
+        return Message(
+            message=(
+                f"Global config masterdata at {global_config_path} was "
+                "successfully loaded into the project masterdata."
+            ),
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FileExistsError as e:
@@ -322,8 +327,12 @@ async def post_global_config(
         ) from e
     except ValidationError as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"The global config file is not valid at path {global_config_path}.",
+            status_code=422,
+            detail={
+                "message": "The global config file is not valid at path "
+                f"{global_config_path}.",
+                "validation_error": str(e),
+            },
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

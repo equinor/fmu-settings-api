@@ -1,5 +1,6 @@
 """Root configuration for pytest."""
 
+import json
 import stat
 from collections.abc import AsyncGenerator, Callable, Generator, Iterator
 from contextlib import AbstractContextManager, contextmanager
@@ -228,3 +229,31 @@ def global_variables_mock() -> dict[str, Any]:
             "zones": {"ZONE_RES": ["Valysar", "Therys", "Volon"]},
         },
     }
+
+
+def _write_global_config_to_path(
+    global_config_path: Path, global_config: dict[str, Any]
+) -> Path:
+    folder_path = global_config_path.parent
+    folder_path.mkdir(parents=True, exist_ok=True)
+    with open(global_config_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_config, indent=2, sort_keys=True))
+    return global_config_path
+
+
+@pytest.fixture
+def global_config_default_path(
+    global_variables_mock: dict[str, Any], tmp_path: Path
+) -> Path:
+    """Writes a valid global config to the project default path and returns the path."""
+    default_path = tmp_path / Path("fmuconfig/output/global_variables.yml")
+    return _write_global_config_to_path(default_path, global_variables_mock)
+
+
+@pytest.fixture
+def global_config_custom_path(
+    global_variables_mock: dict[str, Any], tmp_path: Path
+) -> Path:
+    """Writes a valid global config to a custom path and returns the path."""
+    custom_path = tmp_path / Path("custom/fmuconfig/output/custom_file.yml")
+    return _write_global_config_to_path(custom_path, global_variables_mock)
