@@ -1,16 +1,20 @@
 """Tests the /api/v1/project routes."""
 
+import json
 import shutil
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from uuid import UUID
 
 from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.datamodels.fmu_results.fields import Smda
-from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings._fmu_dir import (
+    UserFMUDirectory,
+)
 from fmu.settings._init import init_fmu_directory
 from pytest import MonkeyPatch
 
@@ -639,4 +643,190 @@ def test_patch_masterdata_no_directory(
     assert get_fmu_project.config.masterdata is not None
     assert get_fmu_project.config.masterdata.smda == Smda.model_validate(
         smda_masterdata
+    )
+
+
+def test_load_global_config_from_default_path(
+    client_with_project_session: TestClient, global_config_default_path: Path
+) -> None:
+    """Test loading masterdata from the default global config path.
+
+    When a valid global config file exists at the default path and
+    no custom path is provided in the request, loading masterdata
+    into the project masterdata should be sucessfull.
+    """
+    # Check that the global config exists at the default location
+    assert global_config_default_path.exists()
+    with open(global_config_default_path, encoding="utf-8") as f:
+        global_config = json.loads(f.read())
+
+    # Get project session and check that masterdata is not set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    assert fmu_project.config.masterdata is None
+
+    # Do the post request and check the response
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Global config masterdata at {global_config_default_path} was "
+        "successfully loaded into the project masterdata."
+    )
+
+    # Get project data and check that masterdata has been set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    expected_field_uuid = UUID(global_config["masterdata"]["smda"]["field"][0]["uuid"])
+    expected_field_identifier = global_config["masterdata"]["smda"]["field"][0][
+        "identifier"
+    ]
+    expected_smda_country = global_config["masterdata"]["smda"]["country"][0][
+        "identifier"
+    ]
+
+    assert fmu_project.config.masterdata is not None
+    assert fmu_project.config.masterdata.smda.field[0].uuid == expected_field_uuid
+    assert (
+        fmu_project.config.masterdata.smda.field[0].identifier
+        == expected_field_identifier
+    )
+    assert (
+        fmu_project.config.masterdata.smda.country[0].identifier
+        == expected_smda_country
+    )
+
+
+def test_load_global_config_from_custom_path(
+    client_with_project_session: TestClient,
+    tmp_path: Path,
+    global_config_custom_path: Path,
+) -> None:
+    """Test loading masterdata from a custom path.
+
+    When a valid global config file exists at the path
+    provided in the request, loading masterdata into
+    the project masterdata should be sucessfull.
+    """
+    # Check that the global config exists at the custom location
+    assert global_config_custom_path.exists()
+    with open(global_config_custom_path, encoding="utf-8") as f:
+        global_config = json.loads(f.read())
+
+    # Get project session and check that masterdata is not set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    assert fmu_project.config.masterdata is None
+
+    # Do the post request and check the response
+    response = client_with_project_session.post(
+        url=f"{ROUTE}/global_config",
+        json={"relative_path": str(global_config_custom_path.relative_to(tmp_path))},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Global config masterdata at {global_config_custom_path} was "
+        "successfully loaded into the project masterdata."
+    )
+
+    # Get project data and check that masterdata has been set
+    get_response = client_with_project_session.get(ROUTE)
+    fmu_project = FMUProject.model_validate(get_response.json())
+    expected_field_uuid = UUID(global_config["masterdata"]["smda"]["field"][0]["uuid"])
+    expected_field_identifier = global_config["masterdata"]["smda"]["field"][0][
+        "identifier"
+    ]
+    expected_smda_country = global_config["masterdata"]["smda"]["country"][0][
+        "identifier"
+    ]
+
+    assert fmu_project.config.masterdata is not None
+    assert fmu_project.config.masterdata.smda.field[0].uuid == expected_field_uuid
+    assert (
+        fmu_project.config.masterdata.smda.field[0].identifier
+        == expected_field_identifier
+    )
+    assert (
+        fmu_project.config.masterdata.smda.country[0].identifier
+        == expected_smda_country
+    )
+
+
+def test_load_global_config_default_file_not_found(
+    client_with_project_session: TestClient, tmp_path: Path
+) -> None:
+    """Test 404 is returned when the default global config is not found."""
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+
+    default_path = Path("fmuconfig/output/global_variables.yml")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"No file exists at path {str(tmp_path / default_path)}."
+    }
+
+
+def test_load_global_config_provided_file_not_found(
+    client_with_project_session: TestClient, tmp_path: Path
+) -> None:
+    """Test 404 is returned when the file at the provided path is not found."""
+    custom_config_path = Path("custom/fmuconfig/output/global_variables.yml")
+    response = client_with_project_session.post(
+        f"{ROUTE}/global_config", json={"relative_path": str(custom_config_path)}
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"No file exists at path {str(tmp_path / custom_config_path)}."
+    }
+
+
+def test_load_global_config_invalid_model(
+    client_with_project_session: TestClient,
+    global_config_default_path: Path,
+) -> None:
+    """Test 422 returned when the global config data is invalid."""
+    with open(global_config_default_path, encoding="utf-8") as f:
+        global_config = json.loads(f.read())
+    del global_config["masterdata"]
+    with open(global_config_default_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_config, indent=2, sort_keys=True))
+
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.json()["detail"]["message"] == (
+        f"The global config file is not valid at path {global_config_default_path}."
+    )
+    expected_validation_string = (
+        "1 validation error for GlobalConfiguration\nmasterdata\n  Field required"
+    )
+    assert expected_validation_string in response.json()["detail"]["validation_error"]
+
+
+def test_load_global_config_with_no_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test 401 returned when user does not have a project session."""
+    response = client_with_session.post(f"{ROUTE}/global_config/")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "No FMU project directory open"}
+
+
+def test_load_global_config_existing_masterdata(
+    client_with_project_session: TestClient,
+    global_config_default_path: Path,
+    smda_masterdata: dict[str, Any],
+) -> None:
+    """Test 409 returned when masterdata is already present in the project config."""
+    assert global_config_default_path.exists()
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/masterdata", json=smda_masterdata
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "A config file with masterdata already exists in .fmu" in str(
+        response.json()
     )

@@ -5,6 +5,8 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException, Response
+from fmu.config import utilities  # type: ignore
+from fmu.datamodels.fmu_results import global_configuration
 from fmu.datamodels.fmu_results.fields import Smda
 from fmu.settings import (
     ProjectFMUDirectory,
@@ -12,12 +14,14 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
+from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
     ProjectSessionDep,
     SessionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
+from fmu_settings_api.models.project import GlobalConfigPath
 from fmu_settings_api.session import (
     ProjectSession,
     SessionNotFoundError,
@@ -30,6 +34,7 @@ from fmu_settings_api.v1.responses import (
     inline_add_response,
 )
 
+GLOBAL_CONFIG_DEFAULT_PATH: Final[Path] = Path("fmuconfig/output/global_variables.yml")
 router = APIRouter(prefix="/project", tags=["project"])
 
 ProjectResponses: Final[Responses] = {
@@ -70,6 +75,49 @@ ProjectExistsResponses: Final[Responses] = {
         [
             {"detail": ".fmu exists at {path} but is not a directory"},
             {"detail": ".fmu already exists at {path}"},
+        ],
+    ),
+}
+
+GlobalConfigResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        dedent(
+            """
+            The global config file was not found at a given location.
+            """
+        ),
+        [
+            {"detail": "No file exists at path {global_config_path}."},
+        ],
+    ),
+    **inline_add_response(
+        409,
+        dedent(
+            """
+            The project .fmu config already contains masterdata.
+            """
+        ),
+        [
+            {
+                "detail": "A config file with masterdata "
+                "already exists in .fmu at {fmu_dir.config.path}."
+            },
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            The global config file did not validate against the
+            GlobalConfiguration Pydantic model.
+            """
+        ),
+        [
+            {
+                "detail": "The global config file is not valid "
+                "at path {global_config_path}"
+            },
         ],
     ),
 }
@@ -218,6 +266,73 @@ async def init_project(
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f".fmu already exists at {path}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/global_config",
+    response_model=Message,
+    summary="Loads the global config into the project masterdata.",
+    description=dedent(
+        """
+        Loads the global config into the project masterdata. If the global config does
+        not validate, or is not found, a failed status code is returned. The endpoint
+        takes an optional parameter, `path` as input: This should be given as a relative
+        path, relative to the project root. If provided, the global config is searched
+        for at this path. If not, the default project path will be used.
+       """
+    ),
+    responses={**GetSessionResponses, **GlobalConfigResponses},
+)
+async def post_global_config(
+    project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
+) -> Message:
+    """Loads the global config into the .fmu config."""
+    try:
+        fmu_dir = project_session.project_fmu_directory
+        relative_path = GLOBAL_CONFIG_DEFAULT_PATH
+        if path is not None:
+            relative_path = path.relative_path
+
+        project_root = fmu_dir.path.parent
+        global_config_path = project_root / relative_path
+        if not global_config_path.exists():
+            raise FileNotFoundError(f"No file exists at path {global_config_path}.")
+
+        if fmu_dir.config.load().masterdata is not None:
+            raise FileExistsError("Masterdata exists in the project config.")
+
+        global_config_dict = utilities.yaml_load(global_config_path)
+        global_config = global_configuration.GlobalConfiguration.model_validate(
+            global_config_dict
+        )
+
+        fmu_dir.set_config_value("masterdata", global_config.masterdata.model_dump())
+
+        return Message(
+            message=(
+                f"Global config masterdata at {global_config_path} was "
+                "successfully loaded into the project masterdata."
+            ),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409,
+            detail="A config file with masterdata already exists in "
+            f".fmu at {fmu_dir.config.path}.",
+        ) from e
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The global config file is not valid at path "
+                f"{global_config_path}.",
+                "validation_error": str(e),
+            },
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

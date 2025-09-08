@@ -29,6 +29,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "fastapi",
+    "fmu-config",
     "fmu-datamodels",
     "fmu-settings",
     "httpx",
