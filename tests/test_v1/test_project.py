@@ -666,7 +666,7 @@ def test_load_global_config_from_default_path(
     assert fmu_project.config.masterdata is None
 
     # Do the post request and check the response
-    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    response = client_with_project_session.post(f"{ROUTE}/global_config")
     assert response.status_code == status.HTTP_200_OK
     assert (
         response.json()["message"]
@@ -757,7 +757,7 @@ def test_load_global_config_default_file_not_found(
     client_with_project_session: TestClient, tmp_path: Path
 ) -> None:
     """Test 404 is returned when the default global config is not found."""
-    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    response = client_with_project_session.post(f"{ROUTE}/global_config")
 
     default_path = Path("fmuconfig/output/global_variables.yml")
     assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -786,29 +786,26 @@ def test_load_global_config_invalid_model(
     global_config_default_path: Path,
 ) -> None:
     """Test 422 returned when the global config data is invalid."""
+    # Make the global config invalid
     with open(global_config_default_path, encoding="utf-8") as f:
         global_config = json.loads(f.read())
     del global_config["masterdata"]
     with open(global_config_default_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(global_config, indent=2, sort_keys=True))
 
-    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    response = client_with_project_session.post(f"{ROUTE}/global_config")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    assert response.json()["detail"]["message"] == (
-        f"The global config file is not valid at path {global_config_default_path}."
-    )
-    expected_validation_string = (
-        "1 validation error for GlobalConfiguration\nmasterdata\n  Field required"
-    )
-    assert expected_validation_string in response.json()["detail"]["validation_error"]
+    assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
+    assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
+    assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
 
 
 def test_load_global_config_with_no_project_session(
     client_with_session: TestClient,
 ) -> None:
     """Test 401 returned when user does not have a project session."""
-    response = client_with_session.post(f"{ROUTE}/global_config/")
+    response = client_with_session.post(f"{ROUTE}/global_config")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "No FMU project directory open"}
 
@@ -825,8 +822,52 @@ def test_load_global_config_existing_masterdata(
         f"{ROUTE}/masterdata", json=smda_masterdata
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/global_config/")
+    response = client_with_project_session.post(f"{ROUTE}/global_config")
     assert response.status_code == status.HTTP_409_CONFLICT
     assert "A config file with masterdata already exists in .fmu" in str(
         response.json()
     )
+
+
+def test_check_global_config_succeeds(
+    client_with_project_session: TestClient, global_config_default_path: Path
+) -> None:
+    """Test 200 returned when a valid global config exists at the default location."""
+    assert global_config_default_path.exists()
+    response = client_with_project_session.get(f"{ROUTE}/global_config_status")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["status"] == "ok"
+
+
+def test_check_global_config_not_found(
+    client_with_project_session: TestClient, tmp_path: Path
+) -> None:
+    """Test 404 returned when no global config is found at the default location."""
+    response = client_with_project_session.get(f"{ROUTE}/global_config_status")
+    default_project_location = tmp_path / Path("fmuconfig/output/global_variables.yml")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"No file exists at path {default_project_location}."
+    }
+
+
+def test_check_global_config_not_valid(
+    client_with_project_session: TestClient, global_config_default_path: Path
+) -> None:
+    """Test 422 returned when the global config at the default location is invalid."""
+    # Make the global config invalid
+    with open(global_config_default_path, encoding="utf-8") as f:
+        global_config = json.loads(f.read())
+    del global_config["masterdata"]
+    with open(global_config_default_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(global_config, indent=2, sort_keys=True))
+
+    response = client_with_project_session.get(f"{ROUTE}/global_config_status")
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.json()["detail"]["message"] == (
+        f"The global config file is not valid at path {global_config_default_path}."
+    )
+
+    assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
+    assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
+    assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
