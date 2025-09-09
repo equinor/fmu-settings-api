@@ -11,6 +11,7 @@ from pydantic import BaseModel, SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
+from fmu_settings_api.services.user import add_to_user_recent_projects
 
 
 class SessionNotFoundError(ValueError):
@@ -173,6 +174,10 @@ async def add_fmu_project_to_session(
         project_session = ProjectSession(
             **asdict(session), project_fmu_directory=project_fmu_directory
         )
+    add_to_user_recent_projects(
+        project_path=project_fmu_directory.base_path,
+        user_dir=project_session.user_fmu_directory,
+    )
     await session_manager._store_session(session_id, project_session)
     return project_session
 

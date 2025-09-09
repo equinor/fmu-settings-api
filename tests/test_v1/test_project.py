@@ -171,6 +171,23 @@ def test_get_project_directory_exists(
     assert existing_fmu_dir.config.load() == fmu_project.config
 
 
+def test_get_project_writes_to_user_recent_projects(
+    client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 200 adds project to user's recent projects."""
+    monkeypatch.chdir(session_tmp_path)
+    init_fmu_directory(session_tmp_path)
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == []
+
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == [session_tmp_path]
+
+
 async def test_get_project_updates_session(
     client_with_session: TestClient,
     session_tmp_path: Path,
@@ -315,6 +332,22 @@ def test_post_fmu_directory_raises_other_exceptions(
         response = client_with_session.post(ROUTE, json={"path": path})
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "foo"}
+
+
+def test_post_project_writes_to_user_recent_projects(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 200 adds project to user's recent projects."""
+    _fmu_dir = init_fmu_directory(session_tmp_path)
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == []
+
+    response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
+    assert response.status_code == status.HTTP_200_OK
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == [session_tmp_path]
 
 
 async def test_post_fmu_directory_exists(
@@ -551,6 +584,22 @@ async def test_post_init_updates_session_instance(
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == session_tmp_path / ".fmu"
     assert session.user_fmu_directory.path == UserFMUDirectory().path
+
+
+def test_post_init_writes_to_user_recent_projects(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 200 adds project to user's recent projects."""
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == []
+
+    response = client_with_session.post(
+        f"{ROUTE}/init", json={"path": str(session_tmp_path)}
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == [session_tmp_path]
 
 
 # PATCH project/masterdata #
