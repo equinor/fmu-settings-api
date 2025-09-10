@@ -4,8 +4,8 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Final
 
+import yaml
 from fastapi import APIRouter, HTTPException, Response
-from fmu.config import utilities  # type: ignore
 from fmu.datamodels.fmu_results import global_configuration
 from fmu.datamodels.fmu_results.fields import Smda
 from fmu.settings import (
@@ -21,6 +21,7 @@ from fmu_settings_api.deps import (
     SessionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
+from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath
 from fmu_settings_api.session import (
     ProjectSession,
@@ -114,10 +115,7 @@ GlobalConfigResponses: Final[Responses] = {
             """
         ),
         [
-            {
-                "detail": "The global config file is not valid "
-                "at path {global_config_path}"
-            },
+            {"detail": "{A dict with 'message' and 'validation_errors'"},
         ],
     ),
 }
@@ -170,6 +168,48 @@ async def get_project(session: SessionDep) -> FMUProject:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
     return _get_project_details(fmu_dir)
+
+
+@router.get(
+    "/global_config_status",
+    response_model=Ok,
+    summary="Checks if a valid global config exists at the default location.",
+    description=dedent(
+        """
+        Checks the global config at the default project location. If the global config
+        does not validate, or is not found, a failed status code is returned.
+        """
+    ),
+    responses={**GetSessionResponses, **GlobalConfigResponses},
+)
+async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
+    """Checks if a valid global config exists at the default project location."""
+    try:
+        global_config_path = (
+            project_session.project_fmu_directory.path.parent
+            / GLOBAL_CONFIG_DEFAULT_PATH
+        )
+        if not global_config_path.exists():
+            raise FileNotFoundError(f"No file exists at path {global_config_path}.")
+
+        with open(global_config_path, encoding="utf8") as f:
+            global_config_dict = yaml.safe_load(f)
+        global_configuration.GlobalConfiguration.model_validate(global_config_dict)
+
+        return Ok()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "The global config file is not valid at path "
+                f"{global_config_path}.",
+                "validation_errors": e.errors(),
+            },
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -304,7 +344,8 @@ async def post_global_config(
         if fmu_dir.config.load().masterdata is not None:
             raise FileExistsError("Masterdata exists in the project config.")
 
-        global_config_dict = utilities.yaml_load(global_config_path)
+        with open(global_config_path, encoding="utf8") as f:
+            global_config_dict = yaml.safe_load(f)
         global_config = global_configuration.GlobalConfiguration.model_validate(
             global_config_dict
         )
@@ -331,7 +372,7 @@ async def post_global_config(
             detail={
                 "message": "The global config file is not valid at path "
                 f"{global_config_path}.",
-                "validation_error": str(e),
+                "validation_errors": e.errors(),
             },
         ) from e
     except Exception as e:

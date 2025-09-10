@@ -29,11 +29,11 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "fastapi",
-    "fmu-config",
     "fmu-datamodels",
     "fmu-settings",
     "httpx",
     "pydantic",
+    "pyyaml",
     "uvicorn",
 ]
 
@@ -47,6 +47,7 @@ dev = [
     "pytest-mock",
     "pytest-xdist",
     "ruff",
+    "types-PyYAML",
     "types-requests",
     "watchfiles",
 ]
