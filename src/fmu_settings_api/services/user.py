@@ -1,0 +1,23 @@
+"""Functions for interacting with the user .fmu directory."""
+
+from pathlib import Path
+
+from fmu.settings._fmu_dir import UserFMUDirectory
+
+
+def add_to_user_recent_projects(
+    project_path: Path,
+    user_dir: UserFMUDirectory,
+) -> None:
+    """Adds a project path to the user's recent project directories.
+
+    Existing paths will be moved to the end if re-added.
+    Only the last 5 recent projects are kept.
+    """
+    recent_projects = user_dir.get_config_value("recent_project_directories")
+
+    if project_path in recent_projects:
+        recent_projects.remove(project_path)
+
+    recent_projects.append(project_path)
+    user_dir.set_config_value("recent_project_directories", recent_projects[-5:])
