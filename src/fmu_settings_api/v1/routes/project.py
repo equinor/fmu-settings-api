@@ -235,6 +235,9 @@ async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
 async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
     """Returns the paths and configuration for the project .fmu directory at 'path'."""
     path = fmu_dir_path.path
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Path {path} does not exist")
+
     try:
         fmu_dir = get_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)

@@ -320,6 +320,14 @@ def test_post_project_directory_corrupt(
     )
 
 
+def test_post_project_directory_not_exists(client_with_session: TestClient) -> None:
+    """Test 404 returns with proper message when path does not exists."""
+    path = Path("/non/existing/path")
+    response = client_with_session.post(ROUTE, json={"path": str(path)})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["detail"] == f"Path {path} does not exist"
+
+
 def test_post_fmu_directory_raises_other_exceptions(
     client_with_session: TestClient,
 ) -> None:
