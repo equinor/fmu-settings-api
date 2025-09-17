@@ -21,3 +21,15 @@ def add_to_user_recent_projects(
 
     recent_projects.append(project_path)
     user_dir.set_config_value("recent_project_directories", recent_projects[-5:])
+
+
+def remove_from_recent_projects(
+    project_path: Path,
+    user_dir: UserFMUDirectory,
+) -> None:
+    """Removes a project path from the user's recent project directories if existing."""
+    recent_projects = user_dir.get_config_value("recent_project_directories")
+
+    if project_path in recent_projects:
+        recent_projects.remove(project_path)
+        user_dir.set_config_value("recent_project_directories", recent_projects[-5:])

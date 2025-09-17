@@ -358,6 +358,34 @@ def test_post_project_writes_to_user_recent_projects(
     assert user_dir.get_config_value("recent_project_directories") == [session_tmp_path]
 
 
+async def test_post_project_removes_non_existing_from_user_recent_projects(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 404 removes a non-exsiting project from user's recent projects."""
+    _fmu_dir = init_fmu_directory(session_tmp_path)
+
+    non_existing_path = Path("/non/existing/path")
+
+    user_dir = UserFMUDirectory()
+    user_dir.set_config_value(
+        "recent_project_directories", [session_tmp_path, non_existing_path]
+    )
+
+    from fmu_settings_api.session import session_manager  # noqa PLC0415
+
+    # need to force a reload of the user config in the session
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    session.user_fmu_directory.config.load(force=True)
+
+    response = client_with_session.post(ROUTE, json={"path": str(non_existing_path)})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    user_dir = UserFMUDirectory()
+    assert user_dir.get_config_value("recent_project_directories") == [session_tmp_path]
+
+
 async def test_post_fmu_directory_exists(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
