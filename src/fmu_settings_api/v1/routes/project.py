@@ -23,6 +23,7 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath
+from fmu_settings_api.services.user import remove_from_recent_projects
 from fmu_settings_api.session import (
     ProjectSession,
     SessionNotFoundError,
@@ -236,6 +237,7 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     """Returns the paths and configuration for the project .fmu directory at 'path'."""
     path = fmu_dir_path.path
     if not path.exists():
+        remove_from_recent_projects(path, session.user_fmu_directory)
         raise HTTPException(status_code=404, detail=f"Path {path} does not exist")
 
     try:

@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 from fmu.settings._init import init_user_fmu_directory
 
-from fmu_settings_api.services.user import add_to_user_recent_projects
+from fmu_settings_api.services.user import (
+    add_to_user_recent_projects,
+    remove_from_recent_projects,
+)
 
 
 def test_add_to_user_recent_projects(tmp_path_mocked_home: Path) -> None:
@@ -69,3 +72,32 @@ def test_add_to_user_recent_projects_removes_oldest_when_full(
         user_dir.set_config_value(
             "recent_project_directories", [Path(f"/project/{i}") for i in range(6)]
         )
+
+
+def test_remove_from_user_recent_projects(tmp_path_mocked_home: Path) -> None:
+    """Tests removing a non-existing path from recent projects works."""
+    user_dir = init_user_fmu_directory()
+
+    non_existing_user_copy = Path("/some/user/project_1")
+
+    user_dir.set_config_value("recent_project_directories", [non_existing_user_copy])
+
+    remove_from_recent_projects(non_existing_user_copy, user_dir)
+    assert user_dir.get_config_value("recent_project_directories") == []
+
+
+def test_remove_from_user_recent_projects_does_not_remove_existing(
+    tmp_path_mocked_home: Path,
+) -> None:
+    """Tests removing a path not present does not modify recent projects."""
+    user_dir = init_user_fmu_directory()
+
+    project_path = tmp_path_mocked_home / "some/project"
+
+    user_dir.set_config_value("recent_project_directories", [project_path])
+
+    another_project_path = tmp_path_mocked_home / "some/other/project"
+
+    remove_from_recent_projects(another_project_path, user_dir)
+
+    assert user_dir.get_config_value("recent_project_directories") == [project_path]
