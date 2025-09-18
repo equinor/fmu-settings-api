@@ -22,12 +22,12 @@ def test_add_to_user_recent_projects(tmp_path_mocked_home: Path) -> None:
     add_to_user_recent_projects(project_path, user_dir)
     assert user_dir.get_config_value("recent_project_directories") == [project_path]
 
-    # add yet another project
+    # add yet another project and see that it is added first in the list
     new_project_path = Path("/new/project")
     add_to_user_recent_projects(new_project_path, user_dir)
     assert user_dir.get_config_value("recent_project_directories") == [
-        project_path,
         new_project_path,
+        project_path,
     ]
 
 
@@ -58,9 +58,9 @@ def test_add_to_user_recent_projects_removes_oldest_when_full(
     assert len(project_paths) == max_number_of_recent_projects
 
     # add a new project and check that the length
-    # is still 5 and the oldest is removed
+    # is still 5 and the oldest (last) is removed
     new_path = Path("/project/new")
-    expected_recent_projects = project_paths[1:] + [new_path]
+    expected_recent_projects = [new_path] + project_paths[:-1]
     add_to_user_recent_projects(new_path, user_dir)
     recent_projects = user_dir.get_config_value("recent_project_directories")
     assert recent_projects == expected_recent_projects
