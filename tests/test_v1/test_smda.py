@@ -641,3 +641,26 @@ async def test_post_masterdata_request_fails(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert response.json()["detail"] == "SMDA error requesting https://smda"
+
+
+async def test_post_masterdata_request_timeout(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when a post request to SMDA times out."""
+    with patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class:
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.side_effect = TimeoutError("Request timed out")
+        mock_smda_class.return_value = mock_smda_instance
+
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[{"identifier": "DROGON"}],
+        )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json()["detail"] == "SMDA API request timed out. Please try again."
