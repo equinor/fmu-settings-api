@@ -278,15 +278,15 @@ async def post_masterdata(
             detail=f"Malformed response from SMDA: {e}",
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        ) from e
     except TimeoutError as e:
         raise HTTPException(
             status_code=503,
             detail="SMDA API request timed out. Please try again.",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
