@@ -202,7 +202,7 @@ async def post_masterdata(
         field_results = field_res.json()["data"]["results"]
         if not field_results:
             raise HTTPException(
-                status_code=404,
+                status_code=422,
                 detail=f"No fields found for identifiers: {unique_field_identifiers}",
                 headers={
                     HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
