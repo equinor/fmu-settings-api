@@ -437,7 +437,7 @@ async def test_post_masterdata_missing_coordinate_system(
         response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    assert "Projected field coordinate system not found" in response.json()["detail"]
+    assert "Coordinate system 'UNKNOWN_CRS' referenced by field 'DROGON' not found in SMDA." in response.json()["detail"]
 
 
 async def test_post_masterdata_malformed_response(

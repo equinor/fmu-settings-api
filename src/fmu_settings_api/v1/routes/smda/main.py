@@ -247,7 +247,10 @@ async def post_masterdata(
             field_id = field_results[0]["identifier"]
             raise HTTPException(
                 status_code=404,
-                detail=f"Coordinate system '{crs_id}' referenced by field '{field_id}' not found in SMDA.",
+                detail=(
+                    f"Coordinate system '{crs_id}' referenced by field '{field_id}' "
+                    "not found in SMDA."
+                ),
                 headers={
                     HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
                 },
