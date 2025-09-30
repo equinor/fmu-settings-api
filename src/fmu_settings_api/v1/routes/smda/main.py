@@ -202,7 +202,7 @@ async def post_masterdata(
         field_results = field_res.json()["data"]["results"]
         if not field_results:
             raise HTTPException(
-                status_code=404,
+                status_code=422,
                 detail=f"No fields found for identifiers: {unique_field_identifiers}",
                 headers={
                     HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
@@ -243,9 +243,14 @@ async def post_masterdata(
                 break
 
         if field_coordinate_system is None:
+            crs_id = field_results[0]["projected_coordinate_system"]
+            field_id = field_results[0]["identifier"]
             raise HTTPException(
                 status_code=404,
-                detail="Projected field coordinate system not found",
+                detail=(
+                    f"Coordinate system '{crs_id}' referenced by field '{field_id}' "
+                    "not found in SMDA."
+                ),
                 headers={
                     HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
                 },
@@ -270,7 +275,7 @@ async def post_masterdata(
     except KeyError as e:
         raise HTTPException(
             status_code=500,
-            detail="Malformed response from SMDA: {e}",
+            detail=f"Malformed response from SMDA: {e}",
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except TimeoutError as e:
