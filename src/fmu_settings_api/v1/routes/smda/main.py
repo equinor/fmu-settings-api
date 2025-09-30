@@ -270,7 +270,7 @@ async def post_masterdata(
     except KeyError as e:
         raise HTTPException(
             status_code=500,
-            detail="Malformed response from SMDA: {e}",
+            detail=f"Malformed response from SMDA: {e}",
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
     except Exception as e:
