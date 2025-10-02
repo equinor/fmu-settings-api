@@ -191,6 +191,12 @@ def model_data() -> dict[str, Any]:
 
 
 @pytest.fixture
+def access_data() -> dict[str, Any]:
+    """Returns example access data for the .fmu project."""
+    return {"asset": {"name": "Drogon"}, "classification": "internal"}
+
+
+@pytest.fixture
 def global_variables_mock() -> dict[str, Any]:
     """Returns an example of the global_variables.yml file with SMDA masterdata."""
     return {
