@@ -484,11 +484,11 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
 @router.patch(
     "/access",
     response_model=Message,
-    summary="Saves access information to the project .fmu directory",
+    summary="Saves access data to the project .fmu directory",
     description=dedent(
         """
-        Saves access information to the project .fmu directory.
-        If existing access information is present, it will be updated with the new
+        Saves access data to the project .fmu directory.
+        If existing access data is present, it will be replaced by the new
         access data.
        """
     ),
@@ -499,11 +499,11 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
     },
 )
 async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
-    """Saves access information to the project .fmu directory."""
+    """Saves access data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
     try:
         fmu_dir.set_config_value("access", access.model_dump())
-        return Message(message=f"Saved access information to {fmu_dir.path}")
+        return Message(message=f"Saved access data to {fmu_dir.path}")
     except PermissionError as e:
         raise HTTPException(
             status_code=403,

@@ -1233,7 +1233,7 @@ async def test_patch_access_project(
     assert response.status_code == status.HTTP_200_OK
     assert (
         response.json()["message"]
-        == f"Saved access information to {get_fmu_project.path / '.fmu'}"
+        == f"Saved access data to {get_fmu_project.path / '.fmu'}"
     )
     # Refetch the project to see that access is set
     get_response = client_with_project_session.get(ROUTE)
