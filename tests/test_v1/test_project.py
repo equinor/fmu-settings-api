@@ -6,12 +6,12 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import UUID
 
-from fastapi import status
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import Smda
+from fmu.datamodels.fmu_results.fields import Model, Smda
 from fmu.settings._fmu_dir import (
     UserFMUDirectory,
 )
@@ -21,7 +21,13 @@ from pytest import MonkeyPatch
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.models.project import FMUProject
-from fmu_settings_api.session import ProjectSession, Session
+from fmu_settings_api.session import (
+    ProjectSession,
+    Session,
+    SessionManager,
+    SessionNotFoundError,
+)
+from fmu_settings_api.v1.routes.project import _get_project_details
 
 client = TestClient(app)
 
@@ -101,6 +107,36 @@ def test_get_project_directory_is_not_directory(
     assert response.json() == {
         "detail": f"No .fmu directory found from {ert_model_path}"
     }
+
+
+def test_get_project_session_not_found_error(
+    client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Test 401 returns when SessionNotFoundError is raised in get_project."""
+    monkeypatch.chdir(session_tmp_path)
+    init_fmu_directory(session_tmp_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        side_effect=SessionNotFoundError("Session not found"),
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {"detail": "Session not found"}
+
+
+def test_get_project_permission_error(
+    client_with_session: TestClient,
+) -> None:
+    """Test 403 returns when PermissionError occurs in get_project."""
+    # Mock find_nearest_fmu_directory to raise PermissionError
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {"detail": "Permission denied locating .fmu"}
 
 
 def test_get_project_raises_other_exceptions(client_with_session: TestClient) -> None:
@@ -328,6 +364,21 @@ def test_post_project_directory_not_exists(client_with_session: TestClient) -> N
     assert response.json()["detail"] == f"Path {path} does not exist"
 
 
+def test_post_fmu_directory_session_not_found_error(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 401 returns when SessionNotFoundError is raised in post_project."""
+    init_fmu_directory(session_tmp_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        side_effect=SessionNotFoundError("Session not found"),
+    ):
+        response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {"detail": "Session not found"}
+
+
 def test_post_fmu_directory_raises_other_exceptions(
     client_with_session: TestClient,
 ) -> None:
@@ -509,6 +560,32 @@ async def test_delete_project_session_returns_to_user_session(
     assert isinstance(session, Session)
 
 
+async def test_delete_project_session_not_found_error(
+    client_with_project_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 401 when SessionNotFoundError is raised in delete_project_session."""
+    with patch(
+        "fmu_settings_api.v1.routes.project.remove_fmu_project_from_session",
+        side_effect=SessionNotFoundError("Session not found"),
+    ):
+        response = client_with_project_session.delete(ROUTE)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {"detail": "Session not found"}
+
+
+async def test_delete_project_session_other_exception(
+    client_with_project_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 500 when other exceptions are raised in delete_project_session."""
+    with patch(
+        "fmu_settings_api.v1.routes.project.remove_fmu_project_from_session",
+        side_effect=Exception("Unexpected error"),
+    ):
+        response = client_with_project_session.delete(ROUTE)
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Unexpected error"}
+
+
 # POST project/init #
 
 
@@ -563,6 +640,21 @@ def test_post_init_fmu_directory_already_exists(
     )
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json() == {"detail": f".fmu already exists at {session_tmp_path}"}
+
+
+def test_post_init_fmu_directory_session_not_found_error(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 401 returns when SessionNotFoundError is raised in init_project."""
+    with patch(
+        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        side_effect=SessionNotFoundError("Session not found"),
+    ):
+        response = client_with_session.post(
+            f"{ROUTE}/init", json={"path": str(session_tmp_path)}
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {"detail": "Session not found"}
 
 
 def test_post_init_fmu_directory_raises_other_exceptions(
@@ -731,6 +823,33 @@ def test_patch_masterdata_no_directory(
     )
 
 
+async def test_patch_masterdata_general_exception(
+    client_with_project_session: TestClient,
+    smda_masterdata: dict[str, Any],
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_masterdata."""
+    # Get the project session to access its project_fmu_directory
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    # Mock the project_fmu_directory.set_config_value to raise ValueError
+    with patch.object(
+        session.project_fmu_directory,
+        "set_config_value",
+        side_effect=ValueError("Invalid config value"),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/masterdata", json=smda_masterdata
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Invalid config value"}
+
+
 def test_load_global_config_from_default_path(
     client_with_project_session: TestClient, global_config_default_path: Path
 ) -> None:
@@ -880,7 +999,7 @@ def test_load_global_config_invalid_model(
 
     response = client_with_project_session.post(f"{ROUTE}/global_config")
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
@@ -893,6 +1012,21 @@ def test_load_global_config_with_no_project_session(
     response = client_with_session.post(f"{ROUTE}/global_config")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "No FMU project directory open"}
+
+
+def test_load_global_config_general_exception(
+    client_with_project_session: TestClient,
+    global_config_default_path: Path,
+) -> None:
+    """Test 500 returns when general exception occurs in post_global_config."""
+    # Mock yaml.safe_load to raise a general exception
+    with patch(
+        "fmu_settings_api.v1.routes.project.yaml.safe_load",
+        side_effect=RuntimeError("YAML processing error"),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/global_config")
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "YAML processing error"}
 
 
 def test_load_global_config_existing_masterdata(
@@ -948,7 +1082,7 @@ def test_check_global_config_not_valid(
         f.write(json.dumps(global_config, indent=2, sort_keys=True))
 
     response = client_with_project_session.get(f"{ROUTE}/global_config_status")
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["message"] == (
         f"The global config file is not valid at path {global_config_default_path}."
     )
@@ -956,3 +1090,140 @@ def test_check_global_config_not_valid(
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
+
+
+def test_check_global_config_status_general_exception(
+    client_with_project_session: TestClient,
+    global_config_default_path: Path,
+) -> None:
+    """Test 500 returns when general exception occurs in get_global_config_status."""
+    # Mock yaml.safe_load to raise a general exception
+    with patch(
+        "fmu_settings_api.v1.routes.project.yaml.safe_load",
+        side_effect=RuntimeError("YAML parsing failed"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/global_config_status")
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "YAML parsing failed"}
+
+
+# PATCH project/model #
+
+
+async def test_patch_model_project(
+    client_with_project_session: TestClient,
+    model_data: dict[str, Any],
+) -> None:
+    """Test saving model data to project .fmu."""
+    # Get project session and check that model is not set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is None
+
+    # Store model to project
+    response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Saved model data to {get_fmu_project.path / '.fmu'}"
+    )
+    # Refetch the project to see that model is set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is not None
+    assert get_fmu_project.config.model == Model.model_validate(model_data)
+    assert get_fmu_project.config.model.name == "Drogon"
+
+
+async def test_patch_model_requires_project_session(
+    client_with_session: TestClient,
+    model_data: dict[str, Any],
+) -> None:
+    """Test saving model data to .fmu requires an active project."""
+    response = client_with_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+def test_patch_model_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    model_data: dict[str, Any],
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions."""
+    bad_project_dir = session_tmp_path / ".fmu"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+    }
+
+
+def test_patch_model_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    model_data: dict[str, Any],
+) -> None:
+    """Test that .fmu is recreated when saving model data.
+
+    If .fmu have been deleted during a session it should be recreated
+    when updating model data (using the cache).
+    """
+    project_dir = session_tmp_path / ".fmu"
+
+    # remove project .fmu
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    # check that .fmu is recreated and model has been set
+    response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert project_dir.exists()
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is not None
+    assert get_fmu_project.config.model == Model.model_validate(model_data)
+
+
+async def test_patch_model_general_exception(
+    client_with_project_session: TestClient,
+    model_data: dict[str, Any],
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_model."""
+    # Get the project session to access its project_fmu_directory
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    # Mock the project_fmu_directory.set_config_value to raise ValueError
+    with patch.object(
+        session.project_fmu_directory,
+        "set_config_value",
+        side_effect=ValueError("Invalid model data"),
+    ):
+        response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Invalid model data"}
+
+
+def test_get_project_details_direct_exception() -> None:
+    """Test the _get_project_details function directly with invalid input."""
+    # Create a mock that will cause an exception in the function
+    mock_fmu_dir = Mock()
+    mock_fmu_dir.config.load.side_effect = Exception("Test exception")
+
+    try:
+        _get_project_details(mock_fmu_dir)
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as e:
+        assert e.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Test exception" in str(e.detail)

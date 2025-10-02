@@ -267,7 +267,9 @@ async def test_post_field_with_no_json_fails(
     """Tests that posting without json causes Pydantic validation errors."""
     response = client_with_smda_session.post(f"{ROUTE}/field")
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, (
+        response.json()
+    )
     assert response.json()["detail"] == [
         {
             "input": None,

@@ -7,7 +7,7 @@ from typing import Final
 import yaml
 from fastapi import APIRouter, HTTPException, Response
 from fmu.datamodels.fmu_results import global_configuration
-from fmu.datamodels.fmu_results.fields import Smda
+from fmu.datamodels.fmu_results.fields import Model, Smda
 from fmu.settings import (
     ProjectFMUDirectory,
     find_nearest_fmu_directory,
@@ -440,6 +440,38 @@ async def patch_masterdata(
     try:
         fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
         return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/model",
+    response_model=Message,
+    summary="Saves model data to the project .fmu directory",
+    description=dedent(
+        """
+        Saves model data to the project .fmu directory.
+        If existing model data is present, it will be replaced by the new
+        model data.
+       """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
+async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
+    """Saves model data to the project .fmu directory."""
+    fmu_dir = project_session.project_fmu_directory
+    try:
+        fmu_dir.set_config_value("model", model.model_dump())
+        return Message(message=f"Saved model data to {fmu_dir.path}")
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
