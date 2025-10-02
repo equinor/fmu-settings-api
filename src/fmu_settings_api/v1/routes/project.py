@@ -452,11 +452,11 @@ async def patch_masterdata(
 @router.patch(
     "/model",
     response_model=Message,
-    summary="Saves model information to the project .fmu directory",
+    summary="Saves model data to the project .fmu directory",
     description=dedent(
         """
-        Saves model information to the project .fmu directory.
-        If existing model information is present, it will be updated with the new
+        Saves model data to the project .fmu directory.
+        If existing model data is present, it will be replaced by the new
         model data.
        """
     ),
@@ -467,11 +467,11 @@ async def patch_masterdata(
     },
 )
 async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
-    """Saves model information to the project .fmu directory."""
+    """Saves model data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
     try:
         fmu_dir.set_config_value("model", model.model_dump())
-        return Message(message=f"Saved model information to {fmu_dir.path}")
+        return Message(message=f"Saved model data to {fmu_dir.path}")
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
