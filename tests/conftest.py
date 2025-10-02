@@ -181,6 +181,16 @@ def smda_masterdata() -> dict[str, Any]:
 
 
 @pytest.fixture
+def model_data() -> dict[str, Any]:
+    """Returns an example model data for the .fmu project."""
+    return {
+        "name": "Drogon",
+        "revision": "21.0.0.dev",
+        "description": ["Test model setup", "Used for development"],
+    }
+
+
+@pytest.fixture
 def global_variables_mock() -> dict[str, Any]:
     """Returns an example of the global_variables.yml file with SMDA masterdata."""
     return {

@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import Smda
+from fmu.datamodels.fmu_results.fields import Model, Smda
 from fmu.settings._fmu_dir import (
     UserFMUDirectory,
 )
@@ -880,7 +880,7 @@ def test_load_global_config_invalid_model(
 
     response = client_with_project_session.post(f"{ROUTE}/global_config")
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
@@ -948,7 +948,7 @@ def test_check_global_config_not_valid(
         f.write(json.dumps(global_config, indent=2, sort_keys=True))
 
     response = client_with_project_session.get(f"{ROUTE}/global_config_status")
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]["message"] == (
         f"The global config file is not valid at path {global_config_default_path}."
     )
@@ -956,3 +956,86 @@ def test_check_global_config_not_valid(
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
+
+
+# PATCH project/model #
+
+
+async def test_patch_model_project(
+    client_with_project_session: TestClient,
+    model_data: dict[str, Any],
+) -> None:
+    """Test saving model data to project .fmu."""
+    # Get project session and check that model is not set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is None
+
+    # Store model to project
+    response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Saved model information to {get_fmu_project.path / '.fmu'}"
+    )
+    # Refetch the project to see that model is set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is not None
+    assert get_fmu_project.config.model == Model.model_validate(model_data)
+    assert get_fmu_project.config.model.name == "Drogon"
+
+
+async def test_patch_model_requires_project_session(
+    client_with_session: TestClient,
+    model_data: dict[str, Any],
+) -> None:
+    """Test saving model data to .fmu requires an active project."""
+    response = client_with_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+def test_patch_model_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    model_data: dict[str, Any],
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions."""
+    bad_project_dir = session_tmp_path / ".fmu"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+    }
+
+
+def test_patch_model_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    model_data: dict[str, Any],
+) -> None:
+    """Test that .fmu is recreated when saving model data.
+
+    If .fmu have been deleted during a session it should be recreated
+    when updating model data (using the cache).
+    """
+    project_dir = session_tmp_path / ".fmu"
+
+    # remove project .fmu
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    # check that .fmu is recreated and model has been set
+    response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert project_dir.exists()
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.model is not None
+    assert get_fmu_project.config.model == Model.model_validate(model_data)
