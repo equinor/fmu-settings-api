@@ -553,7 +553,7 @@ async def test_post_masterdata_multiple_fields(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     response_data = response.json()
-    assert len(response_data["field"]) == 2  # noqa
+    assert len(response_data["field"]) == 2  # noqa: PLR2004
 
     mock_smda_instance.field.assert_called_once_with(
         ["DROGON", "VISERION"],

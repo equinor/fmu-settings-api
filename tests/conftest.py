@@ -23,7 +23,7 @@ from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
 @pytest.fixture
 def mock_token() -> str:
     """Sets a token."""
-    from fmu_settings_api.config import settings  # noqa PLC0415
+    from fmu_settings_api.config import settings  # noqa: PLC0415
 
     token = "safe" * 16
     settings.TOKEN = token
