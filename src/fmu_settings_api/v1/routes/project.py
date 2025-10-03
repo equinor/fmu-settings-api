@@ -7,7 +7,7 @@ from typing import Final
 import yaml
 from fastapi import APIRouter, HTTPException, Response
 from fmu.datamodels.fmu_results import global_configuration
-from fmu.datamodels.fmu_results.fields import Model, Smda
+from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings import (
     ProjectFMUDirectory,
     find_nearest_fmu_directory,
@@ -472,6 +472,38 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
     try:
         fmu_dir.set_config_value("model", model.model_dump())
         return Message(message=f"Saved model data to {fmu_dir.path}")
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/access",
+    response_model=Message,
+    summary="Saves access data to the project .fmu directory",
+    description=dedent(
+        """
+        Saves access data to the project .fmu directory.
+        If existing access data is present, it will be replaced by the new
+        access data.
+       """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+    },
+)
+async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
+    """Saves access data to the project .fmu directory."""
+    fmu_dir = project_session.project_fmu_directory
+    try:
+        fmu_dir.set_config_value("access", access.model_dump())
+        return Message(message=f"Saved access data to {fmu_dir.path}")
     except PermissionError as e:
         raise HTTPException(
             status_code=403,

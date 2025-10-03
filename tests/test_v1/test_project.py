@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import Model, Smda
+from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings._fmu_dir import (
     UserFMUDirectory,
 )
@@ -1213,6 +1213,118 @@ async def test_patch_model_general_exception(
         response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "Invalid model data"}
+
+
+# PATCH project/access #
+
+
+async def test_patch_access_project(
+    client_with_project_session: TestClient,
+    access_data: dict[str, Any],
+) -> None:
+    """Test saving access data to project .fmu."""
+    # Get project session and check that access is not set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.access is None
+
+    # Store access to project
+    response = client_with_project_session.patch(f"{ROUTE}/access", json=access_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Saved access data to {get_fmu_project.path / '.fmu'}"
+    )
+    # Refetch the project to see that access is set
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.access is not None
+    assert get_fmu_project.config.access == Access.model_validate(access_data)
+    assert get_fmu_project.config.access.asset.name == "Drogon"
+
+
+async def test_patch_access_requires_project_session(
+    client_with_session: TestClient,
+    access_data: dict[str, Any],
+) -> None:
+    """Test saving access data to .fmu requires an active project."""
+    response = client_with_session.patch(f"{ROUTE}/access", json=access_data)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+def test_patch_access_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    access_data: dict[str, Any],
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions."""
+    bad_project_dir = session_tmp_path / ".fmu"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/access", json=access_data
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+    }
+
+
+def test_patch_access_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    access_data: dict[str, Any],
+) -> None:
+    """Test that .fmu is recreated when saving access data.
+
+    If .fmu have been deleted during a session it should be recreated
+    when updating access data (using the cache).
+    """
+    project_dir = session_tmp_path / ".fmu"
+
+    # remove project .fmu
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    # check that .fmu is recreated and access has been set
+    response = client_with_project_session.patch(f"{ROUTE}/access", json=access_data)
+    assert response.status_code == status.HTTP_200_OK
+    assert project_dir.exists()
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.access is not None
+    assert get_fmu_project.config.access == Access.model_validate(access_data)
+
+
+async def test_patch_access_general_exception(
+    client_with_project_session: TestClient,
+    access_data: dict[str, Any],
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_access."""
+    # Get the project session to access its project_fmu_directory
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    # Mock the project_fmu_directory.set_config_value to raise ValueError
+    with patch.object(
+        session.project_fmu_directory,
+        "set_config_value",
+        side_effect=ValueError("Invalid access data"),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/access", json=access_data
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Invalid access data"}
 
 
 def test_get_project_details_direct_exception() -> None:
