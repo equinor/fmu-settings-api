@@ -5,7 +5,7 @@ from textwrap import dedent
 from typing import Final
 
 import yaml
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from fmu.datamodels.fmu_results import global_configuration
 from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings import (
@@ -398,9 +398,7 @@ async def post_global_config(
         **GetSessionResponses,
     },
 )
-async def delete_project_session(
-    session: ProjectSessionDep, response: Response
-) -> Message:
+async def delete_project_session(session: ProjectSessionDep) -> Message:
     """Deletes a project .fmu session if it exists."""
     try:
         await remove_fmu_project_from_session(session.id)
