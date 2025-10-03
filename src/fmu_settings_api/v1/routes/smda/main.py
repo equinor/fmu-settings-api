@@ -209,7 +209,7 @@ async def post_masterdata(
                 },
             )
 
-        field_items = [FieldItem(**field) for field in field_results]
+        field_items = [FieldItem.model_validate(field) for field in field_results]
         field_identifiers = [field.identifier for field in field_items]
         country_identifiers = list(
             {field["country_identifier"] for field in field_results}
