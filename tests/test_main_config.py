@@ -18,7 +18,7 @@ def test_generator_auth_token() -> None:
     """Tests that the token is of the correct size."""
     token = generate_auth_token()
     assert isinstance(token, str)
-    assert len(token) == 64  # noqa PLR2004
+    assert len(token) == 64  # noqa: PLR2004
     assert token != generate_auth_token()
 
 

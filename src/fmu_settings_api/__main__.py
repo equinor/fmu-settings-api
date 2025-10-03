@@ -43,7 +43,7 @@ async def health_check() -> Ok:
     return Ok()
 
 
-def run_server(  # noqa PLR0913
+def run_server(  # noqa: PLR0913
     *,
     host: str = "127.0.0.1",
     port: int = 8001,

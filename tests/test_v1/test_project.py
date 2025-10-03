@@ -242,7 +242,7 @@ async def test_get_project_updates_session(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -273,7 +273,7 @@ async def test_get_project_already_in_session(
     )
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -456,7 +456,7 @@ async def test_post_fmu_directory_exists(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -488,7 +488,7 @@ async def test_post_fmu_directory_changes_session_instance(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -536,7 +536,7 @@ async def test_delete_project_session_returns_to_user_session(
     client_with_project_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Tests that deleting a project session returns to a user session."""
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session_id = client_with_project_session.cookies.get(
         settings.SESSION_COOKIE_KEY, None
@@ -705,7 +705,7 @@ async def test_post_init_updates_session_instance(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
     assert session is not None
