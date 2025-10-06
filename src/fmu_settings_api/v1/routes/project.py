@@ -82,6 +82,27 @@ ProjectExistsResponses: Final[Responses] = {
     ),
 }
 
+LockConflictResponses: Final[Responses] = {
+    **inline_add_response(
+        423,
+        dedent(
+            """
+            The project is locked by another process and cannot be modified.
+            The project can still be read but write operations are blocked.
+            """
+        ),
+        [
+            {"detail": "Project lock conflict: {error_message}"},
+            {
+                "detail": (
+                    "Project is read-only. Cannot write to project "
+                    "that is locked by another process."
+                )
+            },
+        ],
+    ),
+}
+
 GlobalConfigResponses: Final[Responses] = {
     **inline_add_response(
         404,
@@ -137,6 +158,7 @@ GlobalConfigResponses: Final[Responses] = {
     responses={
         **GetSessionResponses,
         **ProjectResponses,
+        **LockConflictResponses,
     },
 )
 async def get_project(session: SessionDep) -> FMUProject:
@@ -191,11 +213,11 @@ async def get_project(session: SessionDep) -> FMUProject:
 )
 async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
     """Checks if a valid global config exists at the default project location."""
+    global_config_path = (
+        project_session.project_fmu_directory.path.parent / GLOBAL_CONFIG_DEFAULT_PATH
+    )
+
     try:
-        global_config_path = (
-            project_session.project_fmu_directory.path.parent
-            / GLOBAL_CONFIG_DEFAULT_PATH
-        )
         if not global_config_path.exists():
             raise FileNotFoundError(f"No file exists at path {global_config_path}.")
 
@@ -237,6 +259,7 @@ async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
@@ -292,6 +315,7 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def init_project(
@@ -351,14 +375,17 @@ async def post_global_config(
     project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
 ) -> Message:
     """Loads the global config into the .fmu config."""
-    try:
-        fmu_dir = project_session.project_fmu_directory
-        relative_path = GLOBAL_CONFIG_DEFAULT_PATH
-        if path is not None:
-            relative_path = path.relative_path
+    fmu_dir = project_session.project_fmu_directory
+    _check_write_permissions(fmu_dir)
 
-        project_root = fmu_dir.path.parent
-        global_config_path = project_root / relative_path
+    relative_path = GLOBAL_CONFIG_DEFAULT_PATH
+    if path is not None:
+        relative_path = path.relative_path
+
+    project_root = fmu_dir.path.parent
+    global_config_path = project_root / relative_path
+
+    try:
         if not global_config_path.exists():
             raise FileNotFoundError(f"No file exists at path {global_config_path}.")
 
@@ -444,6 +471,7 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_masterdata(
@@ -451,6 +479,7 @@ async def patch_masterdata(
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
+    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
         return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
@@ -478,11 +507,13 @@ async def patch_masterdata(
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
+    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("model", model.model_dump())
         return Message(message=f"Saved model data to {fmu_dir.path}")
@@ -510,11 +541,13 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
+    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("access", access.model_dump())
         return Message(message=f"Saved access data to {fmu_dir.path}")
@@ -525,6 +558,22 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+def _check_write_permissions(fmu_dir: ProjectFMUDirectory) -> None:
+    """Check if the project allows write operations.
+
+    Raises:
+        HTTPException: If the project is read-only due to lock conflicts.
+    """
+    if not fmu_dir._lock.is_locked():
+        raise HTTPException(
+            status_code=423,
+            detail=(
+                "Project is read-only. Cannot write to project "
+                "that is locked by another process."
+            ),
+        )
 
 
 def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
