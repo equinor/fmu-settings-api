@@ -1,5 +1,6 @@
 """Functionality for managing sessions."""
 
+import contextlib
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Self
@@ -84,7 +85,12 @@ class SessionManager:
         """Destroys a session by its session id."""
         session = await self._retrieve_session(session_id)
         if session is not None:
-            del self.storage[session_id]
+            try:
+                if isinstance(session, ProjectSession):
+                    with contextlib.suppress(Exception):
+                        session.project_fmu_directory._lock.release()
+            finally:
+                del self.storage[session_id]
 
     async def create_session(
         self: Self,
@@ -164,8 +170,15 @@ async def add_fmu_project_to_session(
 
     Raises:
         SessionNotFoundError: If no valid session was found
+        LockError: If the project lock cannot be acquired
     """
     session = await session_manager.get_session(session_id)
+
+    if isinstance(session, ProjectSession):
+        with contextlib.suppress(Exception):
+            session.project_fmu_directory._lock.release()
+
+    project_fmu_directory._lock.acquire()
 
     if isinstance(session, ProjectSession):
         project_session = session
@@ -193,10 +206,14 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     """
     maybe_project_session = await session_manager.get_session(session_id)
 
-    if isinstance(maybe_project_session, Session):
+    if not isinstance(maybe_project_session, ProjectSession):
         return maybe_project_session
 
+    with contextlib.suppress(Exception):
+        maybe_project_session.project_fmu_directory._lock.release()
+
     project_session_dict = asdict(maybe_project_session)
+    project_session_dict.pop("project_fmu_directory", None)
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session

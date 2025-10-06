@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory
+from fmu.settings._resources.lock_manager import LockError
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
@@ -75,7 +76,7 @@ async def create_session(
             samesite="lax",
         )
 
-        with contextlib.suppress(FileNotFoundError):
+        with contextlib.suppress(FileNotFoundError, LockError):
             path = Path.cwd()
             project_fmu_dir = find_nearest_fmu_directory(path)
             await add_fmu_project_to_session(session_id, project_fmu_dir)

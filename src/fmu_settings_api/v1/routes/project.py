@@ -14,6 +14,7 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
+from fmu.settings._resources.lock_manager import LockError
 from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
@@ -150,10 +151,15 @@ async def get_project(session: SessionDep) -> FMUProject:
         fmu_dir = session.project_fmu_directory
         return _get_project_details(fmu_dir)
 
+    path = Path.cwd()
     try:
-        path = Path.cwd()
         fmu_dir = find_nearest_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)
+    except LockError as e:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Project lock conflict: {str(e)}",
+        ) from e
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -243,6 +249,11 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     try:
         fmu_dir = get_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)
+    except LockError as e:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Project lock conflict: {str(e)}",
+        ) from e
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -297,6 +308,11 @@ async def init_project(
             project_dir_name=fmu_dir.base_path.name,
             config=fmu_dir.config.load(),
         )
+    except LockError as e:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Project lock conflict: {str(e)}",
+        ) from e
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -514,10 +530,13 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
 def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     """Returns the paths and configuration of a project FMU directory."""
     try:
+        is_read_only = not fmu_dir._lock.is_locked()
+
         return FMUProject(
             path=fmu_dir.base_path,
             project_dir_name=fmu_dir.base_path.name,
             config=fmu_dir.config.load(),
+            is_read_only=is_read_only,
         )
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(
