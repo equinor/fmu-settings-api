@@ -8,6 +8,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 from pytest import MonkeyPatch
 
@@ -244,6 +245,38 @@ async def test_getting_two_sessions_destroys_existing_session(
         await session_manager.get_session(session_id)
 
 
+async def test_session_creation_handles_lock_conflicts(
+    tmp_path_mocked_home: Path,
+    mock_token: str,
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Tests that session creation handles lock conflicts gracefully."""
+    client = TestClient(app)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    init_fmu_directory(project_path)
+    monkeypatch.chdir(project_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.session.add_fmu_project_to_session",
+        side_effect=LockError("Project is locked by another process"),
+    ):
+        response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"message": "Session created"}
+
+        session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+        assert session_id is not None
+
+        session = await session_manager.get_session(session_id)
+        assert session is not None
+
+        assert isinstance(session, Session)
+        assert not hasattr(session, "project_fmu_directory")
+
+
 def test_patch_invalid_access_token_key_to_session(
     client_with_session: TestClient,
 ) -> None:
@@ -312,3 +345,19 @@ async def test_patch_access_token_unknown_failure(
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json()["detail"] == "foo"
+
+
+def test_post_session_handles_general_exception(
+    tmp_path_mocked_home: Path, mock_token: str
+) -> None:
+    """Tests that session creation handles general exceptions properly."""
+    client = TestClient(app)
+
+    with patch(
+        "fmu_settings_api.v1.routes.session.create_fmu_session",
+        side_effect=RuntimeError("Session creation failed"),
+    ):
+        response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Session creation failed" in response.json()["detail"]
