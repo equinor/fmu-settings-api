@@ -165,12 +165,14 @@ async def add_fmu_project_to_session(
 ) -> ProjectSession:
     """Adds an opened project FMU directory instance to the session.
 
+    The session will attempt to acquire a write lock, but will proceed with
+    read-only access if the lock cannot be acquired.
+
     Returns:
         The updated ProjectSession
 
     Raises:
         SessionNotFoundError: If no valid session was found
-        LockError: If the project lock cannot be acquired
     """
     session = await session_manager.get_session(session_id)
 
@@ -178,7 +180,8 @@ async def add_fmu_project_to_session(
         with contextlib.suppress(Exception):
             session.project_fmu_directory._lock.release()
 
-    project_fmu_directory._lock.acquire()
+    with contextlib.suppress(Exception):
+        project_fmu_directory._lock.acquire()
 
     if isinstance(session, ProjectSession):
         project_session = session

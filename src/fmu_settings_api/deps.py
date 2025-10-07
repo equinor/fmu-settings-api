@@ -189,3 +189,26 @@ async def get_project_smda_interface(session: ProjectSmdaSessionDep) -> SmdaAPI:
 
 
 ProjectSmdaInterfaceDep = Annotated[SmdaAPI, Depends(get_project_smda_interface)]
+
+
+async def check_write_permissions(project_session: ProjectSessionDep) -> None:
+    """Check if the project allows write operations.
+
+    Args:
+        project_session: The project session containing the FMU directory.
+
+    Raises:
+        HTTPException: If the project is read-only due to lock conflicts.
+    """
+    fmu_dir = project_session.project_fmu_directory
+    if not fmu_dir._lock.is_locked():
+        raise HTTPException(
+            status_code=423,
+            detail=(
+                "Project is read-only. Cannot write to project "
+                "that is locked by another process."
+            ),
+        )
+
+
+WritePermissionDep = Annotated[None, Depends(check_write_permissions)]

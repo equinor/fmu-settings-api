@@ -14,12 +14,12 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
-from fmu.settings._resources.lock_manager import LockError
 from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
     ProjectSessionDep,
     SessionDep,
+    WritePermissionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
@@ -177,11 +177,6 @@ async def get_project(session: SessionDep) -> FMUProject:
     try:
         fmu_dir = find_nearest_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)
-    except LockError as e:
-        raise HTTPException(
-            status_code=423,
-            detail=f"Project lock conflict: {str(e)}",
-        ) from e
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -272,11 +267,6 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     try:
         fmu_dir = get_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)
-    except LockError as e:
-        raise HTTPException(
-            status_code=423,
-            detail=f"Project lock conflict: {str(e)}",
-        ) from e
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -327,16 +317,7 @@ async def init_project(
     try:
         fmu_dir = init_fmu_directory(path)
         _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-        )
-    except LockError as e:
-        raise HTTPException(
-            status_code=423,
-            detail=f"Project lock conflict: {str(e)}",
-        ) from e
+        return _get_project_details(fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -372,11 +353,12 @@ async def init_project(
     responses={**GetSessionResponses, **GlobalConfigResponses},
 )
 async def post_global_config(
-    project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
+    project_session: ProjectSessionDep,
+    path: GlobalConfigPath | None = None,
+    _: WritePermissionDep = None,
 ) -> Message:
     """Loads the global config into the .fmu config."""
     fmu_dir = project_session.project_fmu_directory
-    _check_write_permissions(fmu_dir)
 
     relative_path = GLOBAL_CONFIG_DEFAULT_PATH
     if path is not None:
@@ -475,11 +457,12 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
     },
 )
 async def patch_masterdata(
-    project_session: ProjectSessionDep, smda_masterdata: Smda
+    project_session: ProjectSessionDep,
+    smda_masterdata: Smda,
+    _: WritePermissionDep = None,
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
-    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
         return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
@@ -510,10 +493,11 @@ async def patch_masterdata(
         **LockConflictResponses,
     },
 )
-async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
+async def patch_model(
+    project_session: ProjectSessionDep, model: Model, _: WritePermissionDep = None
+) -> Message:
     """Saves model data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
-    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("model", model.model_dump())
         return Message(message=f"Saved model data to {fmu_dir.path}")
@@ -544,10 +528,11 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
         **LockConflictResponses,
     },
 )
-async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
+async def patch_access(
+    project_session: ProjectSessionDep, access: Access, _: WritePermissionDep = None
+) -> Message:
     """Saves access data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
-    _check_write_permissions(fmu_dir)
     try:
         fmu_dir.set_config_value("access", access.model_dump())
         return Message(message=f"Saved access data to {fmu_dir.path}")
@@ -558,22 +543,6 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-def _check_write_permissions(fmu_dir: ProjectFMUDirectory) -> None:
-    """Check if the project allows write operations.
-
-    Raises:
-        HTTPException: If the project is read-only due to lock conflicts.
-    """
-    if not fmu_dir._lock.is_locked():
-        raise HTTPException(
-            status_code=423,
-            detail=(
-                "Project is read-only. Cannot write to project "
-                "that is locked by another process."
-            ),
-        )
 
 
 def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
