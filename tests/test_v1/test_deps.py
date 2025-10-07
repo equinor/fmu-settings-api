@@ -125,7 +125,7 @@ async def test_get_project_smda_interface(tmp_path_mocked_home: Path) -> None:
     assert smda_interface._subscription_key == smda_subscription_mock
 
 
-async def test_ensure_user_fmu_directory_file_exists_error():
+async def test_ensure_user_fmu_directory_file_exists_error() -> None:
     """Test that a FileExistsError results in HTTPException with status 409."""
     with (
         patch(
@@ -144,7 +144,7 @@ async def test_ensure_user_fmu_directory_file_exists_error():
     assert "User .fmu already exists but is invalid" in str(exc_info.value.detail)
 
 
-async def test_ensure_user_fmu_directory_permission_error():
+async def test_ensure_user_fmu_directory_permission_error() -> None:
     """Test that a PermissionError results in HTTPException with status 403."""
     with (
         patch(
@@ -163,7 +163,7 @@ async def test_ensure_user_fmu_directory_permission_error():
     assert "Permission denied creating user .fmu" in str(exc_info.value.detail)
 
 
-async def test_ensure_user_fmu_directory_general_error():
+async def test_ensure_user_fmu_directory_general_error() -> None:
     """Test that a general Exception results in HTTPException with status 500."""
     with (
         patch(
@@ -182,7 +182,7 @@ async def test_ensure_user_fmu_directory_general_error():
     assert "Something went wrong" in str(exc_info.value.detail)
 
 
-async def test_ensure_user_fmu_directory_outer_general_error():
+async def test_ensure_user_fmu_directory_outer_general_error() -> None:
     """Test that a general Exception from UserFMUDirectory results in HTTP 500."""
     with (
         patch(
