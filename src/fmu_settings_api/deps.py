@@ -201,7 +201,7 @@ async def check_write_permissions(project_session: ProjectSessionDep) -> None:
         HTTPException: If the project is read-only due to lock conflicts.
     """
     fmu_dir = project_session.project_fmu_directory
-    if not fmu_dir._lock.is_locked():
+    if not fmu_dir._lock.is_acquired():
         raise HTTPException(
             status_code=423,
             detail=(

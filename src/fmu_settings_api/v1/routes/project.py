@@ -547,7 +547,7 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
 def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     """Returns the paths and configuration of a project FMU directory."""
     try:
-        is_read_only = not fmu_dir._lock.is_locked()
+        is_read_only = not fmu_dir._lock.is_acquired()
 
         return FMUProject(
             path=fmu_dir.base_path,
