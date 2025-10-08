@@ -211,4 +211,4 @@ async def check_write_permissions(project_session: ProjectSessionDep) -> None:
         )
 
 
-WritePermissionDep = Annotated[None, Depends(check_write_permissions)]
+WritePermissionDep = Depends(check_write_permissions)

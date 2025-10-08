@@ -340,6 +340,7 @@ async def init_project(
 @router.post(
     "/global_config",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Loads the global config into the project masterdata.",
     description=dedent(
         """
@@ -355,7 +356,6 @@ async def init_project(
 async def post_global_config(
     project_session: ProjectSessionDep,
     path: GlobalConfigPath | None = None,
-    _: WritePermissionDep = None,
 ) -> Message:
     """Loads the global config into the .fmu config."""
     fmu_dir = project_session.project_fmu_directory
@@ -442,6 +442,7 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
 @router.patch(
     "/masterdata",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves SMDA masterdata to the project .fmu directory",
     description=dedent(
         """
@@ -459,7 +460,6 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
 async def patch_masterdata(
     project_session: ProjectSessionDep,
     smda_masterdata: Smda,
-    _: WritePermissionDep = None,
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
@@ -478,6 +478,7 @@ async def patch_masterdata(
 @router.patch(
     "/model",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves model data to the project .fmu directory",
     description=dedent(
         """
@@ -493,9 +494,7 @@ async def patch_masterdata(
         **LockConflictResponses,
     },
 )
-async def patch_model(
-    project_session: ProjectSessionDep, model: Model, _: WritePermissionDep = None
-) -> Message:
+async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
     try:
@@ -513,6 +512,7 @@ async def patch_model(
 @router.patch(
     "/access",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves access data to the project .fmu directory",
     description=dedent(
         """
@@ -528,9 +528,7 @@ async def patch_model(
         **LockConflictResponses,
     },
 )
-async def patch_access(
-    project_session: ProjectSessionDep, access: Access, _: WritePermissionDep = None
-) -> Message:
+async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
     try:
