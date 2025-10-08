@@ -158,7 +158,6 @@ GlobalConfigResponses: Final[Responses] = {
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **LockConflictResponses,
     },
 )
 async def get_project(session: SessionDep) -> FMUProject:
@@ -254,7 +253,6 @@ async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
-        **LockConflictResponses,
     },
 )
 async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
@@ -305,7 +303,6 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
-        **LockConflictResponses,
     },
 )
 async def init_project(
@@ -351,7 +348,11 @@ async def init_project(
         for at this path. If not, the default project path will be used.
        """
     ),
-    responses={**GetSessionResponses, **GlobalConfigResponses},
+    responses={
+        **GetSessionResponses,
+        **GlobalConfigResponses,
+        **LockConflictResponses,
+    },
 )
 async def post_global_config(
     project_session: ProjectSessionDep,
