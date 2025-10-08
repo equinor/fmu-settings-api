@@ -308,7 +308,7 @@ async def test_lock_error_gracefully_handled_in_add_fmu_project_to_session(
 
     mock_lock = Mock()
     mock_lock.acquire.side_effect = LockError("Project is locked by another process")
-    mock_lock.is_locked.return_value = False
+    mock_lock.is_acquired.return_value = False
     project_fmu_dir._lock = mock_lock
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
@@ -318,4 +318,4 @@ async def test_lock_error_gracefully_handled_in_add_fmu_project_to_session(
         assert project_session.project_fmu_directory == project_fmu_dir
 
         mock_lock.acquire.assert_called_once()
-        assert not project_session.project_fmu_directory._lock.is_locked()
+        assert not project_session.project_fmu_directory._lock.is_acquired()

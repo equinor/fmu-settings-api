@@ -1335,7 +1335,7 @@ def test_get_project_details_direct_exception() -> None:
     mock_fmu_dir.config.load.side_effect = Exception("Test exception")
 
     mock_lock = Mock()
-    mock_lock.is_locked.return_value = True
+    mock_lock.is_acquired.return_value = True
     mock_fmu_dir._lock = mock_lock
 
     try:
