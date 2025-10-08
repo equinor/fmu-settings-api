@@ -15,6 +15,7 @@ from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     ProjectSmdaSessionDep,
     SmdaInterfaceDep,
+    ensure_user_fmu_directory,
     get_project_smda_interface,
     get_session,
 )
@@ -122,3 +123,75 @@ async def test_get_project_smda_interface(tmp_path_mocked_home: Path) -> None:
     assert isinstance(smda_interface, SmdaAPI)
     assert smda_interface._access_token == smda_api_token_mock
     assert smda_interface._subscription_key == smda_subscription_mock
+
+
+async def test_ensure_user_fmu_directory_file_exists_error() -> None:
+    """Test that a FileExistsError results in HTTPException with status 409."""
+    with (
+        patch(
+            "fmu_settings_api.deps.UserFMUDirectory",
+            side_effect=FileNotFoundError("Directory not found"),
+        ),
+        patch(
+            "fmu_settings_api.deps.init_user_fmu_directory",
+            side_effect=FileExistsError("Directory already exists"),
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await ensure_user_fmu_directory()
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    assert "User .fmu already exists but is invalid" in str(exc_info.value.detail)
+
+
+async def test_ensure_user_fmu_directory_permission_error() -> None:
+    """Test that a PermissionError results in HTTPException with status 403."""
+    with (
+        patch(
+            "fmu_settings_api.deps.UserFMUDirectory",
+            side_effect=FileNotFoundError("Directory not found"),
+        ),
+        patch(
+            "fmu_settings_api.deps.init_user_fmu_directory",
+            side_effect=PermissionError("Permission denied"),
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await ensure_user_fmu_directory()
+
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+    assert "Permission denied creating user .fmu" in str(exc_info.value.detail)
+
+
+async def test_ensure_user_fmu_directory_general_error() -> None:
+    """Test that a general Exception results in HTTPException with status 500."""
+    with (
+        patch(
+            "fmu_settings_api.deps.UserFMUDirectory",
+            side_effect=FileNotFoundError("Directory not found"),
+        ),
+        patch(
+            "fmu_settings_api.deps.init_user_fmu_directory",
+            side_effect=Exception("Something went wrong"),
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await ensure_user_fmu_directory()
+
+    assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Something went wrong" in str(exc_info.value.detail)
+
+
+async def test_ensure_user_fmu_directory_outer_general_error() -> None:
+    """Test that a general Exception from UserFMUDirectory results in HTTP 500."""
+    with (
+        patch(
+            "fmu_settings_api.deps.UserFMUDirectory",
+            side_effect=RuntimeError("Outer exception"),
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await ensure_user_fmu_directory()
+
+    assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Outer exception" in str(exc_info.value.detail)

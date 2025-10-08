@@ -205,6 +205,7 @@ def test_get_project_directory_exists(
     assert fmu_project.path == session_tmp_path
     assert fmu_project.project_dir_name == session_tmp_path.name
     assert existing_fmu_dir.config.load() == fmu_project.config
+    assert fmu_project.is_read_only is False
 
 
 def test_get_project_writes_to_user_recent_projects(
@@ -1332,6 +1333,10 @@ def test_get_project_details_direct_exception() -> None:
     # Create a mock that will cause an exception in the function
     mock_fmu_dir = Mock()
     mock_fmu_dir.config.load.side_effect = Exception("Test exception")
+
+    mock_lock = Mock()
+    mock_lock.is_locked.return_value = True
+    mock_fmu_dir._lock = mock_lock
 
     try:
         _get_project_details(mock_fmu_dir)

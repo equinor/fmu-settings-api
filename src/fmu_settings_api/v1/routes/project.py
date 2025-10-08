@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from fmu_settings_api.deps import (
     ProjectSessionDep,
     SessionDep,
+    WritePermissionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
@@ -77,6 +78,27 @@ ProjectExistsResponses: Final[Responses] = {
         [
             {"detail": ".fmu exists at {path} but is not a directory"},
             {"detail": ".fmu already exists at {path}"},
+        ],
+    ),
+}
+
+LockConflictResponses: Final[Responses] = {
+    **inline_add_response(
+        423,
+        dedent(
+            """
+            The project is locked by another process and cannot be modified.
+            The project can still be read but write operations are blocked.
+            """
+        ),
+        [
+            {"detail": "Project lock conflict: {error_message}"},
+            {
+                "detail": (
+                    "Project is read-only. Cannot write to project "
+                    "that is locked by another process."
+                )
+            },
         ],
     ),
 }
@@ -150,8 +172,8 @@ async def get_project(session: SessionDep) -> FMUProject:
         fmu_dir = session.project_fmu_directory
         return _get_project_details(fmu_dir)
 
+    path = Path.cwd()
     try:
-        path = Path.cwd()
         fmu_dir = find_nearest_fmu_directory(path)
         await add_fmu_project_to_session(session.id, fmu_dir)
     except SessionNotFoundError as e:
@@ -185,11 +207,11 @@ async def get_project(session: SessionDep) -> FMUProject:
 )
 async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
     """Checks if a valid global config exists at the default project location."""
+    global_config_path = (
+        project_session.project_fmu_directory.path.parent / GLOBAL_CONFIG_DEFAULT_PATH
+    )
+
     try:
-        global_config_path = (
-            project_session.project_fmu_directory.path.parent
-            / GLOBAL_CONFIG_DEFAULT_PATH
-        )
         if not global_config_path.exists():
             raise FileNotFoundError(f"No file exists at path {global_config_path}.")
 
@@ -292,11 +314,7 @@ async def init_project(
     try:
         fmu_dir = init_fmu_directory(path)
         _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-        )
+        return _get_project_details(fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -319,6 +337,7 @@ async def init_project(
 @router.post(
     "/global_config",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Loads the global config into the project masterdata.",
     description=dedent(
         """
@@ -329,20 +348,27 @@ async def init_project(
         for at this path. If not, the default project path will be used.
        """
     ),
-    responses={**GetSessionResponses, **GlobalConfigResponses},
+    responses={
+        **GetSessionResponses,
+        **GlobalConfigResponses,
+        **LockConflictResponses,
+    },
 )
 async def post_global_config(
-    project_session: ProjectSessionDep, path: GlobalConfigPath | None = None
+    project_session: ProjectSessionDep,
+    path: GlobalConfigPath | None = None,
 ) -> Message:
     """Loads the global config into the .fmu config."""
-    try:
-        fmu_dir = project_session.project_fmu_directory
-        relative_path = GLOBAL_CONFIG_DEFAULT_PATH
-        if path is not None:
-            relative_path = path.relative_path
+    fmu_dir = project_session.project_fmu_directory
 
-        project_root = fmu_dir.path.parent
-        global_config_path = project_root / relative_path
+    relative_path = GLOBAL_CONFIG_DEFAULT_PATH
+    if path is not None:
+        relative_path = path.relative_path
+
+    project_root = fmu_dir.path.parent
+    global_config_path = project_root / relative_path
+
+    try:
         if not global_config_path.exists():
             raise FileNotFoundError(f"No file exists at path {global_config_path}.")
 
@@ -417,6 +443,7 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
 @router.patch(
     "/masterdata",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves SMDA masterdata to the project .fmu directory",
     description=dedent(
         """
@@ -428,10 +455,12 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_masterdata(
-    project_session: ProjectSessionDep, smda_masterdata: Smda
+    project_session: ProjectSessionDep,
+    smda_masterdata: Smda,
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     fmu_dir = project_session.project_fmu_directory
@@ -450,6 +479,7 @@ async def patch_masterdata(
 @router.patch(
     "/model",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves model data to the project .fmu directory",
     description=dedent(
         """
@@ -462,6 +492,7 @@ async def patch_masterdata(
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
@@ -482,6 +513,7 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
 @router.patch(
     "/access",
     response_model=Message,
+    dependencies=[WritePermissionDep],
     summary="Saves access data to the project .fmu directory",
     description=dedent(
         """
@@ -494,6 +526,7 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
         **GetSessionResponses,
         **ProjectResponses,
         **ProjectExistsResponses,
+        **LockConflictResponses,
     },
 )
 async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
@@ -514,10 +547,13 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
 def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     """Returns the paths and configuration of a project FMU directory."""
     try:
+        is_read_only = not fmu_dir._lock.is_locked()
+
         return FMUProject(
             path=fmu_dir.base_path,
             project_dir_name=fmu_dir.base_path.name,
             config=fmu_dir.config.load(),
+            is_read_only=is_read_only,
         )
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(
