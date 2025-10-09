@@ -1470,7 +1470,7 @@ def test_get_lock_status_with_lock_file_read_error(
         mock_lock.is_acquired.return_value = False
         error_msg = "Permission denied accessing lock path"
 
-        def raise_error(self):
+        def raise_error(self: object) -> None:
             raise PermissionError(error_msg)
 
         type(mock_lock).path = property(raise_error)
