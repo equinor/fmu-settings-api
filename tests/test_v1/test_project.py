@@ -27,7 +27,7 @@ from fmu_settings_api.session import (
     SessionManager,
     SessionNotFoundError,
 )
-from fmu_settings_api.v1.routes.project import _get_project_details
+from fmu_settings_api.v1.routes.project import _create_opened_project_response
 
 client = TestClient(app)
 
@@ -1328,8 +1328,8 @@ async def test_patch_access_general_exception(
         assert response.json() == {"detail": "Invalid access data"}
 
 
-def test_get_project_details_direct_exception() -> None:
-    """Test the _get_project_details function directly with invalid input."""
+def test_create_opened_project_response_direct_exception() -> None:
+    """Test the _create_opened_project_response function directly with invalid input."""
     # Create a mock that will cause an exception in the function
     mock_fmu_dir = Mock()
     mock_fmu_dir.config.load.side_effect = Exception("Test exception")
@@ -1339,7 +1339,7 @@ def test_get_project_details_direct_exception() -> None:
     mock_fmu_dir._lock = mock_lock
 
     try:
-        _get_project_details(mock_fmu_dir)
+        _create_opened_project_response(mock_fmu_dir)
         raise AssertionError("Expected HTTPException")
     except HTTPException as e:
         assert e.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR

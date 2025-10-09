@@ -170,7 +170,7 @@ async def get_project(session: SessionDep) -> FMUProject:
     """
     if isinstance(session, ProjectSession):
         fmu_dir = session.project_fmu_directory
-        return _get_project_details(fmu_dir)
+        return _create_opened_project_response(fmu_dir)
 
     path = Path.cwd()
     try:
@@ -190,7 +190,7 @@ async def get_project(session: SessionDep) -> FMUProject:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return _get_project_details(fmu_dir)
+    return _create_opened_project_response(fmu_dir)
 
 
 @router.get(
@@ -283,7 +283,7 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return _get_project_details(fmu_dir)
+    return _create_opened_project_response(fmu_dir)
 
 
 @router.post(
@@ -314,7 +314,7 @@ async def init_project(
     try:
         fmu_dir = init_fmu_directory(path)
         _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return _get_project_details(fmu_dir)
+        return _create_opened_project_response(fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -544,8 +544,12 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-def _get_project_details(fmu_dir: ProjectFMUDirectory) -> FMUProject:
-    """Returns the paths and configuration of a project FMU directory."""
+def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
+    """Creates an FMUProject response model for an opened project.
+
+    Includes path, configuration, and read-only status determined by lock acquisition.
+    Raises HTTP exceptions for corrupt or inaccessible projects.
+    """
     try:
         is_read_only = not fmu_dir._lock.is_acquired()
 
