@@ -1,6 +1,5 @@
 """Routes to add an FMU project to an existing session."""
 
-import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Final
@@ -477,11 +476,11 @@ async def get_lock_status(project_session: ProjectSessionDep) -> LockStatus:
         if fmu_dir._lock.exists:
             lock_file_exists = True
             try:
-                lock_info = fmu_dir._lock.load(store_cache=False)
+                lock_info = fmu_dir._lock.load(force=True, store_cache=False)
             except (OSError, PermissionError) as e:
                 lock_file_read_error = f"Failed to read lock file: {str(e)}"
-            except json.JSONDecodeError as e:
-                lock_file_read_error = f"Failed to parse lock file JSON: {str(e)}"
+            except ValueError as e:
+                lock_file_read_error = f"Failed to parse lock file: {str(e)}"
             except Exception as e:
                 lock_file_read_error = f"Failed to process lock file: {str(e)}"
         else:

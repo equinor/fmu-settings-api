@@ -1519,7 +1519,7 @@ def test_get_lock_status_with_corrupted_lock_file(
             assert lock_status["lock_file_exists"] is True
             assert lock_status["lock_info"] is None
             read_error = lock_status["lock_file_read_error"]
-            assert "Failed to parse lock file JSON" in read_error
+            assert "Failed to parse lock file" in read_error
 
 
 def test_get_lock_status_includes_session_error_fields(
@@ -1616,7 +1616,7 @@ def test_get_lock_status_with_lock_file_processing_error(
             assert lock_status["is_lock_acquired"] is False
             assert lock_status["lock_file_exists"] is True
             read_error = lock_status["lock_file_read_error"]
-            assert "Failed to process lock file: Invalid lock info" in read_error
+            assert "Failed to parse lock file: Invalid lock info" in read_error
 
 
 def test_get_lock_status_with_lock_file_not_exists(
