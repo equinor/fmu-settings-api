@@ -1470,10 +1470,10 @@ def test_get_lock_status_with_lock_file_read_error(
         mock_lock.is_acquired.return_value = False
         error_msg = "Permission denied accessing lock path"
 
-        def raise_error(self: object) -> None:
+        def raise_error_on_exists() -> None:
             raise PermissionError(error_msg)
 
-        type(mock_lock).path = property(raise_error)
+        type(mock_lock).exists = property(lambda self: raise_error_on_exists())
 
         with patch.object(existing_fmu_dir, "_lock", mock_lock):
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")
@@ -1506,18 +1506,20 @@ def test_get_lock_status_with_corrupted_lock_file(
         response = client_with_session.get(ROUTE)
         assert response.status_code == status.HTTP_200_OK
 
-        lock_file_path = existing_fmu_dir._lock.path
-        lock_file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(lock_file_path, "w") as f:
-            f.write("invalid json content")
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
 
-        lock_response = client_with_session.get(f"{ROUTE}/lock_status")
-        assert lock_response.status_code == status.HTTP_200_OK
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
 
-        lock_status = lock_response.json()
-        assert lock_status["lock_file_exists"] is True
-        assert lock_status["lock_info"] is None
-        assert "Failed to parse lock file JSON" in lock_status["lock_file_read_error"]
+            lock_status = lock_response.json()
+            assert lock_status["lock_file_exists"] is True
+            assert lock_status["lock_info"] is None
+            read_error = lock_status["lock_file_read_error"]
+            assert "Failed to parse lock file JSON" in read_error
 
 
 def test_get_lock_status_includes_session_error_fields(
@@ -1568,15 +1570,10 @@ def test_get_lock_status_with_lock_file_permission_error(
 
         mock_lock = Mock()
         mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = PermissionError("Permission denied")
 
-        mock_path = Mock()
-        mock_path.exists.return_value = True
-        mock_lock.path = mock_path
-
-        with (
-            patch.object(existing_fmu_dir, "_lock", mock_lock),
-            patch("builtins.open", side_effect=PermissionError("Permission denied")),
-        ):
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")
             assert lock_response.status_code == status.HTTP_200_OK
 
@@ -1608,24 +1605,10 @@ def test_get_lock_status_with_lock_file_processing_error(
 
         mock_lock = Mock()
         mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = ValueError("Invalid lock info")
 
-        mock_path = Mock()
-        mock_path.exists.return_value = True
-        mock_lock.path = mock_path
-
-        mock_file = Mock()
-        mock_file.read.return_value = '{"valid": "json"}'
-        mock_file.__enter__ = Mock(return_value=mock_file)
-        mock_file.__exit__ = Mock(return_value=None)
-
-        with (
-            patch.object(existing_fmu_dir, "_lock", mock_lock),
-            patch("builtins.open", return_value=mock_file),
-            patch(
-                "fmu_settings_api.v1.routes.project.LockInfo",
-                side_effect=ValueError("Invalid lock info"),
-            ),
-        ):
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")
             assert lock_response.status_code == status.HTTP_200_OK
 
@@ -1657,10 +1640,7 @@ def test_get_lock_status_with_lock_file_not_exists(
 
         mock_lock = Mock()
         mock_lock.is_acquired.return_value = False
-
-        mock_path = Mock()
-        mock_path.exists.return_value = False
-        mock_lock.path = mock_path
+        mock_lock.exists = False
 
         with patch.object(existing_fmu_dir, "_lock", mock_lock):
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")

@@ -15,7 +15,6 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
-from fmu.settings.models.lock_info import LockInfo
 from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
@@ -475,14 +474,10 @@ async def get_lock_status(project_session: ProjectSessionDep) -> LockStatus:
         lock_status_error = f"Failed to check lock status: {str(e)}"
 
     try:
-        lock_file_path = fmu_dir._lock.path
-        if lock_file_path.exists():
+        if fmu_dir._lock.exists:
             lock_file_exists = True
             try:
-                with open(lock_file_path, encoding="utf-8") as f:
-                    content = f.read().strip()
-                    lock_data = json.loads(content)
-                    lock_info = LockInfo(**lock_data)
+                lock_info = fmu_dir._lock.load(store_cache=False)
             except (OSError, PermissionError) as e:
                 lock_file_read_error = f"Failed to read lock file: {str(e)}"
             except json.JSONDecodeError as e:
