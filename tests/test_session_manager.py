@@ -319,3 +319,53 @@ async def test_lock_error_gracefully_handled_in_add_fmu_project_to_session(
 
         mock_lock.acquire.assert_called_once()
         assert not project_session.project_fmu_directory._lock.is_acquired()
+
+
+async def test_add_fmu_project_to_session_handles_previous_lock_release_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests handling exception when releasing previous lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project1_path = tmp_path_mocked_home / "test_project1"
+    project1_path.mkdir()
+    project1_fmu_dir = init_fmu_directory(project1_path)
+
+    mock_lock1 = Mock()
+    project1_fmu_dir._lock = mock_lock1
+
+    project2_path = tmp_path_mocked_home / "test_project2"
+    project2_path.mkdir()
+    project2_fmu_dir = init_fmu_directory(project2_path)
+
+    mock_lock2 = Mock()
+    project2_fmu_dir._lock = mock_lock2
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project1_fmu_dir)
+
+        mock_lock1.release.side_effect = Exception("Failed to release lock")
+
+        project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
+
+        assert project_session.project_fmu_directory == project2_fmu_dir
+        assert project_session.last_lock_release_error == "Failed to release lock"
+
+        mock_lock1.release.assert_called_once()
+        mock_lock2.acquire.assert_called_once()
+
+
+async def test_remove_fmu_project_from_session_with_regular_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests remove_fmu_project_from_session when session is not a ProjectSession."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        result_session = await remove_fmu_project_from_session(session_id)
+
+        original_session = await session_manager.get_session(session_id)
+        assert result_session == original_session
+        assert result_session.id == session_id

@@ -1,6 +1,5 @@
 """Functionality for managing sessions."""
 
-import contextlib
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Self
@@ -43,6 +42,8 @@ class ProjectSession(Session):
     """A session with an FMU project attached."""
 
     project_fmu_directory: ProjectFMUDirectory
+    last_lock_acquire_error: str | None = None
+    last_lock_release_error: str | None = None
 
 
 class SessionManager:
@@ -87,8 +88,10 @@ class SessionManager:
         if session is not None:
             try:
                 if isinstance(session, ProjectSession):
-                    with contextlib.suppress(Exception):
+                    try:
                         session.project_fmu_directory._lock.release()
+                    except Exception as e:
+                        session.last_lock_release_error = str(e)
             finally:
                 del self.storage[session_id]
 
@@ -176,19 +179,31 @@ async def add_fmu_project_to_session(
     """
     session = await session_manager.get_session(session_id)
 
-    if isinstance(session, ProjectSession):
-        with contextlib.suppress(Exception):
-            session.project_fmu_directory._lock.release()
+    last_lock_release_error = None
+    last_lock_acquire_error = None
 
-    with contextlib.suppress(Exception):
+    if isinstance(session, ProjectSession):
+        try:
+            session.project_fmu_directory._lock.release()
+        except Exception as e:
+            last_lock_release_error = str(e)
+
+    try:
         project_fmu_directory._lock.acquire()
+    except Exception as e:
+        last_lock_acquire_error = str(e)
 
     if isinstance(session, ProjectSession):
         project_session = session
         project_session.project_fmu_directory = project_fmu_directory
+        project_session.last_lock_acquire_error = last_lock_acquire_error
+        project_session.last_lock_release_error = last_lock_release_error
     else:
         project_session = ProjectSession(
-            **asdict(session), project_fmu_directory=project_fmu_directory
+            **asdict(session),
+            project_fmu_directory=project_fmu_directory,
+            last_lock_acquire_error=last_lock_acquire_error,
+            last_lock_release_error=last_lock_release_error,
         )
     add_to_user_recent_projects(
         project_path=project_fmu_directory.base_path,
@@ -212,11 +227,16 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     if not isinstance(maybe_project_session, ProjectSession):
         return maybe_project_session
 
-    with contextlib.suppress(Exception):
+    try:
         maybe_project_session.project_fmu_directory._lock.release()
+        maybe_project_session.last_lock_release_error = None
+    except Exception as e:
+        maybe_project_session.last_lock_release_error = str(e)
 
     project_session_dict = asdict(maybe_project_session)
     project_session_dict.pop("project_fmu_directory", None)
+    project_session_dict.pop("last_lock_acquire_error", None)
+    project_session_dict.pop("last_lock_release_error", None)
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session

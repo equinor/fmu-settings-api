@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from fmu.settings.models.lock_info import LockInfo
 from fmu.settings.models.project_config import ProjectConfig
 from pydantic import BaseModel, Field
 
@@ -31,3 +32,42 @@ class GlobalConfigPath(BaseModel):
 
     relative_path: Path = Field(examples=["relative_path/to/global_config_file"])
     """Relative path in the project to a global config file."""
+
+
+class LockStatus(BaseModel):
+    """Information about the project lock status."""
+
+    is_lock_acquired: bool = Field(
+        description="Whether the current session holds the write lock"
+    )
+    """Whether the current session holds the write lock."""
+
+    lock_file_exists: bool = Field(
+        description="Whether a lock file exists on the filesystem"
+    )
+    """Whether a lock file exists."""
+
+    lock_info: LockInfo | None = Field(
+        default=None, description="Contents of the lock file if it exists"
+    )
+    """Contents of the lock file, if available and readable."""
+
+    lock_status_error: str | None = Field(
+        default=None, description="Error message if lock status could not be determined"
+    )
+    """Error message if checking lock status failed."""
+
+    lock_file_read_error: str | None = Field(
+        default=None, description="Error message if lock file could not be read"
+    )
+    """Error message if reading the lock file failed."""
+
+    last_lock_acquire_error: str | None = Field(
+        default=None, description="Error message from the last lock acquire attempt"
+    )
+    """Error message from the last attempt to acquire the lock."""
+
+    last_lock_release_error: str | None = Field(
+        default=None, description="Error message from the last lock release attempt"
+    )
+    """Error message from the last attempt to release the lock."""
