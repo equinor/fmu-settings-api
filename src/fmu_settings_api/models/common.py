@@ -2,29 +2,35 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 
-class Ok(BaseModel):
+class BaseResponseModel(BaseModel):
+    """Base class for all response models with attribute docstrings enabled."""
+
+    model_config = ConfigDict(use_attribute_docstrings=True)
+
+
+class Ok(BaseResponseModel):
     """Returns "ok" if the route is functioning correctly."""
 
     status: Literal["ok"] = "ok"
 
 
-class Message(BaseModel):
+class Message(BaseResponseModel):
     """A generic message to return to the GUI."""
 
     message: str
 
 
-class APIKey(BaseModel):
+class APIKey(BaseResponseModel):
     """A key-value pair for a known and supported API."""
 
     id: str
     key: SecretStr
 
 
-class AccessToken(BaseModel):
+class AccessToken(BaseResponseModel):
     """A key-value pair for a known and supported access scope."""
 
     id: str

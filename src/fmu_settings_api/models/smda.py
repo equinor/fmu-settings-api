@@ -9,17 +9,19 @@ from fmu.datamodels.fmu_results.fields import (
     FieldItem,
     StratigraphicColumn,
 )
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from fmu_settings_api.models.common import BaseResponseModel
 
 
-class SmdaField(BaseModel):
+class SmdaField(BaseResponseModel):
     """An identifier for a field to be searched for."""
 
     identifier: str = Field(examples=["TROLL"])
     """A field identifier (name)."""
 
 
-class SmdaFieldUUID(BaseModel):
+class SmdaFieldUUID(BaseResponseModel):
     """Name-UUID identifier for a field as known by SMDA."""
 
     identifier: str = Field(examples=["TROLL"])
@@ -29,7 +31,7 @@ class SmdaFieldUUID(BaseModel):
     """The SMDA UUID identifier corresponding to the field identifier."""
 
 
-class SmdaFieldSearchResult(BaseModel):
+class SmdaFieldSearchResult(BaseResponseModel):
     """The search result of a field identifier result."""
 
     hits: int
@@ -40,7 +42,7 @@ class SmdaFieldSearchResult(BaseModel):
     """A list of field identifier results from the search."""
 
 
-class SmdaMasterdataResult(BaseModel):
+class SmdaMasterdataResult(BaseResponseModel):
     """Contains SMDA-related attributes."""
 
     field: list[FieldItem]

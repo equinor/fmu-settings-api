@@ -1344,3 +1344,310 @@ def test_create_opened_project_response_direct_exception() -> None:
     except HTTPException as e:
         assert e.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert "Test exception" in str(e.detail)
+
+
+def test_get_lock_status(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test that lock status endpoint returns current lock information."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+        assert lock_response.status_code == status.HTTP_200_OK
+
+        lock_status = lock_response.json()
+
+        assert "is_lock_acquired" in lock_status
+        assert "lock_file_exists" in lock_status
+        assert "lock_info" in lock_status
+        assert "lock_status_error" in lock_status
+        assert "lock_file_read_error" in lock_status
+        assert "last_lock_acquire_error" in lock_status
+        assert "last_lock_release_error" in lock_status
+
+        assert isinstance(lock_status["is_lock_acquired"], bool)
+        assert isinstance(lock_status["lock_file_exists"], bool)
+        assert lock_status["lock_status_error"] is None or isinstance(
+            lock_status["lock_status_error"], str
+        )
+        assert lock_status["lock_file_read_error"] is None or isinstance(
+            lock_status["lock_file_read_error"], str
+        )
+        assert lock_status["last_lock_acquire_error"] is None or isinstance(
+            lock_status["last_lock_acquire_error"], str
+        )
+        assert lock_status["last_lock_release_error"] is None or isinstance(
+            lock_status["last_lock_release_error"], str
+        )
+
+        if lock_status["is_lock_acquired"] and lock_status["lock_file_exists"]:
+            assert lock_status["lock_info"] is not None
+            if isinstance(lock_status["lock_info"], dict):
+                expected_fields: dict[str, type | tuple[type, ...]] = {
+                    "pid": int,
+                    "hostname": str,
+                    "user": str,
+                    "acquired_at": (int, float),
+                    "expires_at": (int, float),
+                    "version": str,
+                }
+                for field, expected_type in expected_fields.items():
+                    if field in lock_status["lock_info"]:
+                        assert isinstance(
+                            lock_status["lock_info"][field], expected_type
+                        )
+
+
+def test_get_lock_status_with_lock_status_error(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status endpoint when is_acquired() fails."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        with patch.object(
+            existing_fmu_dir._lock,
+            "is_acquired",
+            side_effect=Exception("Lock status check failed"),
+        ):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["is_lock_acquired"] is False
+            expected_error = "Failed to check lock status: Lock status check failed"
+            assert lock_status["lock_status_error"] == expected_error
+            assert lock_status["lock_file_read_error"] is None
+            assert lock_status["last_lock_acquire_error"] is None
+            assert lock_status["last_lock_release_error"] is None
+
+
+def test_get_lock_status_with_lock_file_read_error(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status endpoint when lock file path access fails."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        error_msg = "Permission denied accessing lock path"
+
+        def raise_error_on_exists() -> None:
+            raise PermissionError(error_msg)
+
+        type(mock_lock).exists = property(lambda self: raise_error_on_exists())
+
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["is_lock_acquired"] is False
+            assert lock_status["lock_file_exists"] is False
+            read_error = lock_status["lock_file_read_error"]
+            assert "Failed to access lock file path" in read_error
+            assert error_msg in read_error
+
+
+def test_get_lock_status_with_corrupted_lock_file(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status endpoint with corrupted lock file JSON."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["lock_file_exists"] is True
+            assert lock_status["lock_info"] is None
+            read_error = lock_status["lock_file_read_error"]
+            assert "Failed to parse lock file" in read_error
+
+
+def test_get_lock_status_includes_session_error_fields(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status endpoint includes session lock error fields."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+        assert lock_response.status_code == status.HTTP_200_OK
+
+        lock_status = lock_response.json()
+        assert "last_lock_acquire_error" in lock_status
+        assert "last_lock_release_error" in lock_status
+
+
+def test_get_lock_status_with_lock_file_permission_error(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status when lock file exists but can't be read due to permissions."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = PermissionError("Permission denied")
+
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["is_lock_acquired"] is False
+            assert lock_status["lock_file_exists"] is True
+            read_error = lock_status["lock_file_read_error"]
+            assert "Failed to read lock file: Permission denied" in read_error
+
+
+def test_get_lock_status_with_lock_file_processing_error(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status when lock file processing fails with generic exception."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        mock_lock.exists = True
+        mock_lock.load.side_effect = ValueError("Invalid lock info")
+
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["is_lock_acquired"] is False
+            assert lock_status["lock_file_exists"] is True
+            read_error = lock_status["lock_file_read_error"]
+            assert "Failed to parse lock file: Invalid lock info" in read_error
+
+
+def test_get_lock_status_with_lock_file_not_exists(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test lock status when lock file path exists but file doesn't exist."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_lock = Mock()
+        mock_lock.is_acquired.return_value = False
+        mock_lock.exists = False
+
+        with patch.object(existing_fmu_dir, "_lock", mock_lock):
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["is_lock_acquired"] is False
+            assert lock_status["lock_file_exists"] is False
+            assert lock_status["lock_info"] is None
+            assert lock_status["lock_file_read_error"] is None

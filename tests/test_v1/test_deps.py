@@ -2,25 +2,30 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import create_autospec, patch
+from unittest.mock import Mock, create_autospec, patch
 from uuid import uuid4
 
 import pytest
 from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
 from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     ProjectSmdaSessionDep,
     SmdaInterfaceDep,
+    check_write_permissions,
     ensure_user_fmu_directory,
     get_project_smda_interface,
     get_session,
 )
 from fmu_settings_api.interfaces.smda_api import SmdaAPI
-from fmu_settings_api.session import AccessTokens, SessionManager
+from fmu_settings_api.session import (
+    AccessTokens,
+    SessionManager,
+    add_fmu_project_to_session,
+)
 
 ROUTE = "/api/v1/health"
 
@@ -195,3 +200,28 @@ async def test_ensure_user_fmu_directory_outer_general_error() -> None:
 
     assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Outer exception" in str(exc_info.value.detail)
+
+
+async def test_check_write_permissions_project_not_acquired(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Test that check_write_permissions raises HTTPException when not acquired."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    project_fmu_dir._lock = mock_lock
+
+    project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_write_permissions(project_session)
+
+    assert exc_info.value.status_code == status.HTTP_423_LOCKED
+    assert "Project is read-only" in str(exc_info.value.detail)
+    assert "locked by another process" in str(exc_info.value.detail)

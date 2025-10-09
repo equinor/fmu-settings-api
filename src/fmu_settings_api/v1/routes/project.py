@@ -23,7 +23,7 @@ from fmu_settings_api.deps import (
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
-from fmu_settings_api.models.project import GlobalConfigPath
+from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
 from fmu_settings_api.services.user import remove_from_recent_projects
 from fmu_settings_api.session import (
     ProjectSession,
@@ -438,6 +438,65 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/lock_status",
+    response_model=LockStatus,
+    summary="Returns the lock status and lock file contents",
+    description=dedent(
+        """
+        Returns information about the project lock including whether the current
+        session holds the lock and the contents of the lock file if it exists.
+        This is useful for debugging lock conflicts and showing users who has
+        the project locked.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+    },
+)
+async def get_lock_status(project_session: ProjectSessionDep) -> LockStatus:
+    """Returns the lock status and lock file contents if available."""
+    fmu_dir = project_session.project_fmu_directory
+
+    is_lock_acquired = False
+    lock_file_exists = False
+    lock_info = None
+    lock_status_error = None
+    lock_file_read_error = None
+
+    try:
+        is_lock_acquired = fmu_dir._lock.is_acquired()
+    except Exception as e:
+        lock_status_error = f"Failed to check lock status: {str(e)}"
+
+    try:
+        if fmu_dir._lock.exists:
+            lock_file_exists = True
+            try:
+                lock_info = fmu_dir._lock.load(force=True, store_cache=False)
+            except (OSError, PermissionError) as e:
+                lock_file_read_error = f"Failed to read lock file: {str(e)}"
+            except ValueError as e:
+                lock_file_read_error = f"Failed to parse lock file: {str(e)}"
+            except Exception as e:
+                lock_file_read_error = f"Failed to process lock file: {str(e)}"
+        else:
+            lock_file_exists = False
+    except Exception as e:
+        lock_file_read_error = f"Failed to access lock file path: {str(e)}"
+
+    return LockStatus(
+        is_lock_acquired=is_lock_acquired,
+        lock_file_exists=lock_file_exists,
+        lock_info=lock_info,
+        lock_status_error=lock_status_error,
+        lock_file_read_error=lock_file_read_error,
+        last_lock_acquire_error=project_session.last_lock_acquire_error,
+        last_lock_release_error=project_session.last_lock_release_error,
+    )
 
 
 @router.patch(
