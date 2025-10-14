@@ -59,3 +59,6 @@ class LockStatus(BaseResponseModel):
 
     last_lock_release_error: str | None = Field(default=None)
     """Error message from the last attempt to release the lock."""
+
+    last_lock_refresh_error: str | None = Field(default=None)
+    """Error message from the last attempt to refresh the lock."""

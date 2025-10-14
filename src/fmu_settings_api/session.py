@@ -44,6 +44,7 @@ class ProjectSession(Session):
     project_fmu_directory: ProjectFMUDirectory
     last_lock_acquire_error: str | None = None
     last_lock_release_error: str | None = None
+    last_lock_refresh_error: str | None = None
 
 
 class SessionManager:
@@ -147,6 +148,18 @@ class SessionManager:
             raise SessionNotFoundError("Invalid or expired session")
 
         session.last_accessed = now
+
+        if isinstance(session, ProjectSession):
+            lock = session.project_fmu_directory._lock
+            try:
+                if lock.is_acquired():
+                    lock.refresh()
+                    session.last_lock_refresh_error = None
+                else:
+                    session.last_lock_refresh_error = None
+            except Exception as e:
+                session.last_lock_refresh_error = str(e)
+
         await self._update_session(session_id, session)
         return session
 
@@ -198,12 +211,14 @@ async def add_fmu_project_to_session(
         project_session.project_fmu_directory = project_fmu_directory
         project_session.last_lock_acquire_error = last_lock_acquire_error
         project_session.last_lock_release_error = last_lock_release_error
+        project_session.last_lock_refresh_error = None
     else:
         project_session = ProjectSession(
             **asdict(session),
             project_fmu_directory=project_fmu_directory,
             last_lock_acquire_error=last_lock_acquire_error,
             last_lock_release_error=last_lock_release_error,
+            last_lock_refresh_error=None,
         )
     add_to_user_recent_projects(
         project_path=project_fmu_directory.base_path,
@@ -237,6 +252,7 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     project_session_dict.pop("project_fmu_directory", None)
     project_session_dict.pop("last_lock_acquire_error", None)
     project_session_dict.pop("last_lock_release_error", None)
+    project_session_dict.pop("last_lock_refresh_error", None)
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session
