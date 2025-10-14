@@ -48,7 +48,7 @@ class ProjectSession(Session):
 
 
 class SessionManager:
-    """Manages sessions started when an FMU Directory as been opened.
+    """Manages sessions started when an FMU Directory has been opened.
 
     A better implementation would involve creating a storage backend interface that all
     backends implement. Because our use case is simple only hints of this are here and
