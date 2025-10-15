@@ -494,9 +494,9 @@ async def get_lock_status(project_session: ProjectSessionDep) -> LockStatus:
         lock_info=lock_info,
         lock_status_error=lock_status_error,
         lock_file_read_error=lock_file_read_error,
-        last_lock_acquire_error=project_session.last_lock_acquire_error,
-        last_lock_release_error=project_session.last_lock_release_error,
-        last_lock_refresh_error=project_session.last_lock_refresh_error,
+        last_lock_acquire_error=project_session.lock_errors.acquire,
+        last_lock_release_error=project_session.lock_errors.release,
+        last_lock_refresh_error=project_session.lock_errors.refresh,
     )
 
 

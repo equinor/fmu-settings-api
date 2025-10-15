@@ -130,7 +130,7 @@ async def test_get_session_refreshes_project_lock_when_acquired(
 
     assert isinstance(result, ProjectSession)
     mock_lock.refresh.assert_called_once_with()
-    assert result.last_lock_refresh_error is None
+    assert result.lock_errors.refresh is None
 
 
 async def test_get_session_handles_lock_refresh_error(
@@ -156,7 +156,7 @@ async def test_get_session_handles_lock_refresh_error(
 
     assert isinstance(result, ProjectSession)
     mock_lock.refresh.assert_called_once_with()
-    assert result.last_lock_refresh_error == "Refresh failed"
+    assert result.lock_errors.refresh == "Refresh failed"
 
 
 async def test_destroy_fmu_session(
@@ -403,7 +403,7 @@ async def test_add_fmu_project_to_session_handles_previous_lock_release_error(
         project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
 
         assert project_session.project_fmu_directory == project2_fmu_dir
-        assert project_session.last_lock_release_error == "Failed to release lock"
+        assert project_session.lock_errors.release == "Failed to release lock"
 
         mock_lock1.release.assert_called_once()
         mock_lock2.acquire.assert_called_once()
