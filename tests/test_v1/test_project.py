@@ -1377,6 +1377,7 @@ def test_get_lock_status(
         assert "lock_file_read_error" in lock_status
         assert "last_lock_acquire_error" in lock_status
         assert "last_lock_release_error" in lock_status
+        assert "last_lock_refresh_error" in lock_status
 
         assert isinstance(lock_status["is_lock_acquired"], bool)
         assert isinstance(lock_status["lock_file_exists"], bool)
@@ -1391,6 +1392,9 @@ def test_get_lock_status(
         )
         assert lock_status["last_lock_release_error"] is None or isinstance(
             lock_status["last_lock_release_error"], str
+        )
+        assert lock_status["last_lock_refresh_error"] is None or isinstance(
+            lock_status["last_lock_refresh_error"], str
         )
 
         if lock_status["is_lock_acquired"] and lock_status["lock_file_exists"]:
@@ -1445,6 +1449,7 @@ def test_get_lock_status_with_lock_status_error(
             assert lock_status["lock_file_read_error"] is None
             assert lock_status["last_lock_acquire_error"] is None
             assert lock_status["last_lock_release_error"] is None
+            assert lock_status["last_lock_refresh_error"] == "Lock status check failed"
 
 
 def test_get_lock_status_with_lock_file_read_error(
@@ -1547,6 +1552,7 @@ def test_get_lock_status_includes_session_error_fields(
         lock_status = lock_response.json()
         assert "last_lock_acquire_error" in lock_status
         assert "last_lock_release_error" in lock_status
+        assert "last_lock_refresh_error" in lock_status
 
 
 def test_get_lock_status_with_lock_file_permission_error(

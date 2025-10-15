@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
 from fmu_settings_api.session import (
+    ProjectSession,
     Session,
     SessionManager,
     SessionNotFoundError,
@@ -104,6 +105,58 @@ async def test_get_existing_session_updates_last_accessed(
     session = await session_manager.get_session(session_id)
     assert session is not None
     assert orig_session.last_accessed < session.last_accessed
+
+
+async def test_get_session_refreshes_project_lock_when_acquired(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that fetching a project session refreshes its lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    result = await session_manager.get_session(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.refresh.assert_called_once_with()
+    assert result.lock_errors.refresh is None
+
+
+async def test_get_session_handles_lock_refresh_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that lock refresh failures are recorded but not raised."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock(side_effect=LockError("Refresh failed"))
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    result = await session_manager.get_session(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.refresh.assert_called_once_with()
+    assert result.lock_errors.refresh == "Refresh failed"
 
 
 async def test_destroy_fmu_session(
@@ -350,7 +403,7 @@ async def test_add_fmu_project_to_session_handles_previous_lock_release_error(
         project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
 
         assert project_session.project_fmu_directory == project2_fmu_dir
-        assert project_session.last_lock_release_error == "Failed to release lock"
+        assert project_session.lock_errors.release == "Failed to release lock"
 
         mock_lock1.release.assert_called_once()
         mock_lock2.acquire.assert_called_once()

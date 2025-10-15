@@ -94,8 +94,8 @@ async def create_session(
     description=dedent(
         """
         This route should be used to add a scoped access token to the current
-        session. The token applied via this route is typically a depndency for
-        other routes."
+        session. The token applied via this route is typically a dependency for
+        other routes.
         """
     ),
     responses={

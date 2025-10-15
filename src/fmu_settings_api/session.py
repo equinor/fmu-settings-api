@@ -1,6 +1,6 @@
 """Functionality for managing sessions."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Self
 from uuid import uuid4
@@ -25,6 +25,14 @@ class AccessTokens(BaseModel):
     smda_api: SecretStr | None = None
 
 
+class LockErrors(BaseModel):
+    """Lock-related error messages tracked for a project session."""
+
+    acquire: str | None = None
+    release: str | None = None
+    refresh: str | None = None
+
+
 @dataclass
 class Session:
     """Represents session information when working on an FMU Directory."""
@@ -42,12 +50,11 @@ class ProjectSession(Session):
     """A session with an FMU project attached."""
 
     project_fmu_directory: ProjectFMUDirectory
-    last_lock_acquire_error: str | None = None
-    last_lock_release_error: str | None = None
+    lock_errors: LockErrors = field(default_factory=LockErrors)
 
 
 class SessionManager:
-    """Manages sessions started when an FMU Directory as been opened.
+    """Manages sessions started when an FMU Directory has been opened.
 
     A better implementation would involve creating a storage backend interface that all
     backends implement. Because our use case is simple only hints of this are here and
@@ -91,7 +98,7 @@ class SessionManager:
                     try:
                         session.project_fmu_directory._lock.release()
                     except Exception as e:
-                        session.last_lock_release_error = str(e)
+                        session.lock_errors.release = str(e)
             finally:
                 del self.storage[session_id]
 
@@ -147,6 +154,18 @@ class SessionManager:
             raise SessionNotFoundError("Invalid or expired session")
 
         session.last_accessed = now
+
+        if isinstance(session, ProjectSession):
+            lock = session.project_fmu_directory._lock
+            try:
+                if lock.is_acquired():
+                    lock.refresh()
+                    session.lock_errors.refresh = None
+                else:
+                    session.lock_errors.refresh = None
+            except Exception as e:
+                session.lock_errors.refresh = str(e)
+
         await self._update_session(session_id, session)
         return session
 
@@ -179,31 +198,30 @@ async def add_fmu_project_to_session(
     """
     session = await session_manager.get_session(session_id)
 
-    last_lock_release_error = None
-    last_lock_acquire_error = None
+    lock_errors = LockErrors()
 
     if isinstance(session, ProjectSession):
         try:
             session.project_fmu_directory._lock.release()
         except Exception as e:
-            last_lock_release_error = str(e)
+            lock_errors.release = str(e)
 
     try:
         project_fmu_directory._lock.acquire()
     except Exception as e:
-        last_lock_acquire_error = str(e)
+        lock_errors.acquire = str(e)
+
+    lock_errors.refresh = None
 
     if isinstance(session, ProjectSession):
         project_session = session
         project_session.project_fmu_directory = project_fmu_directory
-        project_session.last_lock_acquire_error = last_lock_acquire_error
-        project_session.last_lock_release_error = last_lock_release_error
+        project_session.lock_errors = lock_errors
     else:
         project_session = ProjectSession(
             **asdict(session),
             project_fmu_directory=project_fmu_directory,
-            last_lock_acquire_error=last_lock_acquire_error,
-            last_lock_release_error=last_lock_release_error,
+            lock_errors=lock_errors,
         )
     add_to_user_recent_projects(
         project_path=project_fmu_directory.base_path,
@@ -229,14 +247,13 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
 
     try:
         maybe_project_session.project_fmu_directory._lock.release()
-        maybe_project_session.last_lock_release_error = None
+        maybe_project_session.lock_errors.release = None
     except Exception as e:
-        maybe_project_session.last_lock_release_error = str(e)
+        maybe_project_session.lock_errors.release = str(e)
 
     project_session_dict = asdict(maybe_project_session)
     project_session_dict.pop("project_fmu_directory", None)
-    project_session_dict.pop("last_lock_acquire_error", None)
-    project_session_dict.pop("last_lock_release_error", None)
+    project_session_dict.pop("lock_errors", None)
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session
