@@ -15,7 +15,6 @@ from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings._fmu_dir import (
     UserFMUDirectory,
 )
-from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
 from pytest import MonkeyPatch
 
@@ -876,8 +875,8 @@ def test_load_global_config_from_default_path(
     assert response.status_code == status.HTTP_200_OK
     assert (
         response.json()["message"]
-        == "Global config masterdata was successfully loaded "
-        "into the project masterdata."
+        == f"Global config masterdata at {global_config_default_path} was "
+        "successfully loaded into the project masterdata."
     )
 
     # Get project data and check that masterdata has been set
@@ -932,8 +931,8 @@ def test_load_global_config_from_custom_path(
     assert response.status_code == status.HTTP_200_OK
     assert (
         response.json()["message"]
-        == "Global config masterdata was successfully loaded "
-        "into the project masterdata."
+        == f"Global config masterdata at {global_config_custom_path} was "
+        "successfully loaded into the project masterdata."
     )
 
     # Get project data and check that masterdata has been set
@@ -965,9 +964,10 @@ def test_load_global_config_default_file_not_found(
     """Test 404 is returned when the default global config is not found."""
     response = client_with_project_session.post(f"{ROUTE}/global_config")
 
+    default_path = Path("fmuconfig/output/global_variables.yml")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {
-        "detail": "No valid global config file found in the project."
+        "detail": f"No file exists at path {str(tmp_path / default_path)}."
     }
 
 
@@ -982,7 +982,7 @@ def test_load_global_config_provided_file_not_found(
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {
-        "detail": "No valid global config file found in the project."
+        "detail": f"No file exists at path {str(tmp_path / custom_config_path)}."
     }
 
 
@@ -1001,10 +1001,6 @@ def test_load_global_config_invalid_model(
     response = client_with_project_session.post(f"{ROUTE}/global_config")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert (
-        response.json()["detail"]["message"] == "The global config file is not valid."
-    )
-    assert "validation_errors" in response.json()["detail"]
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
@@ -1024,13 +1020,14 @@ def test_load_global_config_general_exception(
     global_config_default_path: Path,
 ) -> None:
     """Test 500 returns when general exception occurs in post_global_config."""
+    # Mock yaml.safe_load to raise a general exception
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
-        side_effect=RuntimeError("Config processing error"),
+        "fmu_settings_api.v1.routes.project.yaml.safe_load",
+        side_effect=RuntimeError("YAML processing error"),
     ):
         response = client_with_project_session.post(f"{ROUTE}/global_config")
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Config processing error"}
+        assert response.json() == {"detail": "YAML processing error"}
 
 
 def test_load_global_config_existing_masterdata(
@@ -1067,9 +1064,10 @@ def test_check_global_config_not_found(
 ) -> None:
     """Test 404 returned when no global config is found at the default location."""
     response = client_with_project_session.get(f"{ROUTE}/global_config_status")
+    default_project_location = tmp_path / Path("fmuconfig/output/global_variables.yml")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {
-        "detail": "No valid global config file found in the project."
+        "detail": f"No file exists at path {default_project_location}."
     }
 
 
@@ -1086,10 +1084,10 @@ def test_check_global_config_not_valid(
 
     response = client_with_project_session.get(f"{ROUTE}/global_config_status")
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert (
-        response.json()["detail"]["message"] == "The global config file is not valid."
+    assert response.json()["detail"]["message"] == (
+        f"The global config file is not valid at path {global_config_default_path}."
     )
-    assert "validation_errors" in response.json()["detail"]
+
     assert response.json()["detail"]["validation_errors"][0]["type"] == "missing"
     assert response.json()["detail"]["validation_errors"][0]["loc"][0] == "masterdata"
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
@@ -1100,55 +1098,14 @@ def test_check_global_config_status_general_exception(
     global_config_default_path: Path,
 ) -> None:
     """Test 500 returns when general exception occurs in get_global_config_status."""
+    # Mock yaml.safe_load to raise a general exception
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
-        side_effect=RuntimeError("Global config lookup failed"),
+        "fmu_settings_api.v1.routes.project.yaml.safe_load",
+        side_effect=RuntimeError("YAML parsing failed"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/global_config_status")
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Global config lookup failed"}
-
-
-def test_check_global_config_status_with_disallowed_content(
-    client_with_project_session: TestClient,
-    global_config_default_path: Path,
-) -> None:
-    """Test 422 returned when global config has disallowed content.
-
-    Tests the get_global_config_status endpoint.
-    """
-    with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
-        side_effect=InvalidGlobalConfigurationError("Drogon data is not allowed"),
-    ):
-        response = client_with_project_session.get(f"{ROUTE}/global_config_status")
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-        assert (
-            response.json()["detail"]["message"]
-            == "The global config contains invalid or disallowed content."
-        )
-        assert response.json()["detail"]["error"] == "Drogon data is not allowed"
-
-
-def test_load_global_config_with_disallowed_content(
-    client_with_project_session: TestClient,
-    global_config_default_path: Path,
-) -> None:
-    """Test 422 returned when global config has disallowed content.
-
-    Tests the post_global_config endpoint.
-    """
-    with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
-        side_effect=InvalidGlobalConfigurationError("Drogon data is not allowed"),
-    ):
-        response = client_with_project_session.post(f"{ROUTE}/global_config")
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-        assert (
-            response.json()["detail"]["message"]
-            == "The global config contains invalid or disallowed content."
-        )
-        assert response.json()["detail"]["error"] == "Drogon data is not allowed"
+        assert response.json() == {"detail": "YAML parsing failed"}
 
 
 # PATCH project/model #
@@ -1655,7 +1612,7 @@ def test_get_lock_status_with_lock_file_processing_error(
         mock_lock = Mock()
         mock_lock.is_acquired.return_value = False
         mock_lock.exists = True
-        mock_lock.load.side_effect = RuntimeError("Unexpected lock file error")
+        mock_lock.load.side_effect = ValueError("Invalid lock info")
 
         with patch.object(existing_fmu_dir, "_lock", mock_lock):
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")
@@ -1665,8 +1622,7 @@ def test_get_lock_status_with_lock_file_processing_error(
             assert lock_status["is_lock_acquired"] is False
             assert lock_status["lock_file_exists"] is True
             read_error = lock_status["lock_file_read_error"]
-            assert "Failed to process lock file" in read_error
-            assert "Unexpected lock file error" in read_error
+            assert "Failed to parse lock file: Invalid lock info" in read_error
 
 
 def test_get_lock_status_with_lock_file_not_exists(
