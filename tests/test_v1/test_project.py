@@ -1706,7 +1706,7 @@ def test_get_lock_status_with_lock_file_not_exists(
 # POST project/lock_acquire #
 
 
-async def test_post_project_lock_acquire_success(
+async def test_post_lock_acquire_success(
     client_with_project_session: TestClient,
     session_id: str,
 ) -> None:
@@ -1731,12 +1731,10 @@ async def test_post_project_lock_acquire_success(
 
     mock_try_acquire.assert_awaited_once_with(session_id)
     assert response.status_code == status.HTTP_200_OK
-    payload = response.json()
-    assert payload["is_read_only"] is False
-    assert mock_lock.is_acquired.call_count >= 1
+    assert response.json() == {"message": "Project lock acquired."}
 
 
-async def test_post_project_lock_acquire_conflict_returns_read_only(
+async def test_post_lock_acquire_conflict_returns_read_only(
     client_with_project_session: TestClient,
     session_id: str,
 ) -> None:
@@ -1762,12 +1760,15 @@ async def test_post_project_lock_acquire_conflict_returns_read_only(
 
     mock_try_acquire.assert_awaited_once_with(session_id)
     assert response.status_code == status.HTTP_200_OK
-    payload = response.json()
-    assert payload["is_read_only"] is True
-    assert mock_lock.is_acquired.call_count >= 1
+    assert response.json() == {
+        "message": (
+            "Project remains read-only because the lock could not be acquired."
+            "Check lock status for details."
+        )
+    }
 
 
-def test_post_project_lock_acquire_session_not_found(
+def test_post_lock_acquire_session_not_found(
     client_with_project_session: TestClient,
 ) -> None:
     """Test lock acquire route returns 401 when session is missing."""
@@ -1784,7 +1785,7 @@ def test_post_project_lock_acquire_session_not_found(
     assert response.json() == {"detail": "Session not found"}
 
 
-def test_post_project_lock_acquire_unexpected_error(
+def test_post_lock_acquire_unexpected_error(
     client_with_project_session: TestClient,
 ) -> None:
     """Test lock acquire route returns 500 on unexpected error."""

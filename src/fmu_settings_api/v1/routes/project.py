@@ -448,7 +448,7 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
 
 @router.post(
     "/lock_acquire",
-    response_model=FMUProject,
+    response_model=Message,
     summary="Attempts to acquire the project lock for editing",
     description=dedent(
         """
@@ -461,17 +461,22 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         **GetSessionResponses,
     },
 )
-async def post_project_lock_acquire(project_session: ProjectSessionDep) -> FMUProject:
-    """Attempts to acquire the project lock and returns the project state."""
+async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
+    """Attempts to acquire the project lock and returns a status message."""
     try:
         updated_session = await try_acquire_project_lock(project_session.id)
+        lock = updated_session.project_fmu_directory._lock
+        if lock.is_acquired():
+            return Message(message="Project lock acquired.")
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    fmu_dir = updated_session.project_fmu_directory
-    return _create_opened_project_response(fmu_dir)
+    return Message(
+        message="Project remains read-only because the lock could not be acquired."
+        "Check lock status for details."
+    )
 
 
 @router.get(
