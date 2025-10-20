@@ -203,7 +203,7 @@ def global_variables_mock() -> dict[str, Any]:
         "masterdata": {
             "smda": {
                 "stratigraphic_column": {
-                    "identifier": "DROGON_2020",
+                    "identifier": "ALPHA_2024",
                     "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
                 },
                 "coordinate_system": {
@@ -230,19 +230,17 @@ def global_variables_mock() -> dict[str, Any]:
                 ],
             }
         },
-        "access": {"asset": {"name": "Drogon"}, "classification": "internal"},
+        "access": {"asset": {"name": "ValidAsset"}, "classification": "internal"},
         "model": {"name": "ff", "revision": "21.1.0.dev"},
         "stratigraphy": {
             "MSL": {"stratigraphic": False, "name": "MSL"},
             "Seabase": {"stratigraphic": False, "name": "Seabase"},
-            "TopTherys": {"stratigraphic": True, "name": "Therys Fm. Top"},
+            "TopAlpha": {"stratigraphic": True, "name": "Alpha Fm. Top"},
         },
         "global": {"GLOBAL_VARS_EXAMPLE": 99, "OTHER": "skipped"},
         "rms": {
-            "horizons": {
-                "TOP_RES": ["TopVolantis", "TopTherys", "TopVolon", "BaseVolantis"]
-            },
-            "zones": {"ZONE_RES": ["Valysar", "Therys", "Volon"]},
+            "horizons": {"TOP_RES": ["TopAlpha", "TopBeta", "TopGamma", "BaseAlpha"]},
+            "zones": {"ZONE_RES": ["Alpha", "Beta", "Gamma"]},
         },
     }
 
