@@ -246,13 +246,7 @@ async def try_acquire_project_lock(session_id: str) -> ProjectSession:
         await session_manager._store_session(session_id, session)
         return session
 
-    if is_held:
-        try:
-            lock.refresh()
-            session.lock_errors.refresh = None
-        except Exception as e:
-            session.lock_errors.refresh = str(e)
-    else:
+    if not is_held:
         try:
             lock.acquire()
             session.lock_errors.acquire = None

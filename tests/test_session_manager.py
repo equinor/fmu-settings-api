@@ -183,7 +183,7 @@ async def test_try_acquire_project_lock_refreshes_when_held(
 
     assert isinstance(result, ProjectSession)
     assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
-    assert mock_lock.refresh.call_count == 2  # noqa: PLR2004
+    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
     assert result.lock_errors.refresh is None
 
 
@@ -210,7 +210,7 @@ async def test_try_acquire_project_lock_handles_refresh_error(
 
     assert isinstance(result, ProjectSession)
     assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
-    assert mock_lock.refresh.call_count == 2  # noqa: PLR2004
+    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
     assert result.lock_errors.refresh == "Refresh failed"
 
 
