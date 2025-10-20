@@ -6,7 +6,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -1701,3 +1701,101 @@ def test_get_lock_status_with_lock_file_not_exists(
             assert lock_status["lock_file_exists"] is False
             assert lock_status["lock_info"] is None
             assert lock_status["lock_file_read_error"] is None
+
+
+# POST project/lock_acquire #
+
+
+async def test_post_project_lock_acquire_success(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock acquire route returns writable project when lock is held."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock()
+    session.project_fmu_directory._lock = mock_lock
+
+    mock_try_acquire = AsyncMock(return_value=session)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        mock_try_acquire,
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
+
+    mock_try_acquire.assert_awaited_once_with(session_id)
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["is_read_only"] is False
+    assert mock_lock.is_acquired.call_count >= 1
+
+
+async def test_post_project_lock_acquire_conflict_returns_read_only(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock acquire route returns read-only when acquisition fails."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.refresh = Mock()
+    session.project_fmu_directory._lock = mock_lock
+    session.lock_errors.acquire = "Lock held elsewhere"
+
+    mock_try_acquire = AsyncMock(return_value=session)
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        mock_try_acquire,
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
+
+    mock_try_acquire.assert_awaited_once_with(session_id)
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["is_read_only"] is True
+    assert mock_lock.is_acquired.call_count >= 1
+
+
+def test_post_project_lock_acquire_session_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock acquire route returns 401 when session is missing."""
+    mock_try_acquire = AsyncMock(side_effect=SessionNotFoundError("Session not found"))
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        mock_try_acquire,
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
+
+    mock_try_acquire.assert_awaited_once()
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Session not found"}
+
+
+def test_post_project_lock_acquire_unexpected_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock acquire route returns 500 on unexpected error."""
+    mock_try_acquire = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        mock_try_acquire,
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
+
+    mock_try_acquire.assert_awaited_once()
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {"detail": "boom"}

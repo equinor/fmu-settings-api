@@ -32,6 +32,7 @@ from fmu_settings_api.session import (
     SessionNotFoundError,
     add_fmu_project_to_session,
     remove_fmu_project_from_session,
+    try_acquire_project_lock,
 )
 from fmu_settings_api.v1.responses import (
     GetSessionResponses,
@@ -443,6 +444,34 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post(
+    "/lock_acquire",
+    response_model=FMUProject,
+    summary="Attempts to acquire the project lock for editing",
+    description=dedent(
+        """
+        Tries to upgrade the project session from read-only to editable by acquiring
+        the project lock. If the lock cannot be acquired the project remains read-only
+        and the last lock acquire error is recorded in the session.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+    },
+)
+async def post_project_lock_acquire(project_session: ProjectSessionDep) -> FMUProject:
+    """Attempts to acquire the project lock and returns the project state."""
+    try:
+        updated_session = await try_acquire_project_lock(project_session.id)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    fmu_dir = updated_session.project_fmu_directory
+    return _create_opened_project_response(fmu_dir)
 
 
 @router.get(
