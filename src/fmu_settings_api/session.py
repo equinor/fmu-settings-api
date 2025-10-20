@@ -241,17 +241,11 @@ async def try_acquire_project_lock(session_id: str) -> ProjectSession:
     lock = session.project_fmu_directory._lock
 
     try:
-        is_held = lock.is_acquired()
-    except Exception:
-        await session_manager._store_session(session_id, session)
-        return session
-
-    if not is_held:
-        try:
+        if not lock.is_acquired():
             lock.acquire()
             session.lock_errors.acquire = None
-        except Exception as e:
-            session.lock_errors.acquire = str(e)
+    except Exception as e:
+        session.lock_errors.acquire = str(e)
 
     await session_manager._store_session(session_id, session)
     return session
