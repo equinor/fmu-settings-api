@@ -231,6 +231,26 @@ async def add_fmu_project_to_session(
     return project_session
 
 
+async def try_acquire_project_lock(session_id: str) -> ProjectSession:
+    """Attempts to acquire or refresh the project lock for a session."""
+    session = await session_manager.get_session(session_id)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    lock = session.project_fmu_directory._lock
+
+    try:
+        if not lock.is_acquired():
+            lock.acquire()
+            session.lock_errors.acquire = None
+    except Exception as e:
+        session.lock_errors.acquire = str(e)
+
+    await session_manager._store_session(session_id, session)
+    return session
+
+
 async def remove_fmu_project_from_session(session_id: str) -> Session:
     """Removes (closes) an open project FMU directory from a session.
 

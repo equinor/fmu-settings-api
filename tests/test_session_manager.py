@@ -23,6 +23,7 @@ from fmu_settings_api.session import (
     destroy_fmu_session,
     remove_fmu_project_from_session,
     session_manager,
+    try_acquire_project_lock,
 )
 
 
@@ -157,6 +158,156 @@ async def test_get_session_handles_lock_refresh_error(
     assert isinstance(result, ProjectSession)
     mock_lock.refresh.assert_called_once_with()
     assert result.lock_errors.refresh == "Refresh failed"
+
+
+async def test_try_acquire_project_lock_refreshes_when_held(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that try_acquire_project_lock refreshes the lock when already held."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_refresh_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await try_acquire_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
+    assert result.lock_errors.refresh is None
+
+
+async def test_try_acquire_project_lock_handles_refresh_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that refresh errors are recorded by try_acquire_project_lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_refresh_error_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock(side_effect=LockError("Refresh failed"))
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await try_acquire_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
+    assert result.lock_errors.refresh == "Refresh failed"
+
+
+async def test_try_acquire_project_lock_acquires_when_not_held(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that try_acquire_project_lock acquires the lock when not already held."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_acquire_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.acquire = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await try_acquire_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    mock_lock.acquire.assert_called_once_with()
+    assert result.lock_errors.acquire is None
+
+
+async def test_try_acquire_project_lock_records_acquire_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that lock acquire failures are captured by try_acquire_project_lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_acquire_error_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.acquire = Mock(side_effect=LockError("Acquire failed"))
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await try_acquire_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    mock_lock.acquire.assert_called_once_with()
+    assert result.lock_errors.acquire == "Acquire failed"
+
+
+async def test_try_acquire_project_lock_requires_project_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that try_acquire_project_lock requires a project-scoped session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    with (
+        patch("fmu_settings_api.session.session_manager", session_manager),
+        pytest.raises(SessionNotFoundError, match="No FMU project directory open"),
+    ):
+        await try_acquire_project_lock(session_id)
+
+
+async def test_try_acquire_project_lock_handles_is_acquired_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that try_acquire_project_lock tolerates lock status errors."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_status_error_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.side_effect = LockError("status failed")
+    mock_lock.refresh = Mock()
+    mock_lock.acquire = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await try_acquire_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    mock_lock.refresh.assert_not_called()
+    mock_lock.acquire.assert_not_called()
 
 
 async def test_destroy_fmu_session(
