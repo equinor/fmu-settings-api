@@ -51,10 +51,14 @@ def run_server(  # noqa: PLR0913
     frontend_port: int | None = None,
     token: str | None = None,
     reload: bool = False,
+    log_level: str = "critical",
 ) -> None:
     """Starts the API server."""
+    log_level = log_level.lower()
+
     if token:
         settings.TOKEN = token
+
     if frontend_host is not None and frontend_port is not None:
         settings.update_frontend_host(host=frontend_host, port=frontend_port)
 
@@ -83,9 +87,12 @@ def run_server(  # noqa: PLR0913
             reload=True,
             reload_dirs=["src"],
             reload_includes=[".env"],
+            log_level=log_level,
         )
     else:
-        server_config = uvicorn.Config(app=app, host=host, port=port)
+        server_config = uvicorn.Config(
+            app=app, host=host, port=port, log_level=log_level
+        )
         server = uvicorn.Server(server_config)
 
         try:
