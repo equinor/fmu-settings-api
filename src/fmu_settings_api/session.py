@@ -160,9 +160,7 @@ class SessionManager:
             try:
                 if lock.is_acquired():
                     lock.refresh()
-                    session.lock_errors.refresh = None
-                else:
-                    session.lock_errors.refresh = None
+                session.lock_errors.refresh = None
             except Exception as e:
                 session.lock_errors.refresh = str(e)
 
