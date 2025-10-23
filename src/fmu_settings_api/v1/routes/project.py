@@ -566,11 +566,6 @@ async def patch_masterdata(
     try:
         fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
         return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
-        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -600,11 +595,6 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
     try:
         fmu_dir.set_config_value("model", model.model_dump())
         return Message(message=f"Saved model data to {fmu_dir.path}")
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
-        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -634,11 +624,6 @@ async def patch_access(project_session: ProjectSessionDep, access: Access) -> Me
     try:
         fmu_dir.set_config_value("access", access.model_dump())
         return Message(message=f"Saved access data to {fmu_dir.path}")
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission denied updating .fmu at {fmu_dir.path}",
-        ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

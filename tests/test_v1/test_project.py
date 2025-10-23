@@ -1,6 +1,7 @@
 """Tests the /api/v1/project routes."""
 
 import json
+import os
 import shutil
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -13,6 +14,7 @@ from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings._fmu_dir import (
+    ProjectFMUDirectory,
     UserFMUDirectory,
 )
 from fmu.settings._global_config import InvalidGlobalConfigurationError
@@ -796,7 +798,7 @@ async def test_patch_masterdata_no_directory_permissions(
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json() == {
-        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
     }
 
 
@@ -805,30 +807,86 @@ async def test_patch_masterdata_no_directory(
     session_tmp_path: Path,
     smda_masterdata: dict[str, Any],
 ) -> None:
-    """Test that .fmu is recreated when saving masterdata.
-
-    If .fmu have been deleted during a session it should be recreated when updating
-    masterdata (using the cache).
-    """
+    """Test that if .fmu/ is deleted during a session an error is raised."""
     project_dir = session_tmp_path / ".fmu"
 
     # remove project .fmu
     shutil.rmtree(project_dir)
     assert not project_dir.exists()
 
-    # check that .fmu is recreated and masterdata has been set
     response = client_with_project_session.patch(
         f"{ROUTE}/masterdata", json=smda_masterdata
     )
-    assert response.status_code == status.HTTP_200_OK
-    assert project_dir.exists()
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
 
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.masterdata is not None
-    assert get_fmu_project.config.masterdata.smda == Smda.model_validate(
-        smda_masterdata
+
+async def test_patch_masterdata_lockfile_removed(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    smda_masterdata: dict[str, Any],
+    session_manager: SessionManager,
+) -> None:
+    """Test that the lock-file is re-acquired if it was manually removed."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
     )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+
+    assert fmu_dir._lock.exists
+    # Lock file was manually deleted
+    fmu_dir._lock.path.unlink()
+    assert fmu_dir._lock.exists is False
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/masterdata", json=smda_masterdata
+    )
+    # Forbidden. Lock must be re-acquired.
+    assert response.status_code == status.HTTP_423_LOCKED, response.json()
+    assert "Project lock file is missing" in response.json()["detail"]
+
+
+async def test_patch_masterdata_lockfile_removed_and_acquired_by_other(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    smda_masterdata: dict[str, Any],
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test that the lock-file is re-acquired if it was manually removed."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+
+    assert fmu_dir._lock.exists
+    # Lock file was manually deleted
+    fmu_dir._lock.path.unlink()
+    assert fmu_dir._lock.exists is False
+
+    # Other user acquires it
+    cur_user = os.environ.get("USER", "good")
+    monkeypatch.setenv("USER", "bad")
+    bad_fmu_dir = ProjectFMUDirectory(fmu_dir.path.parent)
+    with (
+        patch("os.getpid", return_value=-1234),
+    ):
+        bad_fmu_dir._lock.acquire()
+    monkeypatch.setenv("USER", cur_user)
+    assert bad_fmu_dir._lock.load(force=True, store_cache=False).user == "bad"
+    assert fmu_dir._lock.load(force=True, store_cache=False).user == "bad"
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/masterdata", json=smda_masterdata
+    )
+    assert response.status_code == status.HTTP_423_LOCKED, response.json()
 
 
 async def test_patch_masterdata_general_exception(
@@ -1209,7 +1267,7 @@ async def test_patch_model_no_directory_permissions(
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json() == {
-        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
     }
 
 
@@ -1218,26 +1276,15 @@ async def test_patch_model_no_directory(
     session_tmp_path: Path,
     model_data: dict[str, Any],
 ) -> None:
-    """Test that .fmu is recreated when saving model data.
-
-    If .fmu have been deleted during a session it should be recreated
-    when updating model data (using the cache).
-    """
+    """Test that if .fmu/ is deleted during a session an error is raised."""
     project_dir = session_tmp_path / ".fmu"
 
     # remove project .fmu
     shutil.rmtree(project_dir)
     assert not project_dir.exists()
 
-    # check that .fmu is recreated and model has been set
     response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
-    assert response.status_code == status.HTTP_200_OK
-    assert project_dir.exists()
-
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.model is not None
-    assert get_fmu_project.config.model == Model.model_validate(model_data)
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
 
 
 async def test_patch_model_general_exception(
@@ -1319,7 +1366,7 @@ async def test_patch_access_no_directory_permissions(
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json() == {
-        "detail": f"Permission denied updating .fmu at {bad_project_dir}"
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
     }
 
 
@@ -1328,26 +1375,15 @@ async def test_patch_access_no_directory(
     session_tmp_path: Path,
     access_data: dict[str, Any],
 ) -> None:
-    """Test that .fmu is recreated when saving access data.
-
-    If .fmu have been deleted during a session it should be recreated
-    when updating access data (using the cache).
-    """
+    """Test that if .fmu/ is deleted during a session an error is raised."""
     project_dir = session_tmp_path / ".fmu"
 
     # remove project .fmu
     shutil.rmtree(project_dir)
     assert not project_dir.exists()
 
-    # check that .fmu is recreated and access has been set
     response = client_with_project_session.patch(f"{ROUTE}/access", json=access_data)
-    assert response.status_code == status.HTTP_200_OK
-    assert project_dir.exists()
-
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.access is not None
-    assert get_fmu_project.config.access == Access.model_validate(access_data)
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
 
 
 async def test_patch_access_general_exception(
