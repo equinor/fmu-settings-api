@@ -38,7 +38,7 @@ ROUTE = "/api/v1/project"
 # GET project/ #
 
 
-def test_get_project_does_not_care_about_token(mock_token: str) -> None:
+async def test_get_project_does_not_care_about_token(mock_token: str) -> None:
     """Tests that a header token is irrelevent to the route."""
     response = client.get(ROUTE)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -53,7 +53,7 @@ def test_get_project_does_not_care_about_token(mock_token: str) -> None:
     assert response.json() == {"detail": "No active session found"}
 
 
-def test_get_project_no_directory_permissions(
+async def test_get_project_no_directory_permissions(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -74,7 +74,7 @@ def test_get_project_no_directory_permissions(
     assert response.json() == {"detail": "Permission denied accessing .fmu"}
 
 
-def test_get_project_directory_does_not_exist(
+async def test_get_project_directory_does_not_exist(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 404 returns when project .fmu cannot be found."""
@@ -89,7 +89,7 @@ def test_get_project_directory_does_not_exist(
     }
 
 
-def test_get_project_directory_is_not_directory(
+async def test_get_project_directory_is_not_directory(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 404 returns when project .fmu exists but is not a directory.
@@ -110,7 +110,7 @@ def test_get_project_directory_is_not_directory(
     }
 
 
-def test_get_project_session_not_found_error(
+async def test_get_project_session_not_found_error(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 401 returns when SessionNotFoundError is raised in get_project."""
@@ -126,7 +126,7 @@ def test_get_project_session_not_found_error(
         assert response.json() == {"detail": "Session not found"}
 
 
-def test_get_project_permission_error(
+async def test_get_project_permission_error(
     client_with_session: TestClient,
 ) -> None:
     """Test 403 returns when PermissionError occurs in get_project."""
@@ -140,7 +140,9 @@ def test_get_project_permission_error(
         assert response.json() == {"detail": "Permission denied locating .fmu"}
 
 
-def test_get_project_raises_other_exceptions(client_with_session: TestClient) -> None:
+async def test_get_project_raises_other_exceptions(
+    client_with_session: TestClient,
+) -> None:
     """Test 500 returns if other exceptions are raised."""
     with patch(
         "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
@@ -151,7 +153,7 @@ def test_get_project_raises_other_exceptions(client_with_session: TestClient) ->
         assert response.json() == {"detail": "foo"}
 
 
-def test_get_project_directory_config_missing(
+async def test_get_project_directory_config_missing(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 500 returns when project .fmu has missing config."""
@@ -170,7 +172,7 @@ def test_get_project_directory_config_missing(
     )
 
 
-def test_get_project_directory_corrupt(
+async def test_get_project_directory_corrupt(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 500 returns when project .fmu has invalid config."""
@@ -187,7 +189,7 @@ def test_get_project_directory_corrupt(
     )
 
 
-def test_get_project_directory_exists(
+async def test_get_project_directory_exists(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -209,7 +211,7 @@ def test_get_project_directory_exists(
     assert fmu_project.is_read_only is False
 
 
-def test_get_project_writes_to_user_recent_projects(
+async def test_get_project_writes_to_user_recent_projects(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test 200 adds project to user's recent projects."""
@@ -287,7 +289,7 @@ async def test_get_project_already_in_session(
 # POST project/ #
 
 
-def test_post_fmu_directory_no_permissions(
+async def test_post_fmu_directory_no_permissions(
     client_with_session: TestClient,
     session_tmp_path: Path,
     no_permissions: Callable[[str | Path], AbstractContextManager[None]],
@@ -304,7 +306,9 @@ def test_post_fmu_directory_no_permissions(
     }
 
 
-def test_post_fmu_directory_does_not_exist(client_with_session: TestClient) -> None:
+async def test_post_fmu_directory_does_not_exist(
+    client_with_session: TestClient,
+) -> None:
     """Test 404 returns when .fmu or directory does not exist."""
     path = "/dev/null"
     response = client_with_session.post(ROUTE, json={"path": path})
@@ -312,7 +316,7 @@ def test_post_fmu_directory_does_not_exist(client_with_session: TestClient) -> N
     assert response.json() == {"detail": f"No .fmu directory found at {path}"}
 
 
-def test_post_fmu_directory_is_not_directory(
+async def test_post_fmu_directory_is_not_directory(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 409 returns when .fmu exists but is not a directory."""
@@ -326,7 +330,7 @@ def test_post_fmu_directory_is_not_directory(
     }
 
 
-def test_post_project_directory_config_missing(
+async def test_post_project_directory_config_missing(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 500 returns when project .fmu has missing config."""
@@ -343,7 +347,7 @@ def test_post_project_directory_config_missing(
     )
 
 
-def test_post_project_directory_corrupt(
+async def test_post_project_directory_corrupt(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 500 returns when project .fmu has invalid config."""
@@ -358,7 +362,9 @@ def test_post_project_directory_corrupt(
     )
 
 
-def test_post_project_directory_not_exists(client_with_session: TestClient) -> None:
+async def test_post_project_directory_not_exists(
+    client_with_session: TestClient,
+) -> None:
     """Test 404 returns with proper message when path does not exists."""
     path = Path("/non/existing/path")
     response = client_with_session.post(ROUTE, json={"path": str(path)})
@@ -366,7 +372,7 @@ def test_post_project_directory_not_exists(client_with_session: TestClient) -> N
     assert response.json()["detail"] == f"Path {path} does not exist"
 
 
-def test_post_fmu_directory_session_not_found_error(
+async def test_post_fmu_directory_session_not_found_error(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 401 returns when SessionNotFoundError is raised in post_project."""
@@ -381,7 +387,7 @@ def test_post_fmu_directory_session_not_found_error(
         assert response.json() == {"detail": "Session not found"}
 
 
-def test_post_fmu_directory_raises_other_exceptions(
+async def test_post_fmu_directory_raises_other_exceptions(
     client_with_session: TestClient,
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
@@ -395,7 +401,7 @@ def test_post_fmu_directory_raises_other_exceptions(
         assert response.json() == {"detail": "foo"}
 
 
-def test_post_project_writes_to_user_recent_projects(
+async def test_post_project_writes_to_user_recent_projects(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 200 adds project to user's recent projects."""
@@ -591,7 +597,7 @@ async def test_delete_project_session_other_exception(
 # POST project/init #
 
 
-def test_post_init_fmu_directory_no_permissions(
+async def test_post_init_fmu_directory_no_permissions(
     client_with_session: TestClient,
     session_tmp_path: Path,
     no_permissions: Callable[[str | Path], AbstractContextManager[None]],
@@ -606,7 +612,7 @@ def test_post_init_fmu_directory_no_permissions(
     assert response.json() == {"detail": f"Permission denied creating .fmu at {path}"}
 
 
-def test_post_init_fmu_directory_does_not_exist(
+async def test_post_init_fmu_directory_does_not_exist(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 404 returns when directory to initialize .fmu does not exist."""
@@ -616,7 +622,7 @@ def test_post_init_fmu_directory_does_not_exist(
     assert response.json() == {"detail": f"Path {path} does not exist"}
 
 
-def test_post_init_fmu_directory_is_not_a_directory(
+async def test_post_init_fmu_directory_is_not_a_directory(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 409 returns when .fmu exists as a file at a path."""
@@ -630,7 +636,7 @@ def test_post_init_fmu_directory_is_not_a_directory(
     assert response.json() == {"detail": f".fmu already exists at {session_tmp_path}"}
 
 
-def test_post_init_fmu_directory_already_exists(
+async def test_post_init_fmu_directory_already_exists(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 409 returns when .fmu exists already at a path."""
@@ -644,7 +650,7 @@ def test_post_init_fmu_directory_already_exists(
     assert response.json() == {"detail": f".fmu already exists at {session_tmp_path}"}
 
 
-def test_post_init_fmu_directory_session_not_found_error(
+async def test_post_init_fmu_directory_session_not_found_error(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 401 returns when SessionNotFoundError is raised in init_project."""
@@ -659,7 +665,7 @@ def test_post_init_fmu_directory_session_not_found_error(
         assert response.json() == {"detail": "Session not found"}
 
 
-def test_post_init_fmu_directory_raises_other_exceptions(
+async def test_post_init_fmu_directory_raises_other_exceptions(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
@@ -673,7 +679,7 @@ def test_post_init_fmu_directory_raises_other_exceptions(
         assert response.json() == {"detail": "foo"}
 
 
-def test_post_init_and_get_fmu_directory_succeeds(
+async def test_post_init_and_get_fmu_directory_succeeds(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 200 and config returns when .fmu exists."""
@@ -716,7 +722,7 @@ async def test_post_init_updates_session_instance(
     assert session.user_fmu_directory.path == UserFMUDirectory().path
 
 
-def test_post_init_writes_to_user_recent_projects(
+async def test_post_init_writes_to_user_recent_projects(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Test 200 adds project to user's recent projects."""
@@ -774,7 +780,7 @@ async def test_patch_masterdata_requires_project_session(
     assert response.json()["detail"] == "No FMU project directory open"
 
 
-def test_patch_masterdata_no_directory_permissions(
+async def test_patch_masterdata_no_directory_permissions(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     smda_masterdata: dict[str, Any],
@@ -794,15 +800,15 @@ def test_patch_masterdata_no_directory_permissions(
     }
 
 
-def test_patch_masterdata_no_directory(
+async def test_patch_masterdata_no_directory(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     smda_masterdata: dict[str, Any],
 ) -> None:
     """Test that .fmu is recreated when saving masterdata.
 
-    If .fmu have been deleted during a session it should be recreated
-    when updating masterdata (using the cache).
+    If .fmu have been deleted during a session it should be recreated when updating
+    masterdata (using the cache).
     """
     project_dir = session_tmp_path / ".fmu"
 
@@ -852,7 +858,7 @@ async def test_patch_masterdata_general_exception(
         assert response.json() == {"detail": "Invalid config value"}
 
 
-def test_load_global_config_from_default_path(
+async def test_load_global_config_from_default_path(
     client_with_project_session: TestClient, global_config_default_path: Path
 ) -> None:
     """Test loading masterdata from the default global config path.
@@ -903,7 +909,7 @@ def test_load_global_config_from_default_path(
     )
 
 
-def test_load_global_config_from_custom_path(
+async def test_load_global_config_from_custom_path(
     client_with_project_session: TestClient,
     tmp_path: Path,
     global_config_custom_path: Path,
@@ -959,7 +965,7 @@ def test_load_global_config_from_custom_path(
     )
 
 
-def test_load_global_config_default_file_not_found(
+async def test_load_global_config_default_file_not_found(
     client_with_project_session: TestClient, tmp_path: Path
 ) -> None:
     """Test 404 is returned when the default global config is not found."""
@@ -971,7 +977,7 @@ def test_load_global_config_default_file_not_found(
     }
 
 
-def test_load_global_config_provided_file_not_found(
+async def test_load_global_config_provided_file_not_found(
     client_with_project_session: TestClient, tmp_path: Path
 ) -> None:
     """Test 404 is returned when the file at the provided path is not found."""
@@ -986,7 +992,7 @@ def test_load_global_config_provided_file_not_found(
     }
 
 
-def test_load_global_config_invalid_model(
+async def test_load_global_config_invalid_model(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
 ) -> None:
@@ -1010,7 +1016,7 @@ def test_load_global_config_invalid_model(
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
 
 
-def test_load_global_config_with_no_project_session(
+async def test_load_global_config_with_no_project_session(
     client_with_session: TestClient,
 ) -> None:
     """Test 401 returned when user does not have a project session."""
@@ -1019,7 +1025,7 @@ def test_load_global_config_with_no_project_session(
     assert response.json() == {"detail": "No FMU project directory open"}
 
 
-def test_load_global_config_general_exception(
+async def test_load_global_config_general_exception(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
 ) -> None:
@@ -1033,7 +1039,7 @@ def test_load_global_config_general_exception(
         assert response.json() == {"detail": "Config processing error"}
 
 
-def test_load_global_config_existing_masterdata(
+async def test_load_global_config_existing_masterdata(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
     smda_masterdata: dict[str, Any],
@@ -1052,7 +1058,7 @@ def test_load_global_config_existing_masterdata(
     )
 
 
-def test_check_global_config_succeeds(
+async def test_check_global_config_succeeds(
     client_with_project_session: TestClient, global_config_default_path: Path
 ) -> None:
     """Test 200 returned when a valid global config exists at the default location."""
@@ -1062,7 +1068,7 @@ def test_check_global_config_succeeds(
     assert response.json()["status"] == "ok"
 
 
-def test_check_global_config_not_found(
+async def test_check_global_config_not_found(
     client_with_project_session: TestClient, tmp_path: Path
 ) -> None:
     """Test 404 returned when no global config is found at the default location."""
@@ -1073,7 +1079,7 @@ def test_check_global_config_not_found(
     }
 
 
-def test_check_global_config_not_valid(
+async def test_check_global_config_not_valid(
     client_with_project_session: TestClient, global_config_default_path: Path
 ) -> None:
     """Test 422 returned when the global config at the default location is invalid."""
@@ -1095,7 +1101,7 @@ def test_check_global_config_not_valid(
     assert response.json()["detail"]["validation_errors"][0]["msg"] == "Field required"
 
 
-def test_check_global_config_status_general_exception(
+async def test_check_global_config_status_general_exception(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
 ) -> None:
@@ -1109,7 +1115,7 @@ def test_check_global_config_status_general_exception(
         assert response.json() == {"detail": "Global config lookup failed"}
 
 
-def test_check_global_config_status_with_disallowed_content(
+async def test_check_global_config_status_with_disallowed_content(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
 ) -> None:
@@ -1130,7 +1136,7 @@ def test_check_global_config_status_with_disallowed_content(
         assert response.json()["detail"]["error"] == "Drogon data is not allowed"
 
 
-def test_load_global_config_with_disallowed_content(
+async def test_load_global_config_with_disallowed_content(
     client_with_project_session: TestClient,
     global_config_default_path: Path,
 ) -> None:
@@ -1189,7 +1195,7 @@ async def test_patch_model_requires_project_session(
     assert response.json()["detail"] == "No FMU project directory open"
 
 
-def test_patch_model_no_directory_permissions(
+async def test_patch_model_no_directory_permissions(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     model_data: dict[str, Any],
@@ -1207,7 +1213,7 @@ def test_patch_model_no_directory_permissions(
     }
 
 
-def test_patch_model_no_directory(
+async def test_patch_model_no_directory(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     model_data: dict[str, Any],
@@ -1297,7 +1303,7 @@ async def test_patch_access_requires_project_session(
     assert response.json()["detail"] == "No FMU project directory open"
 
 
-def test_patch_access_no_directory_permissions(
+async def test_patch_access_no_directory_permissions(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     access_data: dict[str, Any],
@@ -1317,7 +1323,7 @@ def test_patch_access_no_directory_permissions(
     }
 
 
-def test_patch_access_no_directory(
+async def test_patch_access_no_directory(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     access_data: dict[str, Any],
@@ -1371,7 +1377,7 @@ async def test_patch_access_general_exception(
         assert response.json() == {"detail": "Invalid access data"}
 
 
-def test_create_opened_project_response_direct_exception() -> None:
+async def test_create_opened_project_response_direct_exception() -> None:
     """Test the _create_opened_project_response function directly with invalid input."""
     # Create a mock that will cause an exception in the function
     mock_fmu_dir = Mock()
@@ -1389,7 +1395,7 @@ def test_create_opened_project_response_direct_exception() -> None:
         assert "Test exception" in str(e.detail)
 
 
-def test_get_lock_status(
+async def test_get_lock_status(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1458,7 +1464,7 @@ def test_get_lock_status(
                         )
 
 
-def test_get_lock_status_with_lock_status_error(
+async def test_get_lock_status_with_lock_status_error(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1495,7 +1501,7 @@ def test_get_lock_status_with_lock_status_error(
             assert lock_status["last_lock_refresh_error"] == "Lock status check failed"
 
 
-def test_get_lock_status_with_lock_file_read_error(
+async def test_get_lock_status_with_lock_file_read_error(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1535,7 +1541,7 @@ def test_get_lock_status_with_lock_file_read_error(
             assert error_msg in read_error
 
 
-def test_get_lock_status_with_corrupted_lock_file(
+async def test_get_lock_status_with_corrupted_lock_file(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1570,7 +1576,7 @@ def test_get_lock_status_with_corrupted_lock_file(
             assert "Failed to parse lock file" in read_error
 
 
-def test_get_lock_status_includes_session_error_fields(
+async def test_get_lock_status_includes_session_error_fields(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1598,7 +1604,7 @@ def test_get_lock_status_includes_session_error_fields(
         assert "last_lock_refresh_error" in lock_status
 
 
-def test_get_lock_status_with_lock_file_permission_error(
+async def test_get_lock_status_with_lock_file_permission_error(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1633,7 +1639,7 @@ def test_get_lock_status_with_lock_file_permission_error(
             assert "Failed to read lock file: Permission denied" in read_error
 
 
-def test_get_lock_status_with_lock_file_processing_error(
+async def test_get_lock_status_with_lock_file_processing_error(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1669,7 +1675,7 @@ def test_get_lock_status_with_lock_file_processing_error(
             assert "Unexpected lock file error" in read_error
 
 
-def test_get_lock_status_with_lock_file_not_exists(
+async def test_get_lock_status_with_lock_file_not_exists(
     client_with_session: TestClient,
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -1768,7 +1774,7 @@ async def test_post_lock_acquire_conflict_returns_read_only(
     }
 
 
-def test_post_lock_acquire_session_not_found(
+async def test_post_lock_acquire_session_not_found(
     client_with_project_session: TestClient,
 ) -> None:
     """Test lock acquire route returns 401 when session is missing."""
@@ -1785,7 +1791,7 @@ def test_post_lock_acquire_session_not_found(
     assert response.json() == {"detail": "Session not found"}
 
 
-def test_post_lock_acquire_unexpected_error(
+async def test_post_lock_acquire_unexpected_error(
     client_with_project_session: TestClient,
 ) -> None:
     """Test lock acquire route returns 500 on unexpected error."""
