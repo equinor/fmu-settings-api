@@ -132,7 +132,9 @@ class SessionManager:
 
         return session_id
 
-    async def get_session(self: Self, session_id: str) -> Session | ProjectSession:
+    async def get_session(
+        self: Self, session_id: str, extend_expiration: bool = True
+    ) -> Session | ProjectSession:
         """Get the session data for a session id.
 
         Params:
@@ -154,6 +156,10 @@ class SessionManager:
             raise SessionNotFoundError("Invalid or expired session")
 
         session.last_accessed = now
+
+        if extend_expiration:
+            expiration_duration = timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
+            session.expires_at = now + expiration_duration
 
         if isinstance(session, ProjectSession):
             lock = session.project_fmu_directory._lock

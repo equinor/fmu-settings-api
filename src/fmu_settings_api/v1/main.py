@@ -10,7 +10,7 @@ from .routes import project, session, user
 from .routes.smda import main as smda
 
 api_v1_router = APIRouter()
-api_v1_router.include_router(project.router, dependencies=[Depends(get_session)])
+api_v1_router.include_router(project.router)
 api_v1_router.include_router(user.router, dependencies=[Depends(get_session)])
 api_v1_router.include_router(session.router)
 api_v1_router.include_router(smda.router, dependencies=[Depends(get_smda_session)])

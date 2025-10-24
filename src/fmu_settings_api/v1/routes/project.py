@@ -20,6 +20,7 @@ from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
     ProjectSessionDep,
+    ProjectSessionNoExtendDep,
     SessionDep,
     WritePermissionDep,
 )
@@ -496,7 +497,7 @@ async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
         **ProjectResponses,
     },
 )
-async def get_lock_status(project_session: ProjectSessionDep) -> LockStatus:
+async def get_lock_status(project_session: ProjectSessionNoExtendDep) -> LockStatus:
     """Returns the lock status and lock file contents if available."""
     fmu_dir = project_session.project_fmu_directory
 

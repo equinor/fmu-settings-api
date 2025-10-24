@@ -1745,6 +1745,43 @@ async def test_get_lock_status_with_lock_file_not_exists(
             assert lock_status["lock_file_read_error"] is None
 
 
+async def test_get_lock_status_does_not_update_expiration(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test that lock status endpoint does not update the session expiration."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    before_acquire = await session_manager.get_session(
+        session_id, extend_expiration=False
+    )
+    # Must be copied. Session is reference
+    before_acquire_expiration = before_acquire.expires_at
+    before_acquire_accessed = before_acquire.last_accessed
+
+    # Acquire lock (or something.)
+    client_with_project_session.post(f"{ROUTE}/lock_acquire")
+
+    before_status = await session_manager.get_session(
+        session_id, extend_expiration=False
+    )
+    before_expiration = before_status.expires_at
+    before_accessed = before_status.last_accessed
+
+    assert before_acquire_accessed < before_accessed
+    assert before_acquire_expiration < before_expiration  # Updates expiration
+
+    # Request
+    client_with_project_session.get(f"{ROUTE}/lock_status")
+
+    after_status = await session_manager.get_session(
+        session_id, extend_expiration=False
+    )
+
+    assert before_accessed < after_status.last_accessed
+    assert before_expiration == after_status.expires_at
+
+
 # POST project/lock_acquire #
 
 
