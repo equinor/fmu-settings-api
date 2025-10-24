@@ -1,9 +1,9 @@
 """The main entry point for fmu-settings-api."""
 
 import asyncio
-import signal
 import sys
-from types import FrameType
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 
 import uvicorn
 from fastapi import FastAPI
@@ -12,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .config import HttpHeader, settings
 from .models import Ok
+from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
 
 
@@ -20,10 +21,30 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """App lifespan for startup/shutdown housekeeping.
+
+    On shutdown, releases any acquired project locks so other processes
+    are not blocked by stale locks after a graceful stop.
+    """
+    yield
+
+    for session in tuple(session_manager.storage.values()):
+        if not isinstance(session, ProjectSession):
+            continue
+
+        lock = session.project_fmu_directory._lock
+        if lock.is_acquired():
+            with suppress(Exception):
+                lock.release()
+
+
 app = FastAPI(
     title="FMU Settings API",
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     generate_unique_id_function=custom_generate_unique_id,
+    lifespan=lifespan,
 )
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
@@ -71,13 +92,6 @@ def run_server(  # noqa: PLR0913
             allow_headers=["*"],
             expose_headers=[HttpHeader.UPSTREAM_SOURCE_KEY],
         )
-
-    def signal_handler(signum: int, frame: FrameType | None) -> None:
-        """Gracefully handles interrupt shutdowns."""
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
 
     if reload:
         uvicorn.run(
