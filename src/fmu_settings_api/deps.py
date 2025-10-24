@@ -102,6 +102,37 @@ async def get_session(
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
+async def get_session_no_extend(
+    fmu_settings_session: Annotated[str | None, Cookie()] = None,
+) -> Session:
+    """Gets a session from the session manager without extending expiration."""
+    if not fmu_settings_session:
+        raise HTTPException(
+            status_code=401,
+            detail="No active session found",
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
+        )
+    try:
+        return await session_manager.get_session(
+            fmu_settings_session, extend_expiration=False
+        )
+    except SessionNotFoundError as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session",
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
+        ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Session error: {e}") from e
+
+
+SessionNoExtendDep = Annotated[Session, Depends(get_session_no_extend)]
+
+
 async def get_project_session(
     fmu_settings_session: str | None = Cookie(None),
 ) -> ProjectSession:
@@ -122,6 +153,30 @@ async def get_project_session(
 
 
 ProjectSessionDep = Annotated[ProjectSession, Depends(get_project_session)]
+
+
+async def get_project_session_no_extend(
+    fmu_settings_session: str | None = Cookie(None),
+) -> ProjectSession:
+    """Gets a session with an FMU Project opened from the session manager."""
+    session = await get_session_no_extend(fmu_settings_session)
+    if not isinstance(session, ProjectSession):
+        raise HTTPException(
+            status_code=401,
+            detail="No FMU project directory open",
+        )
+
+    if not session.project_fmu_directory.path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Project .fmu directory not found. It may have been deleted.",
+        )
+    return session
+
+
+ProjectSessionNoExtendDep = Annotated[
+    ProjectSession, Depends(get_project_session_no_extend)
+]
 
 
 async def ensure_smda_session(session: Session) -> None:

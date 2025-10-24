@@ -108,6 +108,37 @@ async def test_get_existing_session_updates_last_accessed(
     assert orig_session.last_accessed < session.last_accessed
 
 
+async def test_get_existing_session_updates_expires_at(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests getting an existing session updates its expiration."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+    orig_session = deepcopy(session_manager.storage[session_id])
+    session = await session_manager.get_session(session_id)
+    assert session is not None
+    assert (
+        orig_session.last_accessed + timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
+        < session.expires_at
+    )
+    assert orig_session.expires_at < session.expires_at
+
+
+async def test_get_existing_session_does_not_update_expires_at(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests getting an existing session doesn't update expiration if not extended."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+    orig_session = deepcopy(session_manager.storage[session_id])
+    session = await session_manager.get_session(session_id, extend_expiration=False)
+    assert session is not None
+    # Last accessed changed
+    assert orig_session.last_accessed < session.last_accessed
+    # But same expiration
+    assert orig_session.expires_at == session.expires_at
+
+
 async def test_get_session_refreshes_project_lock_when_acquired(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
