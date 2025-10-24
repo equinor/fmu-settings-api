@@ -3,6 +3,7 @@
 import asyncio
 import sys
 from contextlib import asynccontextmanager, suppress
+from typing import AsyncIterator
 
 import uvicorn
 from fastapi import FastAPI
@@ -21,7 +22,7 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """App lifespan for startup/shutdown housekeeping.
 
     On shutdown, releases any acquired project locks so other processes
