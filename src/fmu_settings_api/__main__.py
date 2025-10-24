@@ -2,8 +2,8 @@
 
 import asyncio
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
-from typing import AsyncIterator
 
 import uvicorn
 from fastapi import FastAPI
