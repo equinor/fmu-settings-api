@@ -277,6 +277,75 @@ async def test_session_creation_handles_lock_conflicts(
         assert not hasattr(session, "project_fmu_directory")
 
 
+async def test_get_session_returns_sanitised_payload(
+    client_with_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that GET /session returns the expected session snapshot."""
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    payload = response.json()
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+
+    assert payload["id"] == session.id
+    assert "user_fmu_directory" not in payload
+    assert payload["project"] is None
+    assert payload["project_lock_errors"] is None
+    assert "access_tokens" not in payload
+
+
+async def test_get_session_returns_project_details(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that GET /session includes project data when available."""
+    response = client_with_project_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    payload = response.json()
+    session_id = client_with_project_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    assert "user_fmu_directory" not in payload
+    assert payload["project"] is not None
+    project_payload = payload["project"]
+    assert project_payload["path"] == str(session.project_fmu_directory.base_path)
+    assert (
+        project_payload["project_dir_name"]
+        == session.project_fmu_directory.base_path.name
+    )
+    expected_config = session.project_fmu_directory.config.load().model_dump(
+        mode="json"
+    )
+    assert project_payload["config"] == expected_config
+    assert isinstance(project_payload["is_read_only"], bool)
+    assert payload["project_lock_errors"] == session.lock_errors.model_dump()
+
+
+def test_get_session_requires_cookie() -> None:
+    """Tests that a missing session cookie returns 401."""
+    client = TestClient(app)
+    response = client.get(ROUTE)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No active session found"
+
+
+def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
+    """Tests that an unexpected error when building the session response returns 500."""
+    with patch(
+        "fmu_settings_api.v1.routes.session.build_session_response",
+        side_effect=Exception("boom"),
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json()["detail"] == "boom"
+
+
 def test_patch_invalid_access_token_key_to_session(
     client_with_session: TestClient,
 ) -> None:

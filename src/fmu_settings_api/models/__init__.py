@@ -2,6 +2,7 @@
 
 from .common import AccessToken, APIKey, BaseResponseModel, Message, Ok
 from .project import FMUDirPath, FMUProject
+from .session import SessionResponse
 
 __all__ = [
     "AccessToken",
@@ -9,6 +10,7 @@ __all__ = [
     "BaseResponseModel",
     "FMUDirPath",
     "FMUProject",
-    "Ok",
     "Message",
+    "Ok",
+    "SessionResponse",
 ]
