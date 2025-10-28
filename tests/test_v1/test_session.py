@@ -344,6 +344,8 @@ def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
         response = client_with_session.get(ROUTE)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json()["detail"] == "boom"
+
+
 async def test_session_lock_uses_session_timeout(
     tmp_path_mocked_home: Path,
     mock_token: str,
