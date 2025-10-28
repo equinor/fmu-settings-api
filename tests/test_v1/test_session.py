@@ -277,6 +277,38 @@ async def test_session_creation_handles_lock_conflicts(
         assert not hasattr(session, "project_fmu_directory")
 
 
+async def test_session_lock_uses_session_timeout(
+    tmp_path_mocked_home: Path,
+    mock_token: str,
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Tests that session and project locks use the configured session timeout."""
+    client = TestClient(app)
+    override_timeout = settings.SESSION_EXPIRE_SECONDS + 100
+    original_timeout = settings.SESSION_EXPIRE_SECONDS
+
+    project_root = tmp_path_mocked_home / "project"
+    project_root.mkdir()
+    init_fmu_directory(project_root)
+    monkeypatch.chdir(project_root)
+
+    object.__setattr__(settings, "SESSION_EXPIRE_SECONDS", override_timeout)
+    try:
+        response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+        assert response.status_code == status.HTTP_200_OK, response.json()
+
+        session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+        assert session_id is not None
+
+        session = await session_manager.get_session(session_id)
+        assert session.user_fmu_directory._lock._timeout_seconds == override_timeout
+        assert isinstance(session, ProjectSession)
+        assert session.project_fmu_directory._lock._timeout_seconds == override_timeout
+    finally:
+        object.__setattr__(settings, "SESSION_EXPIRE_SECONDS", original_timeout)
+
+
 def test_patch_invalid_access_token_key_to_session(
     client_with_session: TestClient,
 ) -> None:

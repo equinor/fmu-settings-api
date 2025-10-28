@@ -18,6 +18,7 @@ from fmu.settings._global_config import (
 from fmu.settings._init import init_fmu_directory
 from pydantic import ValidationError
 
+from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     ProjectSessionDep,
     ProjectSessionNoExtendDep,
@@ -177,7 +178,9 @@ async def get_project(session: SessionDep) -> FMUProject:
 
     path = Path.cwd()
     try:
-        fmu_dir = find_nearest_fmu_directory(path)
+        fmu_dir = find_nearest_fmu_directory(
+            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+        )
         await add_fmu_project_to_session(session.id, fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
@@ -267,7 +270,9 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
         raise HTTPException(status_code=404, detail=f"Path {path} does not exist")
 
     try:
-        fmu_dir = get_fmu_directory(path)
+        fmu_dir = get_fmu_directory(
+            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+        )
         await add_fmu_project_to_session(session.id, fmu_dir)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
@@ -316,7 +321,10 @@ async def init_project(
     """Initializes .fmu at 'path' and returns its paths and configuration."""
     path = fmu_dir_path.path
     try:
-        fmu_dir = init_fmu_directory(path)
+        fmu_dir = init_fmu_directory(
+            path,
+            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS,
+        )
         _ = await add_fmu_project_to_session(session.id, fmu_dir)
         return _create_opened_project_response(fmu_dir)
     except SessionNotFoundError as e:
