@@ -73,7 +73,7 @@ async def test_get_project_no_directory_permissions(
         response = client_with_session.get(ROUTE)
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json() == {"detail": "Permission denied accessing .fmu"}
+    assert response.json() == {"detail": "Permission denied locating .fmu"}
 
 
 async def test_get_project_directory_does_not_exist(
@@ -186,9 +186,8 @@ async def test_get_project_directory_corrupt(
 
     response = client_with_session.get(ROUTE)
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"].startswith(
-        f"Corrupt project found at {session_tmp_path}"
-    )
+    detail = response.json()["detail"]
+    assert "Invalid JSON in resource file for 'ProjectConfigManager'" in detail
 
 
 async def test_get_project_directory_exists(
@@ -359,9 +358,8 @@ async def test_post_project_directory_corrupt(
 
     response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"].startswith(
-        f"Corrupt project found at {session_tmp_path}"
-    )
+    detail = response.json()["detail"]
+    assert "Invalid JSON in resource file for 'ProjectConfigManager'" in detail
 
 
 async def test_post_project_directory_not_exists(
@@ -875,9 +873,7 @@ async def test_patch_masterdata_lockfile_removed_and_acquired_by_other(
     cur_user = os.environ.get("USER", "good")
     monkeypatch.setenv("USER", "bad")
     bad_fmu_dir = ProjectFMUDirectory(fmu_dir.path.parent)
-    with (
-        patch("os.getpid", return_value=-1234),
-    ):
+    with patch("os.getpid", return_value=-1234):
         bad_fmu_dir._lock.acquire()
     monkeypatch.setenv("USER", cur_user)
     assert bad_fmu_dir._lock.load(force=True, store_cache=False).user == "bad"
