@@ -123,7 +123,12 @@ def test_get_session_creates_user_fmu(
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
-    assert response.json() == {"message": "Session created"}
+    payload = response.json()
+    session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    assert payload["id"] == session_id
+    assert payload["project"] is None
+    assert payload["project_lock_errors"] is None
     assert user_fmu_dir.path == user_home / ".fmu"
 
 
@@ -189,9 +194,10 @@ async def test_get_session_from_project_path_returns_fmu_project(
     response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
+    payload = response.json()
     user_fmu_dir = UserFMUDirectory()
-    assert response.json() == {"message": "Session created"}
-    assert user_fmu_dir.path == user_fmu_dir.path
+    assert payload["project"] is not None
+    assert payload["project"]["path"] == str(project_fmu_dir.base_path)
 
     session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
     assert session_id is not None
@@ -265,7 +271,9 @@ async def test_session_creation_handles_lock_conflicts(
     ):
         response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == {"message": "Session created"}
+        payload = response.json()
+        assert payload["project"] is None
+        assert payload["project_lock_errors"] is None
 
         session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
         assert session_id is not None
