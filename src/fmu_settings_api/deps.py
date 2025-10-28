@@ -38,10 +38,12 @@ async def ensure_user_fmu_directory() -> UserFMUDirectory:
         The user's UserFMUDirectory
     """
     try:
-        return UserFMUDirectory()
+        return UserFMUDirectory(lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS)
     except FileNotFoundError:
         try:
-            return init_user_fmu_directory()
+            return init_user_fmu_directory(
+                lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+            )
         except PermissionError as e:
             raise HTTPException(
                 status_code=403,
