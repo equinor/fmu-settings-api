@@ -22,6 +22,7 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
+    session_manager,
 )
 from fmu_settings_api.v1.responses import (
     CreateSessionResponses,
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/session", tags=["session"])
 
 @router.post(
     "/",
-    response_model=Message,
+    response_model=SessionResponse,
     summary="Creates a session for the user",
     description=dedent(
         """
@@ -59,7 +60,7 @@ async def create_session(
     auth_token: AuthTokenDep,
     user_fmu_dir: UserFMUDirDep,
     fmu_settings_session: Annotated[str | None, Cookie()] = None,
-) -> Message:
+) -> SessionResponse:
     """Establishes a user session."""
     if fmu_settings_session:
         await destroy_fmu_session(fmu_settings_session)
@@ -81,7 +82,13 @@ async def create_session(
             )
             await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-        return Message(message="Session created")
+        session = await session_manager.get_session(session_id)
+        return SessionResponse(
+            id=session.id,
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            last_accessed=session.last_accessed,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
