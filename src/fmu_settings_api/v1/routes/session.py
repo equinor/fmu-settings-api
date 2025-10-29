@@ -5,7 +5,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, HTTPException, Response
 from fmu.settings import find_nearest_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 
@@ -13,11 +13,10 @@ from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     AuthTokenDep,
     SessionDep,
+    SessionNoExtendDep,
     UserFMUDirDep,
-    get_session,
-    verify_auth_token,
 )
-from fmu_settings_api.models import AccessToken, Message
+from fmu_settings_api.models import AccessToken, Message, SessionResponse
 from fmu_settings_api.session import (
     add_access_token_to_session,
     add_fmu_project_to_session,
@@ -36,7 +35,6 @@ router = APIRouter(prefix="/session", tags=["session"])
 @router.post(
     "/",
     response_model=Message,
-    dependencies=[Depends(verify_auth_token)],
     summary="Creates a session for the user",
     description=dedent(
         """
@@ -91,7 +89,6 @@ async def create_session(
 @router.patch(
     "/access_token",
     response_model=Message,
-    dependencies=[Depends(get_session)],
     summary="Adds a known access token to the session",
     description=dedent(
         """
@@ -131,5 +128,29 @@ async def patch_access_token(session: SessionDep, access_token: AccessToken) -> 
             status_code=400,
             detail=f"Access token id {access_token.id} is not known or supported",
         ) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/",
+    response_model=SessionResponse,
+    summary="Fetches the current session state",
+    description=dedent(
+        """
+        Retrieves the latest session metadata.
+        """
+    ),
+    responses=GetSessionResponses,
+)
+async def read_session(session: SessionNoExtendDep) -> SessionResponse:
+    """Returns the current session in a serialisable format."""
+    try:
+        return SessionResponse(
+            id=session.id,
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            last_accessed=session.last_accessed,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

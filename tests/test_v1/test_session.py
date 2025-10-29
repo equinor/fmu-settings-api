@@ -277,6 +277,63 @@ async def test_session_creation_handles_lock_conflicts(
         assert not hasattr(session, "project_fmu_directory")
 
 
+async def test_get_session_returns_sanitised_payload(
+    client_with_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that GET /session returns the expected session snapshot."""
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    payload = response.json()
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+
+    assert payload["id"] == session.id
+    assert "user_fmu_directory" not in payload
+    assert "access_tokens" not in payload
+
+
+async def test_get_session_does_not_extend_expiration(
+    client_with_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that GET /session should not extend session expiration."""
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    session = await session_manager.get_session(session_id)
+    original_expires_at = session.expires_at
+
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    refreshed_session = await session_manager.get_session(
+        session_id, extend_expiration=False
+    )
+    assert refreshed_session.expires_at == original_expires_at
+
+
+def test_get_session_requires_cookie() -> None:
+    """Tests that a missing session cookie returns 401."""
+    client = TestClient(app)
+    response = client.get(ROUTE)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No active session found"
+
+
+def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
+    """Tests that an unexpected error when building the session response returns 500."""
+    with patch(
+        "fmu_settings_api.v1.routes.session.SessionResponse",
+        side_effect=Exception("boom"),
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json()["detail"] == "boom"
+
+
 async def test_session_lock_uses_session_timeout(
     tmp_path_mocked_home: Path,
     mock_token: str,
