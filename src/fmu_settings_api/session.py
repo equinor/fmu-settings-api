@@ -11,8 +11,6 @@ from pydantic import BaseModel, SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
-from fmu_settings_api.models.project import FMUProject
-from fmu_settings_api.models.session import SessionResponse
 from fmu_settings_api.services.user import add_to_user_recent_projects
 
 
@@ -306,28 +304,3 @@ async def add_access_token_to_session(session_id: str, token: AccessToken) -> No
 async def destroy_fmu_session(session_id: str) -> None:
     """Destroys a session in the session manager."""
     await session_manager.destroy_session(session_id)
-
-
-def build_session_response(session: Session | ProjectSession) -> SessionResponse:
-    """Create a serialisable response model from an in-memory session object."""
-    project_response: FMUProject | None = None
-    project_lock_errors: dict[str, str | None] | None = None
-
-    if isinstance(session, ProjectSession):
-        fmu_dir = session.project_fmu_directory
-        project_response = FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-            is_read_only=not fmu_dir._lock.is_acquired(),
-        )
-        project_lock_errors = session.lock_errors.model_dump()
-
-    return SessionResponse(
-        id=session.id,
-        created_at=session.created_at,
-        expires_at=session.expires_at,
-        last_accessed=session.last_accessed,
-        project=project_response,
-        project_lock_errors=project_lock_errors,
-    )
