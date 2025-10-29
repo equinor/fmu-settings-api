@@ -123,7 +123,13 @@ def test_get_session_creates_user_fmu(
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
-    assert response.json() == {"message": "Session created"}
+    payload = response.json()
+    session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    assert payload["id"] == session_id
+    assert "created_at" in payload
+    assert "expires_at" in payload
+    assert "last_accessed" in payload
     assert user_fmu_dir.path == user_home / ".fmu"
 
 
@@ -180,7 +186,7 @@ async def test_get_session_from_project_path_returns_fmu_project(
 ) -> None:
     """Tests that user .fmu is created when a session is created."""
     client = TestClient(app)
-    user_fmu_dir = init_user_fmu_directory()
+    initial_user_fmu_dir = init_user_fmu_directory()
     project_fmu_dir = init_fmu_directory(tmp_path_mocked_home)
     ert_model_path = tmp_path_mocked_home / "project/24.0.3/ert/model"
     ert_model_path.mkdir(parents=True)
@@ -190,11 +196,15 @@ async def test_get_session_from_project_path_returns_fmu_project(
     assert response.status_code == status.HTTP_200_OK, response.json()
     # Does not raise
     user_fmu_dir = UserFMUDirectory()
-    assert response.json() == {"message": "Session created"}
-    assert user_fmu_dir.path == user_fmu_dir.path
+    payload = response.json()
 
     session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
     assert session_id is not None
+    assert payload["id"] == session_id
+    assert "created_at" in payload
+    assert "expires_at" in payload
+    assert "last_accessed" in payload
+    assert user_fmu_dir.path == initial_user_fmu_dir.path
 
     session = await session_manager.get_session(session_id)
     assert session is not None
@@ -265,7 +275,11 @@ async def test_session_creation_handles_lock_conflicts(
     ):
         response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == {"message": "Session created"}
+        payload = response.json()
+        assert "id" in payload
+        assert "created_at" in payload
+        assert "expires_at" in payload
+        assert "last_accessed" in payload
 
         session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
         assert session_id is not None

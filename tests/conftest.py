@@ -92,6 +92,7 @@ def session_manager() -> Generator[SessionManager]:
     with (
         patch("fmu_settings_api.deps.session_manager", session_manager),
         patch("fmu_settings_api.session.session_manager", session_manager),
+        patch("fmu_settings_api.v1.routes.session.session_manager", session_manager),
     ):
         yield session_manager
 
