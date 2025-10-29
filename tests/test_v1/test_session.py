@@ -300,39 +300,27 @@ async def test_get_session_returns_sanitised_payload(
 
     assert payload["id"] == session.id
     assert "user_fmu_directory" not in payload
-    assert payload["project"] is None
-    assert payload["project_lock_errors"] is None
     assert "access_tokens" not in payload
 
 
-async def test_get_session_returns_project_details(
-    client_with_project_session: TestClient,
+async def test_get_session_does_not_extend_expiration(
+    client_with_session: TestClient,
     session_manager: SessionManager,
 ) -> None:
-    """Tests that GET /session includes project data when available."""
-    response = client_with_project_session.get(ROUTE)
+    """Tests that GET /session should not extend session expiration."""
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    session = await session_manager.get_session(session_id)
+    original_expires_at = session.expires_at
+
+    response = client_with_session.get(ROUTE)
     assert response.status_code == status.HTTP_200_OK
 
-    payload = response.json()
-    session_id = client_with_project_session.cookies.get(settings.SESSION_COOKIE_KEY)
-    assert session_id is not None
-    session = await session_manager.get_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    assert "user_fmu_directory" not in payload
-    assert payload["project"] is not None
-    project_payload = payload["project"]
-    assert project_payload["path"] == str(session.project_fmu_directory.base_path)
-    assert (
-        project_payload["project_dir_name"]
-        == session.project_fmu_directory.base_path.name
+    refreshed_session = await session_manager.get_session(
+        session_id, extend_expiration=False
     )
-    expected_config = session.project_fmu_directory.config.load().model_dump(
-        mode="json"
-    )
-    assert project_payload["config"] == expected_config
-    assert isinstance(project_payload["is_read_only"], bool)
-    assert payload["project_lock_errors"] == session.lock_errors.model_dump()
+    assert refreshed_session.expires_at == original_expires_at
 
 
 def test_get_session_requires_cookie() -> None:
@@ -346,7 +334,7 @@ def test_get_session_requires_cookie() -> None:
 def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
     """Tests that an unexpected error when building the session response returns 500."""
     with patch(
-        "fmu_settings_api.v1.routes.session.build_session_response",
+        "fmu_settings_api.v1.routes.session.SessionResponse",
         side_effect=Exception("boom"),
     ):
         response = client_with_session.get(ROUTE)

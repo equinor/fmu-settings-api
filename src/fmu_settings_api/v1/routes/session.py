@@ -13,6 +13,7 @@ from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     AuthTokenDep,
     SessionDep,
+    SessionNoExtendDep,
     UserFMUDirDep,
 )
 from fmu_settings_api.models import AccessToken, Message, SessionResponse
@@ -140,15 +141,19 @@ async def patch_access_token(session: SessionDep, access_token: AccessToken) -> 
     summary="Fetches the current session state",
     description=dedent(
         """
-        Retrieves the latest session metadata and, when available, information
-        about the currently opened project.
+        Retrieves the latest session metadata.
         """
     ),
     responses=GetSessionResponses,
 )
-async def read_session(session: SessionDep) -> SessionResponse:
+async def read_session(session: SessionNoExtendDep) -> SessionResponse:
     """Returns the current session in a serialisable format."""
     try:
-        return build_session_response(session)
+        return SessionResponse(
+            id=session.id,
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            last_accessed=session.last_accessed,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
