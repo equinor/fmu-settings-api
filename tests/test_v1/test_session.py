@@ -295,6 +295,26 @@ async def test_get_session_returns_sanitised_payload(
     assert "access_tokens" not in payload
 
 
+async def test_get_session_does_not_extend_expiration(
+    client_with_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that GET /session should not extend session expiration."""
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    session = await session_manager.get_session(session_id)
+    original_expires_at = session.expires_at
+
+    response = client_with_session.get(ROUTE)
+    assert response.status_code == status.HTTP_200_OK
+
+    refreshed_session = await session_manager.get_session(
+        session_id, extend_expiration=False
+    )
+    assert refreshed_session.expires_at == original_expires_at
+
+
 def test_get_session_requires_cookie() -> None:
     """Tests that a missing session cookie returns 401."""
     client = TestClient(app)
