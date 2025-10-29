@@ -305,19 +305,19 @@ async def test_post_masterdata_success(
     with (
         patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
         ) as mock_get_coordinate_systems,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
             new_callable=AsyncMock,
         ) as mock_get_countries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
             new_callable=AsyncMock,
         ) as mock_get_discoveries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
             new_callable=AsyncMock,
         ) as mock_get_strat_column_areas,
     ):
@@ -399,19 +399,19 @@ async def test_post_masterdata_missing_coordinate_system(
     with (
         patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
         ) as mock_get_coordinate_systems,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
             new_callable=AsyncMock,
         ) as mock_get_countries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
             new_callable=AsyncMock,
         ) as mock_get_discoveries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
             new_callable=AsyncMock,
         ) as mock_get_strat_column_areas,
     ):
@@ -507,19 +507,19 @@ async def test_post_masterdata_multiple_fields(
     with (
         patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
         ) as mock_get_coordinate_systems,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
             new_callable=AsyncMock,
         ) as mock_get_countries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
             new_callable=AsyncMock,
         ) as mock_get_discoveries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
             new_callable=AsyncMock,
         ) as mock_get_strat_column_areas,
     ):
@@ -584,19 +584,19 @@ async def test_post_masterdata_empty_field_list(
     with (
         patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_coordinate_systems",
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
         ) as mock_get_coordinate_systems,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_countries",
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
             new_callable=AsyncMock,
         ) as mock_get_countries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_discoveries",
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
             new_callable=AsyncMock,
         ) as mock_get_discoveries,
         patch(
-            "fmu_settings_api.v1.routes.smda.main.get_strat_column_areas",
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
             new_callable=AsyncMock,
         ) as mock_get_strat_column_areas,
     ):

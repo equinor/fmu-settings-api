@@ -9,6 +9,7 @@ from fmu.settings._init import init_user_fmu_directory
 
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.interfaces.smda_api import SmdaAPI
+from fmu_settings_api.services.smda import SmdaService
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -252,6 +253,22 @@ async def get_project_smda_interface(session: ProjectSmdaSessionDep) -> SmdaAPI:
 
 
 ProjectSmdaInterfaceDep = Annotated[SmdaAPI, Depends(get_project_smda_interface)]
+
+
+async def get_smda_service(smda_api: SmdaInterfaceDep) -> SmdaService:
+    """Returns an SmdaService instance for the session."""
+    return SmdaService(smda_api)
+
+
+SmdaServiceDep = Annotated[SmdaService, Depends(get_smda_service)]
+
+
+async def get_project_smda_service(smda_api: ProjectSmdaInterfaceDep) -> SmdaService:
+    """Returns an SmdaService instance for the project session."""
+    return SmdaService(smda_api)
+
+
+ProjectSmdaServiceDep = Annotated[SmdaService, Depends(get_project_smda_service)]
 
 
 async def check_write_permissions(project_session: ProjectSessionDep) -> None:

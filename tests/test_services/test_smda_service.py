@@ -12,12 +12,7 @@ from fmu.datamodels.fmu_results.fields import (
     StratigraphicColumn,
 )
 
-from fmu_settings_api.services.smda import (
-    get_coordinate_systems,
-    get_countries,
-    get_discoveries,
-    get_strat_column_areas,
-)
+from fmu_settings_api.services.smda import SmdaService
 
 
 @cache
@@ -55,7 +50,8 @@ async def test_get_countries(given: list[str], mock_val: list[CountryItem]) -> N
     }
     mock_smda.country.return_value = country_resp
 
-    res = await get_countries(mock_smda, given)
+    service = SmdaService(mock_smda)
+    res = await service._get_countries(given)
 
     mock_smda.country.assert_called_with(given)
     # Check duplicated countries are pruned
@@ -109,7 +105,8 @@ async def test_get_discoveries(given: list[str], mock_val: list[DiscoveryItem]) 
     discovery_resp.json.return_value = {"data": {"results": results}}
     mock_smda.discovery.return_value = discovery_resp
 
-    res = await get_discoveries(mock_smda, given)
+    service = SmdaService(mock_smda)
+    res = await service._get_discoveries(given)
 
     mock_smda.discovery.assert_called_with(
         given,
@@ -182,7 +179,8 @@ async def test_get_strat_column_areas(
     strat_col_resp.json.return_value = {"data": {"results": results}}
     mock_smda.strat_column_areas.return_value = strat_col_resp
 
-    res = await get_strat_column_areas(mock_smda, given)
+    service = SmdaService(mock_smda)
+    res = await service._get_strat_column_areas(given)
 
     mock_smda.strat_column_areas.assert_called_with(
         given,
@@ -257,7 +255,8 @@ async def test_get_coordinate_systems(
     }
     mock_smda.coordinate_system.return_value = coord_resp
 
-    res = await get_coordinate_systems(mock_smda, given)
+    service = SmdaService(mock_smda)
+    res = await service._get_coordinate_systems(given)
 
     mock_smda.coordinate_system.assert_called_with(given)
     # Check duplicated countries are pruned

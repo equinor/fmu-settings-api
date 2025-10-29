@@ -1,32 +1,21 @@
 """Routes for querying SMDA's API."""
 
-import asyncio
 from collections.abc import Generator
 from textwrap import dedent
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fmu.datamodels.fmu_results.fields import (
-    CoordinateSystem,
-    FieldItem,
-)
 
 from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.deps import (
-    ProjectSmdaInterfaceDep,
-    SmdaInterfaceDep,
+    ProjectSmdaServiceDep,
+    SmdaServiceDep,
 )
 from fmu_settings_api.models import Ok
 from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
-)
-from fmu_settings_api.services.smda import (
-    get_coordinate_systems,
-    get_countries,
-    get_discoveries,
-    get_strat_column_areas,
 )
 from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_response
 
@@ -63,10 +52,10 @@ router = APIRouter(
         **GetSessionResponses,
     },
 )
-async def get_health(smda_interface: SmdaInterfaceDep) -> Ok:
+async def get_health(smda_service: SmdaServiceDep) -> Ok:
     """Returns a simple 200 OK if able to query SMDA."""
     try:
-        await smda_interface.health()
+        await smda_service.check_health()
         return Ok()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -106,13 +95,11 @@ async def get_health(smda_interface: SmdaInterfaceDep) -> Ok:
     },
 )
 async def post_field(
-    smda_interface: SmdaInterfaceDep, field: SmdaField
+    smda_service: SmdaServiceDep, field: SmdaField
 ) -> SmdaFieldSearchResult:
     """Searches for a field identifier in SMDA."""
     try:
-        res = await smda_interface.field([field.identifier])
-        data = res.json()["data"]
-        return SmdaFieldSearchResult(**data)
+        return await smda_service.search_field(field)
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
@@ -178,94 +165,27 @@ async def post_field(
 )
 async def post_masterdata(
     smda_fields: list[SmdaField],
-    smda_interface: ProjectSmdaInterfaceDep,
+    smda_service: ProjectSmdaServiceDep,
 ) -> SmdaMasterdataResult:
     """Queries SMDA masterdata for .fmu project configuration."""
-    if not smda_fields:
-        raise HTTPException(
-            status_code=400, detail="At least one SMDA field must be provided"
-        )
-
-    # Sorted for tests as sets don't guarantee order
-    unique_field_identifiers = sorted({field.identifier for field in smda_fields})
     try:
-        # Query initial list of fields (with duplicates removed)
-        field_res = await smda_interface.field(
-            unique_field_identifiers,
-            columns=[
-                "country_identifier",
-                "identifier",
-                "projected_coordinate_system",
-                "uuid",
-            ],
-        )
-        field_results = field_res.json()["data"]["results"]
-        if not field_results:
-            raise HTTPException(
-                status_code=422,
-                detail=f"No fields found for identifiers: {unique_field_identifiers}",
-                headers={
-                    HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
-                },
-            )
-
-        field_items = [FieldItem.model_validate(field) for field in field_results]
-        field_identifiers = [field.identifier for field in field_items]
-        country_identifiers = list(
-            {field["country_identifier"] for field in field_results}
-        )
-
-        async with asyncio.TaskGroup() as tg:
-            coordinate_systems_task = tg.create_task(
-                get_coordinate_systems(smda_interface)
-            )
-            country_task = tg.create_task(
-                get_countries(smda_interface, country_identifiers)
-            )
-            discovery_task = tg.create_task(
-                get_discoveries(smda_interface, field_identifiers)
-            )
-            strat_column_task = tg.create_task(
-                get_strat_column_areas(smda_interface, field_identifiers)
-            )
-
-        country_items = country_task.result()
-        discovery_items = discovery_task.result()
-        strat_column_items = strat_column_task.result()
-        coordinate_systems = coordinate_systems_task.result()
-
-        # We only have one (a primary) coordinate system per field. Just take the first
-        # one of the first result as the pre-selected one.
-        field_coordinate_system: CoordinateSystem | None = None
-        for crs in coordinate_systems:
-            if crs.identifier == field_results[0]["projected_coordinate_system"]:
-                field_coordinate_system = crs
-                break
-
-        if field_coordinate_system is None:
-            crs_id = field_results[0]["projected_coordinate_system"]
-            field_id = field_results[0]["identifier"]
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"Coordinate system '{crs_id}' referenced by field '{field_id}' "
-                    "not found in SMDA."
-                ),
-                headers={
-                    HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA
-                },
-            )
-
-        return SmdaMasterdataResult(
-            field=field_items,
-            country=country_items,
-            discovery=discovery_items,
-            stratigraphic_columns=strat_column_items,
-            field_coordinate_system=field_coordinate_system,
-            coordinate_systems=coordinate_systems,
-        )
-    except HTTPException as e:
-        raise e
+        return await smda_service.get_masterdata(smda_fields)
+    except ValueError as e:
+        error_msg = str(e)
+        match error_msg:
+            case msg if "At least one SMDA field must be provided" in msg:
+                status_code = 400
+            case msg if "No fields found for identifiers" in msg:
+                status_code = 422
+            case msg if "not found in SMDA" in msg:
+                status_code = 404
+            case _:
+                status_code = 400
+        raise HTTPException(
+            status_code=status_code,
+            detail=error_msg,
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
