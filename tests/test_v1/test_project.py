@@ -1085,7 +1085,7 @@ async def test_load_global_config_general_exception(
 ) -> None:
     """Test 500 returns when general exception occurs in post_global_config."""
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
+        "fmu_settings_api.services.project.find_global_config",
         side_effect=RuntimeError("Config processing error"),
     ):
         response = client_with_project_session.post(f"{ROUTE}/global_config")
@@ -1161,7 +1161,7 @@ async def test_check_global_config_status_general_exception(
 ) -> None:
     """Test 500 returns when general exception occurs in get_global_config_status."""
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
+        "fmu_settings_api.services.project.find_global_config",
         side_effect=RuntimeError("Global config lookup failed"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/global_config_status")
@@ -1178,7 +1178,7 @@ async def test_check_global_config_status_with_disallowed_content(
     Tests the get_global_config_status endpoint.
     """
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
+        "fmu_settings_api.services.project.find_global_config",
         side_effect=InvalidGlobalConfigurationError("Drogon data is not allowed"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/global_config_status")
@@ -1199,7 +1199,7 @@ async def test_load_global_config_with_disallowed_content(
     Tests the post_global_config endpoint.
     """
     with patch(
-        "fmu_settings_api.v1.routes.project.find_global_config",
+        "fmu_settings_api.services.project.find_global_config",
         side_effect=InvalidGlobalConfigurationError("Drogon data is not allowed"),
     ):
         response = client_with_project_session.post(f"{ROUTE}/global_config")

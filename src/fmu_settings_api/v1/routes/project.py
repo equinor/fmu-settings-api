@@ -11,15 +11,14 @@ from fmu.settings import (
     find_nearest_fmu_directory,
     get_fmu_directory,
 )
-from fmu.settings._global_config import (
-    InvalidGlobalConfigurationError,
-    find_global_config,
-)
+from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
 from pydantic import ValidationError
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
+    ProjectServiceDep,
+    ProjectServiceNoExtendDep,
     ProjectSessionDep,
     ProjectSessionNoExtendDep,
     SessionDep,
@@ -28,6 +27,7 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
+from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.services.user import remove_from_recent_projects
 from fmu_settings_api.session import (
     ProjectSession,
@@ -211,14 +211,10 @@ async def get_project(session: SessionDep) -> FMUProject:
     ),
     responses={**GetSessionResponses, **GlobalConfigResponses},
 )
-async def get_global_config_status(project_session: ProjectSessionDep) -> Ok:
+async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
     """Checks if a valid global config exists at the default project location."""
-    project_root = project_session.project_fmu_directory.path.parent
-
     try:
-        existing_config = find_global_config(project_root)
-        if existing_config is None:
-            raise FileNotFoundError("No valid global config file found in the project.")
+        project_service.validate_global_config()
         return Ok()
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -367,39 +363,17 @@ async def init_project(
     },
 )
 async def post_global_config(
-    project_session: ProjectSessionDep,
+    project_service: ProjectServiceDep,
     path: GlobalConfigPath | None = None,
 ) -> Message:
     """Loads the global config into the .fmu config."""
-    fmu_dir = project_session.project_fmu_directory
-    project_root = fmu_dir.path.parent
-
     try:
-        if fmu_dir.config.load().masterdata is not None:
-            raise FileExistsError("Masterdata exists in the project config.")
-
-        extra_output_paths = None
-        if path is not None:
-            global_config_path = project_root / path.relative_path
-            extra_output_paths = [global_config_path]
-
-        global_config = find_global_config(
-            project_root, extra_output_paths=extra_output_paths
-        )
-        if global_config is None:
-            raise FileNotFoundError("No valid global config file found in the project.")
-
-        fmu_dir.set_config_value("masterdata", global_config.masterdata.model_dump())
-
-        return Message(
-            message=(
-                "Global config masterdata was successfully loaded "
-                "into the project masterdata."
-            ),
-        )
+        message = project_service.load_global_config(path)
+        return Message(message=message)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FileExistsError as e:
+        fmu_dir = project_service._fmu_dir
         raise HTTPException(
             status_code=409,
             detail="A config file with masterdata already exists in "
@@ -505,47 +479,18 @@ async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
         **ProjectResponses,
     },
 )
-async def get_lock_status(project_session: ProjectSessionNoExtendDep) -> LockStatus:
+async def get_lock_status(
+    project_session: ProjectSessionNoExtendDep,
+    project_service: ProjectServiceNoExtendDep,
+) -> LockStatus:
     """Returns the lock status and lock file contents if available."""
-    fmu_dir = project_session.project_fmu_directory
+    lock_status = project_service.get_lock_status()
 
-    is_lock_acquired = False
-    lock_file_exists = False
-    lock_info = None
-    lock_status_error = None
-    lock_file_read_error = None
+    lock_status.last_lock_acquire_error = project_session.lock_errors.acquire
+    lock_status.last_lock_release_error = project_session.lock_errors.release
+    lock_status.last_lock_refresh_error = project_session.lock_errors.refresh
 
-    try:
-        is_lock_acquired = fmu_dir._lock.is_acquired()
-    except Exception as e:
-        lock_status_error = f"Failed to check lock status: {str(e)}"
-
-    try:
-        if fmu_dir._lock.exists:
-            lock_file_exists = True
-            try:
-                lock_info = fmu_dir._lock.load(force=True, store_cache=False)
-            except (OSError, PermissionError) as e:
-                lock_file_read_error = f"Failed to read lock file: {str(e)}"
-            except ValueError as e:
-                lock_file_read_error = f"Failed to parse lock file: {str(e)}"
-            except Exception as e:
-                lock_file_read_error = f"Failed to process lock file: {str(e)}"
-        else:
-            lock_file_exists = False
-    except Exception as e:
-        lock_file_read_error = f"Failed to access lock file path: {str(e)}"
-
-    return LockStatus(
-        is_lock_acquired=is_lock_acquired,
-        lock_file_exists=lock_file_exists,
-        lock_info=lock_info,
-        lock_status_error=lock_status_error,
-        lock_file_read_error=lock_file_read_error,
-        last_lock_acquire_error=project_session.lock_errors.acquire,
-        last_lock_release_error=project_session.lock_errors.release,
-        last_lock_refresh_error=project_session.lock_errors.refresh,
-    )
+    return lock_status
 
 
 @router.patch(
@@ -567,14 +512,13 @@ async def get_lock_status(project_session: ProjectSessionNoExtendDep) -> LockSta
     },
 )
 async def patch_masterdata(
-    project_session: ProjectSessionDep,
+    project_service: ProjectServiceDep,
     smda_masterdata: Smda,
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
-    fmu_dir = project_session.project_fmu_directory
     try:
-        fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
-        return Message(message=f"Saved SMDA masterdata to {fmu_dir.path}")
+        message = project_service.update_masterdata(smda_masterdata)
+        return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -598,12 +542,11 @@ async def patch_masterdata(
         **LockConflictResponses,
     },
 )
-async def patch_model(project_session: ProjectSessionDep, model: Model) -> Message:
+async def patch_model(project_service: ProjectServiceDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
-    fmu_dir = project_session.project_fmu_directory
     try:
-        fmu_dir.set_config_value("model", model.model_dump())
-        return Message(message=f"Saved model data to {fmu_dir.path}")
+        message = project_service.update_model(model)
+        return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -627,12 +570,11 @@ async def patch_model(project_session: ProjectSessionDep, model: Model) -> Messa
         **LockConflictResponses,
     },
 )
-async def patch_access(project_session: ProjectSessionDep, access: Access) -> Message:
+async def patch_access(project_service: ProjectServiceDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
-    fmu_dir = project_session.project_fmu_directory
     try:
-        fmu_dir.set_config_value("access", access.model_dump())
-        return Message(message=f"Saved access data to {fmu_dir.path}")
+        message = project_service.update_access(access)
+        return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -644,14 +586,8 @@ def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     Raises HTTP exceptions for corrupt or inaccessible projects.
     """
     try:
-        is_read_only = not fmu_dir._lock.is_acquired()
-
-        return FMUProject(
-            path=fmu_dir.base_path,
-            project_dir_name=fmu_dir.base_path.name,
-            config=fmu_dir.config.load(),
-            is_read_only=is_read_only,
-        )
+        service = ProjectService(fmu_dir)
+        return service.get_project_data()
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(
             status_code=500,
