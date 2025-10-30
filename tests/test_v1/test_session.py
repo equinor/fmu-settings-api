@@ -94,7 +94,7 @@ def test_get_session_creating_user_unknown_failure(
     """Tests that an unknown exception returns 500."""
     client = TestClient(app)
     with patch(
-        "fmu_settings_api.deps.init_user_fmu_directory",
+        "fmu_settings_api.deps.user_fmu.init_user_fmu_directory",
         side_effect=Exception("foo"),
     ):
         user_fmu_path = tmp_path_mocked_home / "home/.fmu"
