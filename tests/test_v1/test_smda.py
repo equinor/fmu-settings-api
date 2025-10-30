@@ -303,7 +303,7 @@ async def test_post_masterdata_success(
     }
 
     with (
-        patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
         patch(
             "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
@@ -397,7 +397,7 @@ async def test_post_masterdata_missing_coordinate_system(
     }
 
     with (
-        patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
         patch(
             "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
@@ -457,7 +457,7 @@ async def test_post_masterdata_malformed_response(
         "malformed": "response",
     }
 
-    with patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class:
+    with patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class:
         mock_smda_instance = AsyncMock()
         mock_smda_instance.field.return_value = mock_field_response
         mock_smda_class.return_value = mock_smda_instance
@@ -505,7 +505,7 @@ async def test_post_masterdata_multiple_fields(
     }
 
     with (
-        patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
         patch(
             "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
@@ -582,7 +582,7 @@ async def test_post_masterdata_empty_field_list(
     }
 
     with (
-        patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class,
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
         patch(
             "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
             new_callable=AsyncMock,
@@ -650,7 +650,7 @@ async def test_post_masterdata_request_timeout(
     session_tmp_path: Path,
 ) -> None:
     """Tests when a post request to SMDA times out."""
-    with patch("fmu_settings_api.deps.SmdaAPI") as mock_smda_class:
+    with patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class:
         mock_smda_instance = AsyncMock()
         mock_smda_instance.field.side_effect = TimeoutError("Request timed out")
         mock_smda_class.return_value = mock_smda_instance

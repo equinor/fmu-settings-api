@@ -22,7 +22,7 @@ from fmu_settings_api.models.smda import (
 class SmdaService:
     """Service for querying SMDA API and handling business logic."""
 
-    def __init__(self, smda_api: SmdaAPI):
+    def __init__(self, smda_api: SmdaAPI) -> None:
         """Initialize the service with an SMDA API instance."""
         self._smda = smda_api
 

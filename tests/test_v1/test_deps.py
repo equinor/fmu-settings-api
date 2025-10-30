@@ -12,17 +12,19 @@ from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
 from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
-from fmu_settings_api.deps import (
-    ProjectSmdaSessionDep,
-    SmdaInterfaceDep,
-    check_write_permissions,
-    ensure_user_fmu_directory,
-    get_project_smda_interface,
+from fmu_settings_api.deps import ProjectSmdaSessionDep, SmdaInterfaceDep
+from fmu_settings_api.deps.permissions import check_write_permissions
+from fmu_settings_api.deps.session import (
+    get_project_session_no_extend,
     get_session,
+    get_session_no_extend,
 )
+from fmu_settings_api.deps.smda import get_project_smda_interface
+from fmu_settings_api.deps.user_fmu import ensure_user_fmu_directory
 from fmu_settings_api.interfaces.smda_api import SmdaAPI
 from fmu_settings_api.session import (
     AccessTokens,
+    ProjectSession,
     SessionManager,
     add_fmu_project_to_session,
 )
@@ -47,7 +49,7 @@ async def test_get_session_dep(
 
     with (
         patch(
-            "fmu_settings_api.deps.session_manager.get_session",
+            "fmu_settings_api.deps.session.session_manager.get_session",
             side_effect=Exception("foo"),
         ),
         pytest.raises(HTTPException, match="500: Session error: foo"),
@@ -134,11 +136,11 @@ async def test_ensure_user_fmu_directory_file_exists_error() -> None:
     """Test that a FileExistsError results in HTTPException with status 409."""
     with (
         patch(
-            "fmu_settings_api.deps.UserFMUDirectory",
+            "fmu_settings_api.deps.user_fmu.UserFMUDirectory",
             side_effect=FileNotFoundError("Directory not found"),
         ),
         patch(
-            "fmu_settings_api.deps.init_user_fmu_directory",
+            "fmu_settings_api.deps.user_fmu.init_user_fmu_directory",
             side_effect=FileExistsError("Directory already exists"),
         ),
         pytest.raises(HTTPException) as exc_info,
@@ -153,11 +155,11 @@ async def test_ensure_user_fmu_directory_permission_error() -> None:
     """Test that a PermissionError results in HTTPException with status 403."""
     with (
         patch(
-            "fmu_settings_api.deps.UserFMUDirectory",
+            "fmu_settings_api.deps.user_fmu.UserFMUDirectory",
             side_effect=FileNotFoundError("Directory not found"),
         ),
         patch(
-            "fmu_settings_api.deps.init_user_fmu_directory",
+            "fmu_settings_api.deps.user_fmu.init_user_fmu_directory",
             side_effect=PermissionError("Permission denied"),
         ),
         pytest.raises(HTTPException) as exc_info,
@@ -172,11 +174,11 @@ async def test_ensure_user_fmu_directory_general_error() -> None:
     """Test that a general Exception results in HTTPException with status 500."""
     with (
         patch(
-            "fmu_settings_api.deps.UserFMUDirectory",
+            "fmu_settings_api.deps.user_fmu.UserFMUDirectory",
             side_effect=FileNotFoundError("Directory not found"),
         ),
         patch(
-            "fmu_settings_api.deps.init_user_fmu_directory",
+            "fmu_settings_api.deps.user_fmu.init_user_fmu_directory",
             side_effect=Exception("Something went wrong"),
         ),
         pytest.raises(HTTPException) as exc_info,
@@ -191,7 +193,7 @@ async def test_ensure_user_fmu_directory_outer_general_error() -> None:
     """Test that a general Exception from UserFMUDirectory results in HTTP 500."""
     with (
         patch(
-            "fmu_settings_api.deps.UserFMUDirectory",
+            "fmu_settings_api.deps.user_fmu.UserFMUDirectory",
             side_effect=RuntimeError("Outer exception"),
         ),
         pytest.raises(HTTPException) as exc_info,
@@ -225,3 +227,130 @@ async def test_check_write_permissions_project_not_acquired(
     assert exc_info.value.status_code == status.HTTP_423_LOCKED
     assert "Project is read-only" in str(exc_info.value.detail)
     assert "locked by another process" in str(exc_info.value.detail)
+
+
+async def test_check_write_permissions_not_locked(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Test that check_write_permissions raises 423 when project is not locked."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_locked.return_value = False
+    project_fmu_dir._lock = mock_lock
+
+    project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_write_permissions(project_session)
+
+    assert exc_info.value.status_code == status.HTTP_423_LOCKED
+    assert "Project is not locked" in str(exc_info.value.detail)
+    assert "Acquire the lock before writing" in str(exc_info.value.detail)
+
+
+async def test_check_write_permissions_permission_error(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Test that check_write_permissions raises 403 on PermissionError."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_locked.side_effect = PermissionError("Permission denied")
+    project_fmu_dir._lock = mock_lock
+
+    project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_write_permissions(project_session)
+
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+    assert "Permission denied accessing .fmu" in str(exc_info.value.detail)
+
+
+async def test_check_write_permissions_file_not_found_error(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Test that check_write_permissions raises 423 on FileNotFoundError."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_locked.side_effect = FileNotFoundError("Lock file not found")
+    project_fmu_dir._lock = mock_lock
+
+    project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_write_permissions(project_session)
+
+    assert exc_info.value.status_code == status.HTTP_423_LOCKED
+    assert "Project lock file is missing" in str(exc_info.value.detail)
+    assert "read-only" in str(exc_info.value.detail)
+
+
+async def test_get_session_no_extend(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests the get_session_no_extend dependency."""
+    with pytest.raises(HTTPException, match="401: No active session found"):
+        await get_session_no_extend(None)
+
+    with pytest.raises(HTTPException, match="401: Invalid or expired session"):
+        await get_session_no_extend(Cookie(default=uuid4()))
+
+    user_fmu_dir = init_user_fmu_directory()
+    valid_session = await session_manager.create_session(user_fmu_dir)
+    session = await get_session_no_extend(valid_session)
+    assert session.user_fmu_directory.path == user_fmu_dir.path
+
+    with (
+        patch(
+            "fmu_settings_api.deps.session.session_manager.get_session",
+            side_effect=Exception("foo"),
+        ),
+        pytest.raises(HTTPException, match="500: Session error: foo"),
+    ):
+        await get_session_no_extend(Cookie(default=object))
+
+
+async def test_get_project_session_no_extend(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests the get_project_session_no_extend dependency."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_project_session_no_extend(session_id)
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert "No FMU project directory open" in str(exc_info.value.detail)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+    await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    result = await get_project_session_no_extend(session_id)
+    assert isinstance(result, ProjectSession)
+    assert result.project_fmu_directory.path == project_fmu_dir.path
+
+    project_fmu_dir.path.parent.rename(tmp_path_mocked_home / "deleted")
+    with pytest.raises(HTTPException) as exc_info:
+        await get_project_session_no_extend(session_id)
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Project .fmu directory not found" in str(exc_info.value.detail)
