@@ -340,7 +340,7 @@ def test_get_session_requires_cookie() -> None:
 def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
     """Tests that an unexpected error when building the session response returns 500."""
     with patch(
-        "fmu_settings_api.v1.routes.session.SessionResponse",
+        "fmu_settings_api.services.session.SessionResponse",
         side_effect=Exception("boom"),
     ):
         response = client_with_session.get(ROUTE)
@@ -427,7 +427,7 @@ async def test_patch_access_token_unknown_failure(
 ) -> None:
     """Tests that an unknown exception returns 500."""
     with patch(
-        "fmu_settings_api.v1.routes.session.add_access_token_to_session",
+        "fmu_settings_api.services.session.add_token_to_session_manager",
         side_effect=Exception("foo"),
     ):
         session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)

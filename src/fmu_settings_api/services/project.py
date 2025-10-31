@@ -5,7 +5,7 @@ from fmu.settings import ProjectFMUDirectory
 from fmu.settings._global_config import find_global_config
 
 from fmu_settings_api.models import FMUProject
-from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
+from fmu_settings_api.models.project import GlobalConfigPath
 
 
 class ProjectService:
@@ -76,43 +76,3 @@ class ProjectService:
         """Save access data to the project FMU directory."""
         self._fmu_dir.set_config_value("access", access.model_dump())
         return f"Saved access data to {self._fmu_dir.path}"
-
-    def get_lock_status(self) -> LockStatus:
-        """Get the lock status and lock file contents."""
-        is_lock_acquired = False
-        lock_file_exists = False
-        lock_info = None
-        lock_status_error = None
-        lock_file_read_error = None
-
-        try:
-            is_lock_acquired = self._fmu_dir._lock.is_acquired()
-        except Exception as e:
-            lock_status_error = f"Failed to check lock status: {str(e)}"
-
-        try:
-            if self._fmu_dir._lock.exists:
-                lock_file_exists = True
-                try:
-                    lock_info = self._fmu_dir._lock.load(force=True, store_cache=False)
-                except (OSError, PermissionError) as e:
-                    lock_file_read_error = f"Failed to read lock file: {str(e)}"
-                except ValueError as e:
-                    lock_file_read_error = f"Failed to parse lock file: {str(e)}"
-                except Exception as e:
-                    lock_file_read_error = f"Failed to process lock file: {str(e)}"
-            else:
-                lock_file_exists = False
-        except Exception as e:
-            lock_file_read_error = f"Failed to access lock file path: {str(e)}"
-
-        return LockStatus(
-            is_lock_acquired=is_lock_acquired,
-            lock_file_exists=lock_file_exists,
-            lock_info=lock_info,
-            lock_status_error=lock_status_error,
-            lock_file_read_error=lock_file_read_error,
-            last_lock_acquire_error=None,
-            last_lock_release_error=None,
-            last_lock_refresh_error=None,
-        )

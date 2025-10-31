@@ -6,35 +6,22 @@ from typing import Final
 
 from fastapi import APIRouter, HTTPException
 from fmu.datamodels.fmu_results.fields import Access, Model, Smda
-from fmu.settings import (
-    ProjectFMUDirectory,
-    find_nearest_fmu_directory,
-    get_fmu_directory,
-)
+from fmu.settings import ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
-from fmu.settings._init import init_fmu_directory
 from pydantic import ValidationError
 
-from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     ProjectServiceDep,
-    ProjectSessionDep,
-    ProjectSessionNoExtendDep,
-    SessionDep,
+    ProjectSessionServiceDep,
+    ProjectSessionServiceNoExtendDep,
+    SessionServiceDep,
     WritePermissionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
 from fmu_settings_api.services.project import ProjectService
-from fmu_settings_api.services.user import remove_from_recent_projects
-from fmu_settings_api.session import (
-    ProjectSession,
-    SessionNotFoundError,
-    add_fmu_project_to_session,
-    remove_fmu_project_from_session,
-    try_acquire_project_lock,
-)
+from fmu_settings_api.session import SessionNotFoundError
 from fmu_settings_api.v1.responses import (
     GetSessionResponses,
     Responses,
@@ -163,7 +150,7 @@ GlobalConfigResponses: Final[Responses] = {
         **ProjectResponses,
     },
 )
-async def get_project(session: SessionDep) -> FMUProject:
+async def get_project(session_service: SessionServiceDep) -> FMUProject:
     """Returns the paths and configuration of the nearest project .fmu directory.
 
     This directory is searched for above the current working directory.
@@ -171,16 +158,8 @@ async def get_project(session: SessionDep) -> FMUProject:
     If the session contains a project .fmu directory already details of that project
     are returned.
     """
-    if isinstance(session, ProjectSession):
-        fmu_dir = session.project_fmu_directory
-        return _create_opened_project_response(fmu_dir)
-
-    path = Path.cwd()
     try:
-        fmu_dir = find_nearest_fmu_directory(
-            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
-        await add_fmu_project_to_session(session.id, fmu_dir)
+        fmu_dir = await session_service.get_or_find_project()
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -189,6 +168,7 @@ async def get_project(session: SessionDep) -> FMUProject:
             detail="Permission denied locating .fmu",
         ) from e
     except FileNotFoundError as e:
+        path = Path.cwd()
         raise HTTPException(
             status_code=404, detail=f"No .fmu directory found from {path}"
         ) from e
@@ -257,18 +237,13 @@ async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
         **ProjectExistsResponses,
     },
 )
-async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProject:
+async def post_project(
+    session_service: SessionServiceDep, fmu_dir_path: FMUDirPath
+) -> FMUProject:
     """Returns the paths and configuration for the project .fmu directory at 'path'."""
     path = fmu_dir_path.path
-    if not path.exists():
-        remove_from_recent_projects(path, session.user_fmu_directory)
-        raise HTTPException(status_code=404, detail=f"Path {path} does not exist")
-
     try:
-        fmu_dir = get_fmu_directory(
-            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
-        await add_fmu_project_to_session(session.id, fmu_dir)
+        fmu_dir = await session_service.attach_project(path)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -277,9 +252,7 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
             detail=f"Permission denied accessing .fmu at {path}",
         ) from e
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404, detail=f"No .fmu directory found at {path}"
-        ) from e
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f".fmu exists at {path} but is not a directory"
@@ -310,18 +283,13 @@ async def post_project(session: SessionDep, fmu_dir_path: FMUDirPath) -> FMUProj
     },
 )
 async def init_project(
-    session: SessionDep,
+    session_service: SessionServiceDep,
     fmu_dir_path: FMUDirPath,
 ) -> FMUProject:
     """Initializes .fmu at 'path' and returns its paths and configuration."""
     path = fmu_dir_path.path
     try:
-        fmu_dir = init_fmu_directory(
-            path,
-            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS,
-        )
-        _ = await add_fmu_project_to_session(session.id, fmu_dir)
-        return _create_opened_project_response(fmu_dir)
+        fmu_dir = await session_service.initialize_project(path)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:
@@ -339,6 +307,8 @@ async def init_project(
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return _create_opened_project_response(fmu_dir)
 
 
 @router.post(
@@ -412,16 +382,13 @@ async def post_global_config(
         **GetSessionResponses,
     },
 )
-async def delete_project_session(session: ProjectSessionDep) -> Message:
+async def delete_project_session(
+    session_service: ProjectSessionServiceDep,
+) -> Message:
     """Deletes a project .fmu session if it exists."""
     try:
-        await remove_fmu_project_from_session(session.id)
-        return Message(
-            message=(
-                f"FMU directory {session.project_fmu_directory.path} closed "
-                "successfully"
-            ),
-        )
+        message = await session_service.close_project()
+        return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
@@ -443,22 +410,15 @@ async def delete_project_session(session: ProjectSessionDep) -> Message:
         **GetSessionResponses,
     },
 )
-async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
+async def post_lock_acquire(session_service: ProjectSessionServiceDep) -> Message:
     """Attempts to acquire the project lock and returns a status message."""
     try:
-        updated_session = await try_acquire_project_lock(project_session.id)
-        lock = updated_session.project_fmu_directory._lock
-        if lock.is_acquired():
-            return Message(message="Project lock acquired.")
+        message = await session_service.acquire_project_lock()
+        return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-    return Message(
-        message="Project remains read-only because the lock could not be acquired."
-        "Check lock status for details."
-    )
 
 
 @router.get(
@@ -478,47 +438,11 @@ async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
         **ProjectResponses,
     },
 )
-async def get_lock_status(project_session: ProjectSessionNoExtendDep) -> LockStatus:
+async def get_lock_status(
+    session_service: ProjectSessionServiceNoExtendDep,
+) -> LockStatus:
     """Returns the lock status and lock file contents if available."""
-    fmu_dir = project_session.project_fmu_directory
-
-    is_lock_acquired = False
-    lock_file_exists = False
-    lock_info = None
-    lock_status_error = None
-    lock_file_read_error = None
-
-    try:
-        is_lock_acquired = fmu_dir._lock.is_acquired()
-    except Exception as e:
-        lock_status_error = f"Failed to check lock status: {str(e)}"
-
-    try:
-        if fmu_dir._lock.exists:
-            lock_file_exists = True
-            try:
-                lock_info = fmu_dir._lock.load(force=True, store_cache=False)
-            except (OSError, PermissionError) as e:
-                lock_file_read_error = f"Failed to read lock file: {str(e)}"
-            except ValueError as e:
-                lock_file_read_error = f"Failed to parse lock file: {str(e)}"
-            except Exception as e:
-                lock_file_read_error = f"Failed to process lock file: {str(e)}"
-        else:
-            lock_file_exists = False
-    except Exception as e:
-        lock_file_read_error = f"Failed to access lock file path: {str(e)}"
-
-    return LockStatus(
-        is_lock_acquired=is_lock_acquired,
-        lock_file_exists=lock_file_exists,
-        lock_info=lock_info,
-        lock_status_error=lock_status_error,
-        lock_file_read_error=lock_file_read_error,
-        last_lock_acquire_error=project_session.lock_errors.acquire,
-        last_lock_release_error=project_session.lock_errors.release,
-        last_lock_refresh_error=project_session.lock_errors.refresh,
-    )
+    return session_service.get_lock_status()
 
 
 @router.patch(
