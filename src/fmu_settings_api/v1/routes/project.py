@@ -159,7 +159,7 @@ async def get_project(session_service: SessionServiceDep) -> FMUProject:
     are returned.
     """
     try:
-        fmu_dir = await session_service.get_or_find_project()
+        fmu_dir = await session_service.get_or_attach_nearest_project()
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except PermissionError as e:

@@ -45,8 +45,8 @@ class SessionService:
         await add_token_to_session_manager(self._session.id, access_token)
         return f"Set session access token for {access_token.id}"
 
-    async def get_or_find_project(self) -> ProjectFMUDirectory:
-        """Get the project from session or find nearest project .fmu directory."""
+    async def get_or_attach_nearest_project(self) -> ProjectFMUDirectory:
+        """Get attached project or find and attach the nearest .fmu directory."""
         if isinstance(self._session, ProjectSession):
             return self._session.project_fmu_directory
 
@@ -58,7 +58,7 @@ class SessionService:
         return fmu_dir
 
     async def attach_project(self, path: Path) -> ProjectFMUDirectory:
-        """Open a project .fmu directory at the specified path."""
+        """Attach an existing project .fmu directory to the session."""
         if not path.exists():
             remove_from_recent_projects(path, self._session.user_fmu_directory)
             raise FileNotFoundError(f"Path {path} does not exist")
