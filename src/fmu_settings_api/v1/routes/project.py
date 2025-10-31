@@ -18,7 +18,6 @@ from pydantic import ValidationError
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     ProjectServiceDep,
-    ProjectServiceNoExtendDep,
     ProjectSessionDep,
     ProjectSessionNoExtendDep,
     SessionDep,
@@ -214,7 +213,7 @@ async def get_project(session: SessionDep) -> FMUProject:
 async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
     """Checks if a valid global config exists at the default project location."""
     try:
-        project_service.validate_global_config()
+        project_service.check_valid_global_config()
         return Ok()
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -368,7 +367,7 @@ async def post_global_config(
 ) -> Message:
     """Loads the global config into the .fmu config."""
     try:
-        message = project_service.load_global_config(path)
+        message = project_service.import_global_config(path)
         return Message(message=message)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -479,18 +478,47 @@ async def post_lock_acquire(project_session: ProjectSessionDep) -> Message:
         **ProjectResponses,
     },
 )
-async def get_lock_status(
-    project_session: ProjectSessionNoExtendDep,
-    project_service: ProjectServiceNoExtendDep,
-) -> LockStatus:
+async def get_lock_status(project_session: ProjectSessionNoExtendDep) -> LockStatus:
     """Returns the lock status and lock file contents if available."""
-    lock_status = project_service.get_lock_status()
+    fmu_dir = project_session.project_fmu_directory
 
-    lock_status.last_lock_acquire_error = project_session.lock_errors.acquire
-    lock_status.last_lock_release_error = project_session.lock_errors.release
-    lock_status.last_lock_refresh_error = project_session.lock_errors.refresh
+    is_lock_acquired = False
+    lock_file_exists = False
+    lock_info = None
+    lock_status_error = None
+    lock_file_read_error = None
 
-    return lock_status
+    try:
+        is_lock_acquired = fmu_dir._lock.is_acquired()
+    except Exception as e:
+        lock_status_error = f"Failed to check lock status: {str(e)}"
+
+    try:
+        if fmu_dir._lock.exists:
+            lock_file_exists = True
+            try:
+                lock_info = fmu_dir._lock.load(force=True, store_cache=False)
+            except (OSError, PermissionError) as e:
+                lock_file_read_error = f"Failed to read lock file: {str(e)}"
+            except ValueError as e:
+                lock_file_read_error = f"Failed to parse lock file: {str(e)}"
+            except Exception as e:
+                lock_file_read_error = f"Failed to process lock file: {str(e)}"
+        else:
+            lock_file_exists = False
+    except Exception as e:
+        lock_file_read_error = f"Failed to access lock file path: {str(e)}"
+
+    return LockStatus(
+        is_lock_acquired=is_lock_acquired,
+        lock_file_exists=lock_file_exists,
+        lock_info=lock_info,
+        lock_status_error=lock_status_error,
+        lock_file_read_error=lock_file_read_error,
+        last_lock_acquire_error=project_session.lock_errors.acquire,
+        last_lock_release_error=project_session.lock_errors.release,
+        last_lock_refresh_error=project_session.lock_errors.refresh,
+    )
 
 
 @router.patch(

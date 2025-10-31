@@ -4,7 +4,7 @@ from fmu_settings_api.interfaces.smda_api import SmdaAPI
 
 from .auth import AuthTokenDep
 from .permissions import WritePermissionDep
-from .project import ProjectServiceDep, ProjectServiceNoExtendDep
+from .project import ProjectServiceDep
 from .session import (
     ProjectSessionDep,
     ProjectSessionNoExtendDep,
@@ -37,5 +37,4 @@ __all__ = [
     "WritePermissionDep",
     "SmdaAPI",
     "ProjectServiceDep",
-    "ProjectServiceNoExtendDep",
 ]

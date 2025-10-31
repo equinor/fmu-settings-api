@@ -6,7 +6,7 @@ from fastapi import Depends
 
 from fmu_settings_api.services.project import ProjectService
 
-from .session import ProjectSessionDep, ProjectSessionNoExtendDep
+from .session import ProjectSessionDep
 
 
 async def get_project_service(
@@ -16,14 +16,4 @@ async def get_project_service(
     return ProjectService(project_session.project_fmu_directory)
 
 
-async def get_project_service_no_extend(
-    project_session: ProjectSessionNoExtendDep,
-) -> ProjectService:
-    """Returns a ProjectService instance without extending session expiration."""
-    return ProjectService(project_session.project_fmu_directory)
-
-
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
-ProjectServiceNoExtendDep = Annotated[
-    ProjectService, Depends(get_project_service_no_extend)
-]

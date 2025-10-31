@@ -26,7 +26,7 @@ class ProjectService:
             is_read_only=is_read_only,
         )
 
-    def validate_global_config(self) -> None:
+    def check_valid_global_config(self) -> None:
         """Check if a valid global config exists at the default location."""
         project_root = self._fmu_dir.path.parent
         existing_config = find_global_config(project_root)
@@ -34,7 +34,7 @@ class ProjectService:
         if existing_config is None:
             raise FileNotFoundError("No valid global config file found in the project.")
 
-    def load_global_config(self, path: GlobalConfigPath | None = None) -> str:
+    def import_global_config(self, path: GlobalConfigPath | None = None) -> str:
         """Load the global config into the project masterdata."""
         if self._fmu_dir.config.load().masterdata is not None:
             raise FileExistsError("Masterdata exists in the project config.")
