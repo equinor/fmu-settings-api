@@ -34,7 +34,7 @@ class ProjectService:
         if existing_config is None:
             raise FileNotFoundError("No valid global config file found in the project.")
 
-    def import_global_config(self, path: GlobalConfigPath | None = None) -> str:
+    def import_global_config(self, path: GlobalConfigPath | None = None) -> None:
         """Load the global config into the project masterdata."""
         if self._fmu_dir.config.load().masterdata is not None:
             raise FileExistsError("Masterdata exists in the project config.")
@@ -57,22 +57,17 @@ class ProjectService:
             "masterdata", global_config.masterdata.model_dump()
         )
 
-        return (
-            "Global config masterdata was successfully loaded "
-            "into the project masterdata."
-        )
-
-    def update_masterdata(self, smda_masterdata: Smda) -> str:
+    def update_masterdata(self, smda_masterdata: Smda) -> tuple[bool, str]:
         """Save SMDA masterdata to the project FMU directory."""
         self._fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
-        return f"Saved SMDA masterdata to {self._fmu_dir.path}"
+        return True, f"Saved SMDA masterdata to {self._fmu_dir.path}"
 
-    def update_model(self, model: Model) -> str:
+    def update_model(self, model: Model) -> tuple[bool, str]:
         """Save model data to the project FMU directory."""
         self._fmu_dir.set_config_value("model", model.model_dump())
-        return f"Saved model data to {self._fmu_dir.path}"
+        return True, f"Saved model data to {self._fmu_dir.path}"
 
-    def update_access(self, access: Access) -> str:
+    def update_access(self, access: Access) -> tuple[bool, str]:
         """Save access data to the project FMU directory."""
         self._fmu_dir.set_config_value("access", access.model_dump())
-        return f"Saved access data to {self._fmu_dir.path}"
+        return True, f"Saved access data to {self._fmu_dir.path}"

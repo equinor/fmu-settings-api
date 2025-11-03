@@ -337,8 +337,11 @@ async def post_global_config(
 ) -> Message:
     """Loads the global config into the .fmu config."""
     try:
-        message = project_service.import_global_config(path)
-        return Message(message=message)
+        project_service.import_global_config(path)
+        return Message(
+            message="Global config masterdata was successfully loaded "
+            "into the project masterdata."
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except FileExistsError as e:
@@ -476,7 +479,7 @@ async def patch_masterdata(
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     try:
-        message = project_service.update_masterdata(smda_masterdata)
+        _, message = project_service.update_masterdata(smda_masterdata)
         return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -504,7 +507,7 @@ async def patch_masterdata(
 async def patch_model(project_service: ProjectServiceDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
     try:
-        message = project_service.update_model(model)
+        _, message = project_service.update_model(model)
         return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -532,7 +535,7 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
 async def patch_access(project_service: ProjectServiceDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
     try:
-        message = project_service.update_access(access)
+        _, message = project_service.update_access(access)
         return Message(message=message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
