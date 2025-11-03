@@ -312,10 +312,10 @@ async def test_check_write_permissions_file_not_found_error(
     assert "read-only" in str(exc_info.value.detail)
 
 
-async def test_get_session_no_extend(
+async def test_get_session_no_extend_does_not_extend_expiration(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_session_no_extend dependency."""
+    """Tests that get_session_no_extend does not extend session expiration."""
     with pytest.raises(HTTPException, match="401: No active session found"):
         await get_session_no_extend(None)
 
@@ -337,10 +337,10 @@ async def test_get_session_no_extend(
         await get_session_no_extend(Cookie(default=object))
 
 
-async def test_get_project_session_no_extend(
+async def test_get_project_session_no_extend_does_not_extend_expiration(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_project_session_no_extend dependency."""
+    """Tests that get_project_session_no_extend does not extend session expiration."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
@@ -369,7 +369,7 @@ async def test_get_project_session_no_extend(
     assert "Project .fmu directory not found" in str(exc_info.value.detail)
 
 
-async def test_get_project_session(
+async def test_get_project_session_extends_expiration(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
     """Tests that get_project_session extends session expiration."""
@@ -388,10 +388,10 @@ async def test_get_project_session(
     assert result2.expires_at > original_expires_at
 
 
-async def test_get_session_service(
+async def test_get_session_service_returns_session_service(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_session_service dependency."""
+    """Tests that get_session_service returns a SessionService instance."""
     user_fmu_dir = init_user_fmu_directory()
     valid_session = await session_manager.create_session(user_fmu_dir)
     session = await get_session(valid_session)
@@ -402,10 +402,10 @@ async def test_get_session_service(
     assert isinstance(service._session, Session)
 
 
-async def test_get_session_service_no_extend(
+async def test_get_session_service_no_extend_does_not_extend_expiration(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_session_service_no_extend dependency."""
+    """Tests that get_session_service_no_extend does not extend session expiration."""
     user_fmu_dir = init_user_fmu_directory()
     valid_session = await session_manager.create_session(user_fmu_dir)
     session = await get_session_no_extend(valid_session)
@@ -415,11 +415,16 @@ async def test_get_session_service_no_extend(
     assert service._session == session
     assert isinstance(service._session, Session)
 
+    original_expires_at = session.expires_at
+    session2 = await get_session_no_extend(valid_session)
+    service2 = await get_session_service_no_extend(session2)
+    assert service2._session.expires_at == original_expires_at
 
-async def test_get_project_session_service(
+
+async def test_get_project_session_service_returns_session_service(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_project_session_service dependency."""
+    """Tests that get_project_session_service returns a SessionService instance."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
@@ -437,10 +442,10 @@ async def test_get_project_session_service(
     assert service._session.project_fmu_directory.path == project_fmu_dir.path
 
 
-async def test_get_project_session_service_no_extend(
+async def test_get_project_session_service_no_extend_does_not_extend_expiration(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_project_session_service_no_extend dependency."""
+    """Tests that get_project_session_service_no_extend does not extend expiration."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
@@ -457,11 +462,16 @@ async def test_get_project_session_service_no_extend(
     assert isinstance(service._session, ProjectSession)
     assert service._session.project_fmu_directory.path == project_fmu_dir.path
 
+    original_expires_at = project_session.expires_at
+    project_session2 = await get_project_session_no_extend(session_id)
+    service2 = await get_project_session_service_no_extend(project_session2)
+    assert service2._session.expires_at == original_expires_at
 
-async def test_get_project_service(
+
+async def test_get_project_service_returns_project_service(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
-    """Tests the get_project_service dependency."""
+    """Tests that get_project_service returns a ProjectService instance."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
