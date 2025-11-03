@@ -129,7 +129,7 @@ async def patch_access_token(
 ) -> Message:
     """Patches a known SSO access token into the session."""
     try:
-        message = await session_service.add_access_token(access_token)
+        _, message = await session_service.add_access_token(access_token)
         return Message(message=message)
     except ValueError as e:
         raise HTTPException(

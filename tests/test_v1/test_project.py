@@ -1837,7 +1837,7 @@ async def test_post_lock_acquire_conflict_returns_read_only(
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "message": (
-            "Project remains read-only because the lock could not be acquired."
+            "Project remains read-only because the lock could not be acquired. "
             "Check lock status for details."
         )
     }

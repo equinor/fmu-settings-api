@@ -387,7 +387,7 @@ async def delete_project_session(
 ) -> Message:
     """Deletes a project .fmu session if it exists."""
     try:
-        message = await session_service.close_project()
+        _, message = await session_service.close_project()
         return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
@@ -413,7 +413,14 @@ async def delete_project_session(
 async def post_lock_acquire(session_service: ProjectSessionServiceDep) -> Message:
     """Attempts to acquire the project lock and returns a status message."""
     try:
-        message = await session_service.acquire_project_lock()
+        lock_acquired = await session_service.acquire_project_lock()
+        if lock_acquired:
+            message = "Project lock acquired."
+        else:
+            message = (
+                "Project remains read-only because the lock could not be acquired. "
+                "Check lock status for details."
+            )
         return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
