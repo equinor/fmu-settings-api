@@ -108,6 +108,8 @@ def run_server(  # noqa: PLR0913
         )
 
     log_manager = LogManager(user_fmu_dir, Log)
+
+    settings.LOG_LEVEL = log_level.upper()
     setup_logging(settings, fmu_log_manager=log_manager)
 
     if token:
