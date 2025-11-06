@@ -40,10 +40,10 @@ class SessionService:
             last_accessed=self._session.last_accessed,
         )
 
-    async def add_access_token(self, access_token: AccessToken) -> tuple[bool, str]:
+    async def add_access_token(self, access_token: AccessToken) -> str:
         """Add a known access token to the session."""
         await add_token_to_session_manager(self._session.id, access_token)
-        return True, f"Set session access token for {access_token.id}"
+        return access_token.id
 
     async def get_or_attach_nearest_project(self) -> ProjectFMUDirectory:
         """Get attached project or find and attach the nearest .fmu directory."""
@@ -78,15 +78,12 @@ class SessionService:
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 
-    async def close_project(self) -> tuple[bool, str]:
+    async def close_project(self) -> tuple[bool, Path]:
         """Remove (close) a project .fmu directory from the session."""
         project_session = cast("ProjectSession", self._session)
         project_path = project_session.project_fmu_directory.path
         await remove_fmu_project_from_session(self._session.id)
-        return (
-            True,
-            f"FMU directory {project_path} closed successfully",
-        )
+        return True, project_path
 
     async def acquire_project_lock(self) -> bool:
         """Attempt to acquire the project lock for editing."""

@@ -129,8 +129,8 @@ async def patch_access_token(
 ) -> Message:
     """Patches a known SSO access token into the session."""
     try:
-        _, message = await session_service.add_access_token(access_token)
-        return Message(message=message)
+        access_token_id = await session_service.add_access_token(access_token)
+        return Message(message=f"Set session access token for {access_token_id}")
     except ValueError as e:
         raise HTTPException(
             status_code=400,

@@ -390,8 +390,8 @@ async def delete_project_session(
 ) -> Message:
     """Deletes a project .fmu session if it exists."""
     try:
-        _, message = await session_service.close_project()
-        return Message(message=message)
+        _, path = await session_service.close_project()
+        return Message(message=f"FMU directory {path} closed successfully")
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
@@ -479,8 +479,8 @@ async def patch_masterdata(
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     try:
-        _, message = project_service.update_masterdata(smda_masterdata)
-        return Message(message=message)
+        _, path = project_service.update_masterdata(smda_masterdata)
+        return Message(message=f"Saved SMDA masterdata to {path}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -507,8 +507,8 @@ async def patch_masterdata(
 async def patch_model(project_service: ProjectServiceDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
     try:
-        _, message = project_service.update_model(model)
-        return Message(message=message)
+        _, path = project_service.update_model(model)
+        return Message(message=f"Saved model data to {path}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -535,8 +535,8 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
 async def patch_access(project_service: ProjectServiceDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
     try:
-        _, message = project_service.update_access(access)
-        return Message(message=message)
+        _, path = project_service.update_access(access)
+        return Message(message=f"Saved access data to {path}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
