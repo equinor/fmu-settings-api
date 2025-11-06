@@ -13,6 +13,11 @@ from pydantic import (
     computed_field,
 )
 
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0"
+
 
 def generate_auth_token() -> str:
     """Generates a secure auth token."""
@@ -68,6 +73,18 @@ class APISettings(BaseModel):
 
     FRONTEND_HOST: HttpUrl = Field(default=HttpUrl("http://localhost:8000"))
     BACKEND_CORS_ORIGINS: Annotated[list[HttpUrl], BeforeValidator(parse_cors)] = []
+
+    LOG_LEVEL: str = Field(default="INFO")
+    LOG_FORMAT: str = Field(default="console")  # "console" or "json"
+    ENVIRONMENT: str = Field(default="development")  # "development" or "production"
+    APP_NAME: str = Field(default="fmu-settings-api", frozen=True)
+    APP_VERSION: str = Field(default=__version__, frozen=True)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_production(self) -> bool:
+        """Returns True if the environment is production."""
+        return self.ENVIRONMENT.lower() == "production"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
