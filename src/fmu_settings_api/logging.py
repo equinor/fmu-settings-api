@@ -26,8 +26,8 @@ def attach_fmu_settings_handler(
         try:
             log_entry_data = {
                 "level": event_dict.get("level", "info").upper(),
-                "event": event_dict.get("event", ""),
-                "timestamp": event_dict.get("timestamp", ""),
+                "event": event_dict.get("event", "unknown"),
+                "timestamp": event_dict.get("timestamp"),
                 **{
                     k: v
                     for k, v in event_dict.items()
@@ -48,12 +48,10 @@ def setup_logging(
     fmu_log_manager: Any,
 ) -> None:
     """Configure structured logging with structlog."""
-    log_level = getattr(logging, settings.LOG_LEVEL.upper())
-
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
-        level=log_level,
+        level=settings.log_level,
     )
 
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -69,7 +67,7 @@ def setup_logging(
         attach_fmu_settings_handler(fmu_log_manager),
     ]
 
-    if settings.LOG_FORMAT.lower() == "json" or settings.is_production:
+    if settings.log_format == "json" or settings.is_production:
         processors += [
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),

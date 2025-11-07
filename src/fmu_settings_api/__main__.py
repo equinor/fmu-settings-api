@@ -41,9 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "starting_application",
         app_name=settings.APP_NAME,
         app_version=settings.APP_VERSION,
-        log_level=settings.LOG_LEVEL,
-        log_format=settings.LOG_FORMAT,
-        environment=settings.ENVIRONMENT,
+        log_level=settings.log_level,
+        log_format=settings.log_format,
+        environment=settings.environment,
     )
 
     yield
@@ -102,15 +102,22 @@ def run_server(  # noqa: PLR0913
         user_fmu_dir = UserFMUDirectory(
             lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
         )
+        fmu_dir_status = "loaded"
     except FileNotFoundError:
         user_fmu_dir = init_user_fmu_directory(
             lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
         )
+        fmu_dir_status = "initialized"
 
     log_manager = LogManager(user_fmu_dir, Log)
 
-    settings.LOG_LEVEL = log_level.upper()
+    settings.log_level = log_level.upper()  # type: ignore[assignment]
     setup_logging(settings, fmu_log_manager=log_manager)
+
+    if fmu_dir_status == "initialized":
+        logger.info("fmu_directory_initialized", path=str(user_fmu_dir.path))
+    else:
+        logger.debug("fmu_directory_loaded", path=str(user_fmu_dir.path))
 
     if token:
         settings.TOKEN = token

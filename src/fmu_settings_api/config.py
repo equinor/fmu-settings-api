@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from typing import Annotated, Any, Final, Self
+from typing import TYPE_CHECKING, Annotated, Any, Final, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -13,10 +13,10 @@ from pydantic import (
     computed_field,
 )
 
-try:
+if TYPE_CHECKING:
     from ._version import __version__
-except ImportError:
-    __version__ = "0.0.0"
+else:
+    from fmu_settings_api import __version__
 
 
 def generate_auth_token() -> str:
@@ -62,29 +62,29 @@ class APISettings(BaseModel):
     """Settings used for the API."""
 
     API_V1_PREFIX: str = Field(default="/api/v1", frozen=True)
+    SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
+    SESSION_EXPIRE_SECONDS: int = Field(default=1200, frozen=True)  # 20 minutes
+    APP_NAME: str = Field(default="fmu-settings-api", frozen=True)
+    APP_VERSION: str = Field(default=__version__, frozen=True)
     TOKEN: str = Field(
         default_factory=generate_auth_token,
         pattern=r"^[a-fA-F0-9]{64}$",
     )
-
-    SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
-    # 20 minute session length
-    SESSION_EXPIRE_SECONDS: int = Field(default=1200, frozen=True)
-
     FRONTEND_HOST: HttpUrl = Field(default=HttpUrl("http://localhost:8000"))
     BACKEND_CORS_ORIGINS: Annotated[list[HttpUrl], BeforeValidator(parse_cors)] = []
 
-    LOG_LEVEL: str = Field(default="INFO")
-    LOG_FORMAT: str = Field(default="console")  # "console" or "json"
-    ENVIRONMENT: str = Field(default="development")  # "development" or "production"
-    APP_NAME: str = Field(default="fmu-settings-api", frozen=True)
-    APP_VERSION: str = Field(default=__version__, frozen=True)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Logging level",
+    )
+    log_format: Literal["console", "json"] = Field(default="console")
+    environment: Literal["development", "production"] = Field(default="development")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_production(self) -> bool:
         """Returns True if the environment is production."""
-        return self.ENVIRONMENT.lower() == "production"
+        return self.environment == "production"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
