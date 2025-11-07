@@ -12,13 +12,12 @@ from fmu.settings._resources.lock_manager import LockError
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import (
     AuthTokenDep,
-    SessionDep,
-    SessionNoExtendDep,
+    SessionServiceDep,
+    SessionServiceNoExtendDep,
     UserFMUDirDep,
 )
 from fmu_settings_api.models import AccessToken, Message, SessionResponse
 from fmu_settings_api.session import (
-    add_access_token_to_session,
     add_fmu_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
@@ -125,11 +124,13 @@ async def create_session(
         ),
     },
 )
-async def patch_access_token(session: SessionDep, access_token: AccessToken) -> Message:
+async def patch_access_token(
+    session_service: SessionServiceDep, access_token: AccessToken
+) -> Message:
     """Patches a known SSO access token into the session."""
     try:
-        await add_access_token_to_session(session.id, access_token)
-        return Message(message=f"Set session access token for {access_token.id}")
+        access_token_id = await session_service.add_access_token(access_token)
+        return Message(message=f"Set session access token for {access_token_id}")
     except ValueError as e:
         raise HTTPException(
             status_code=400,
@@ -150,14 +151,11 @@ async def patch_access_token(session: SessionDep, access_token: AccessToken) -> 
     ),
     responses=GetSessionResponses,
 )
-async def read_session(session: SessionNoExtendDep) -> SessionResponse:
+async def read_session(
+    session_service: SessionServiceNoExtendDep,
+) -> SessionResponse:
     """Returns the current session in a serialisable format."""
     try:
-        return SessionResponse(
-            id=session.id,
-            created_at=session.created_at,
-            expires_at=session.expires_at,
-            last_accessed=session.last_accessed,
-        )
+        return session_service.get_session_response()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

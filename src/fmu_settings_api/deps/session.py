@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Cookie, Depends, HTTPException
 
 from fmu_settings_api.config import HttpHeader
+from fmu_settings_api.services.session import SessionService
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -157,3 +158,45 @@ async def get_project_smda_session(
 
 
 ProjectSmdaSessionDep = Annotated[ProjectSession, Depends(get_project_smda_session)]
+
+
+async def get_session_service(
+    session: SessionDep,
+) -> SessionService:
+    """Returns a SessionService instance for the session."""
+    return SessionService(session)
+
+
+async def get_session_service_no_extend(
+    session: SessionNoExtendDep,
+) -> SessionService:
+    """Returns a SessionService instance without extending session expiration."""
+    return SessionService(session)
+
+
+SessionServiceDep = Annotated[SessionService, Depends(get_session_service)]
+SessionServiceNoExtendDep = Annotated[
+    SessionService, Depends(get_session_service_no_extend)
+]
+
+
+async def get_project_session_service(
+    session: ProjectSessionDep,
+) -> SessionService:
+    """Returns a SessionService instance for a project session."""
+    return SessionService(session)
+
+
+async def get_project_session_service_no_extend(
+    session: ProjectSessionNoExtendDep,
+) -> SessionService:
+    """Returns a SessionService for a project session without extending expiration."""
+    return SessionService(session)
+
+
+ProjectSessionServiceDep = Annotated[
+    SessionService, Depends(get_project_session_service)
+]
+ProjectSessionServiceNoExtendDep = Annotated[
+    SessionService, Depends(get_project_session_service_no_extend)
+]

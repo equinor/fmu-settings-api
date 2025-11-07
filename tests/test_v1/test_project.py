@@ -120,7 +120,7 @@ async def test_get_project_session_not_found_error(
     init_fmu_directory(session_tmp_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        "fmu_settings_api.services.session.add_fmu_project_to_session",
         side_effect=SessionNotFoundError("Session not found"),
     ):
         response = client_with_session.get(ROUTE)
@@ -134,7 +134,7 @@ async def test_get_project_permission_error(
     """Test 403 returns when PermissionError occurs in get_project."""
     # Mock find_nearest_fmu_directory to raise PermissionError
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         side_effect=PermissionError("Permission denied"),
     ):
         response = client_with_session.get(ROUTE)
@@ -147,7 +147,7 @@ async def test_get_project_raises_other_exceptions(
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         side_effect=Exception("foo"),
     ):
         response = client_with_session.get(ROUTE)
@@ -379,7 +379,7 @@ async def test_post_fmu_directory_session_not_found_error(
     init_fmu_directory(session_tmp_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        "fmu_settings_api.services.session.add_fmu_project_to_session",
         side_effect=SessionNotFoundError("Session not found"),
     ):
         response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
@@ -392,7 +392,7 @@ async def test_post_fmu_directory_raises_other_exceptions(
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
     with patch(
-        "fmu_settings_api.v1.routes.project.get_fmu_directory",
+        "fmu_settings_api.services.session.get_fmu_directory",
         side_effect=Exception("foo"),
     ):
         path = "/dev/null"
@@ -573,7 +573,7 @@ async def test_delete_project_session_not_found_error(
 ) -> None:
     """Test 401 when SessionNotFoundError is raised in delete_project_session."""
     with patch(
-        "fmu_settings_api.v1.routes.project.remove_fmu_project_from_session",
+        "fmu_settings_api.services.session.remove_fmu_project_from_session",
         side_effect=SessionNotFoundError("Session not found"),
     ):
         response = client_with_project_session.delete(ROUTE)
@@ -586,7 +586,7 @@ async def test_delete_project_session_other_exception(
 ) -> None:
     """Test 500 when other exceptions are raised in delete_project_session."""
     with patch(
-        "fmu_settings_api.v1.routes.project.remove_fmu_project_from_session",
+        "fmu_settings_api.services.session.remove_fmu_project_from_session",
         side_effect=Exception("Unexpected error"),
     ):
         response = client_with_project_session.delete(ROUTE)
@@ -655,7 +655,7 @@ async def test_post_init_fmu_directory_session_not_found_error(
 ) -> None:
     """Test 401 returns when SessionNotFoundError is raised in init_project."""
     with patch(
-        "fmu_settings_api.v1.routes.project.add_fmu_project_to_session",
+        "fmu_settings_api.services.session.add_fmu_project_to_session",
         side_effect=SessionNotFoundError("Session not found"),
     ):
         response = client_with_session.post(
@@ -670,7 +670,7 @@ async def test_post_init_fmu_directory_raises_other_exceptions(
 ) -> None:
     """Test 500 returns if other exceptions are raised."""
     with patch(
-        "fmu_settings_api.v1.routes.project.init_fmu_directory",
+        "fmu_settings_api.services.session.init_fmu_directory",
         side_effect=Exception("foo"),
     ):
         path = "/dev/null"
@@ -1440,7 +1440,7 @@ async def test_get_lock_status(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1509,7 +1509,7 @@ async def test_get_lock_status_with_lock_status_error(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1546,7 +1546,7 @@ async def test_get_lock_status_with_lock_file_read_error(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1586,7 +1586,7 @@ async def test_get_lock_status_with_corrupted_lock_file(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1621,7 +1621,7 @@ async def test_get_lock_status_includes_session_error_fields(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1649,7 +1649,7 @@ async def test_get_lock_status_with_lock_file_permission_error(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1684,7 +1684,7 @@ async def test_get_lock_status_with_lock_file_processing_error(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1720,7 +1720,7 @@ async def test_get_lock_status_with_lock_file_not_exists(
     monkeypatch.chdir(ert_model_path)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.find_nearest_fmu_directory",
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
         return_value=existing_fmu_dir,
     ):
         response = client_with_session.get(ROUTE)
@@ -1799,7 +1799,7 @@ async def test_post_lock_acquire_success(
     mock_try_acquire = AsyncMock(return_value=session)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        "fmu_settings_api.services.session.try_acquire_project_lock",
         mock_try_acquire,
     ):
         response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
@@ -1828,7 +1828,7 @@ async def test_post_lock_acquire_conflict_returns_read_only(
     mock_try_acquire = AsyncMock(return_value=session)
 
     with patch(
-        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        "fmu_settings_api.services.session.try_acquire_project_lock",
         mock_try_acquire,
     ):
         response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
@@ -1837,7 +1837,7 @@ async def test_post_lock_acquire_conflict_returns_read_only(
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "message": (
-            "Project remains read-only because the lock could not be acquired."
+            "Project remains read-only because the lock could not be acquired. "
             "Check lock status for details."
         )
     }
@@ -1850,7 +1850,7 @@ async def test_post_lock_acquire_session_not_found(
     mock_try_acquire = AsyncMock(side_effect=SessionNotFoundError("Session not found"))
 
     with patch(
-        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        "fmu_settings_api.services.session.try_acquire_project_lock",
         mock_try_acquire,
     ):
         response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
@@ -1867,7 +1867,7 @@ async def test_post_lock_acquire_unexpected_error(
     mock_try_acquire = AsyncMock(side_effect=RuntimeError("boom"))
 
     with patch(
-        "fmu_settings_api.v1.routes.project.try_acquire_project_lock",
+        "fmu_settings_api.services.session.try_acquire_project_lock",
         mock_try_acquire,
     ):
         response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
