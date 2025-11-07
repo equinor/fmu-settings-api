@@ -26,6 +26,8 @@ from .v1.main import api_v1_router
 class LogEntry(BaseModel):
     """Log entry model for fmu-settings LogManager."""
 
+    model_config = {"extra": "allow"}
+
     level: str = "INFO"
     event: str = "unknown"
     timestamp: str | None = None
