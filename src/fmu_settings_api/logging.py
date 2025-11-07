@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 def attach_fmu_settings_handler(
     log_manager: Any,
+    entry_class: type[Any],
 ) -> Callable[..., Any]:
     """Create a processor that forwards logs to fmu-settings LogManager."""
 
@@ -34,7 +35,8 @@ def attach_fmu_settings_handler(
                     if k not in ["level", "event", "timestamp"]
                 },
             }
-            log_manager.add_log_entry(log_entry_data)
+            log_entry = entry_class.model_validate(log_entry_data)
+            log_manager.add_log_entry(log_entry)
         except Exception:
             pass
 
@@ -46,6 +48,7 @@ def attach_fmu_settings_handler(
 def setup_logging(
     settings: APISettings,
     fmu_log_manager: Any,
+    log_entry_class: type[Any],
 ) -> None:
     """Configure structured logging with structlog."""
     logging.basicConfig(
@@ -64,7 +67,7 @@ def setup_logging(
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
-        attach_fmu_settings_handler(fmu_log_manager),
+        attach_fmu_settings_handler(fmu_log_manager, log_entry_class),
     ]
 
     if settings.log_format == "json" or settings.is_production:

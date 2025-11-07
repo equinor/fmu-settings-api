@@ -12,6 +12,7 @@ from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 from fmu.settings._resources.log_manager import LogManager
 from fmu.settings.models.log import Log
+from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import HttpHeader, settings
@@ -20,6 +21,14 @@ from .middleware.logging import LoggingMiddleware
 from .models import Ok
 from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
+
+
+class LogEntry(BaseModel):
+    """Log entry model for fmu-settings LogManager."""
+
+    level: str = "INFO"
+    event: str = "unknown"
+    timestamp: str | None = None
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -109,10 +118,10 @@ def run_server(  # noqa: PLR0913
         )
         fmu_dir_status = "initialized"
 
-    log_manager = LogManager(user_fmu_dir, Log)
+    log_manager = LogManager(user_fmu_dir, Log[LogEntry])
 
     settings.log_level = log_level.upper()  # type: ignore[assignment]
-    setup_logging(settings, fmu_log_manager=log_manager)
+    setup_logging(settings, fmu_log_manager=log_manager, log_entry_class=LogEntry)
 
     if fmu_dir_status == "initialized":
         logger.info("fmu_directory_initialized", path=str(user_fmu_dir.path))
