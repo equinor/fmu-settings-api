@@ -566,6 +566,207 @@ async def test_post_masterdata_multiple_fields(
     )
 
 
+async def test_post_masterdata_multiple_fields_different_crs(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests that field coordinate systems are placed at the top of the list."""
+    field_uuid_1 = uuid4()
+    field_uuid_2 = uuid4()
+    crs_uuid_1 = uuid4()
+    crs_uuid_2 = uuid4()
+    crs_uuid_3 = uuid4()
+
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 2,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": field_uuid_1,
+                },
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "VISERION",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32638",
+                    "uuid": field_uuid_2,
+                },
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32639",  # Not used by fields
+                uuid=crs_uuid_3,
+            ),
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",  # DROGON's CRS
+                uuid=crs_uuid_1,
+            ),
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32638",  # VISERION's CRS
+                uuid=crs_uuid_2,
+            ),
+        ]
+        mock_get_countries.return_value = [
+            CountryItem(identifier="Norway", uuid=uuid4())
+        ]
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[
+                {"identifier": "DROGON"},
+                {"identifier": "VISERION"},
+            ],
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+
+    assert (
+        response_data["field_coordinate_system"]["identifier"]
+        == "ST_WGS84_UTM37N_P32637"
+    )
+    assert str(response_data["field_coordinate_system"]["uuid"]) == str(crs_uuid_1)
+
+    coordinate_systems = response_data["coordinate_systems"]
+    assert len(coordinate_systems) == 3  # noqa: PLR2004
+
+    assert coordinate_systems[0]["identifier"] == "ST_WGS84_UTM37N_P32637"
+    assert str(coordinate_systems[0]["uuid"]) == str(crs_uuid_1)
+
+    assert coordinate_systems[1]["identifier"] == "ST_WGS84_UTM37N_P32638"
+    assert str(coordinate_systems[1]["uuid"]) == str(crs_uuid_2)
+
+    assert coordinate_systems[2]["identifier"] == "ST_WGS84_UTM37N_P32639"
+    assert str(coordinate_systems[2]["uuid"]) == str(crs_uuid_3)
+
+
+async def test_post_masterdata_duplicate_field_crs(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests that duplicate field coordinate systems appear only once at top."""
+    field_uuid_1 = uuid4()
+    field_uuid_2 = uuid4()
+    crs_uuid_1 = uuid4()
+    crs_uuid_2 = uuid4()
+
+    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response.status_code = 200
+    mock_field_response.json.return_value = {
+        "data": {
+            "hits": 2,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": field_uuid_1,
+                },
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "VISERION",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",  # Same CRS
+                    "uuid": field_uuid_2,
+                },
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",
+                uuid=crs_uuid_1,
+            ),
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32639",
+                uuid=crs_uuid_2,
+            ),
+        ]
+        mock_get_countries.return_value = [
+            CountryItem(identifier="Norway", uuid=uuid4())
+        ]
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[
+                {"identifier": "DROGON"},
+                {"identifier": "VISERION"},
+            ],
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+
+    coordinate_systems = response_data["coordinate_systems"]
+    assert len(coordinate_systems) == 2  # noqa: PLR2004
+
+    assert coordinate_systems[0]["identifier"] == "ST_WGS84_UTM37N_P32637"
+
+    assert coordinate_systems[1]["identifier"] == "ST_WGS84_UTM37N_P32639"
+
+    field_crs_count = sum(
+        1 for crs in coordinate_systems if crs["identifier"] == "ST_WGS84_UTM37N_P32637"
+    )
+    assert field_crs_count == 1
+
+
 async def test_post_masterdata_empty_field_list(
     client_with_smda_session: TestClient,
     session_tmp_path: Path,

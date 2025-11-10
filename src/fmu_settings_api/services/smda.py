@@ -82,21 +82,41 @@ class SmdaService:
         strat_column_items = strat_column_task.result()
         coordinate_systems = coordinate_systems_task.result()
 
-        # We only have one (a primary) coordinate system per field.
-        # Just take the first one of the first result as the pre-selected one.
-        field_coordinate_system: CoordinateSystem | None = None
-        for crs in coordinate_systems:
-            if crs.identifier == field_results[0]["projected_coordinate_system"]:
-                field_coordinate_system = crs
-                break
+        # Collect all field-specific coordinate systems in order
+        # Track seen CRS identifiers to avoid duplicates
+        field_crs_list: list[CoordinateSystem] = []
+        seen_field_crs_ids: set[str] = set()
 
-        if field_coordinate_system is None:
-            crs_id = field_results[0]["projected_coordinate_system"]
-            field_id = field_results[0]["identifier"]
-            raise ValueError(
-                f"Coordinate system '{crs_id}' referenced by field "
-                f"'{field_id}' not found in SMDA."
-            )
+        for field in field_results:
+            crs_id = field["projected_coordinate_system"]
+
+            if crs_id in seen_field_crs_ids:
+                continue
+
+            field_crs = None
+            for crs in coordinate_systems:
+                if crs.identifier == crs_id:
+                    field_crs = crs
+                    break
+
+            if field_crs is None:
+                field_id = field["identifier"]
+                raise ValueError(
+                    f"Coordinate system '{crs_id}' referenced by field "
+                    f"'{field_id}' not found in SMDA."
+                )
+
+            field_crs_list.append(field_crs)
+            seen_field_crs_ids.add(crs_id)
+
+        field_coordinate_system = field_crs_list[0]
+
+        remaining_crs = [
+            crs
+            for crs in coordinate_systems
+            if crs.identifier not in seen_field_crs_ids
+        ]
+        field_crs_list.extend(remaining_crs)
 
         return SmdaMasterdataResult(
             field=field_items,
@@ -104,7 +124,7 @@ class SmdaService:
             discovery=discovery_items,
             stratigraphic_columns=strat_column_items,
             field_coordinate_system=field_coordinate_system,
-            coordinate_systems=coordinate_systems,
+            coordinate_systems=field_crs_list,
         )
 
     async def _get_countries(
