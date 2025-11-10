@@ -86,6 +86,7 @@ class SmdaService:
         # Track seen CRS identifiers to avoid duplicates
         field_crs_list: list[CoordinateSystem] = []
         seen_field_crs_ids: set[str] = set()
+        crs_dict = {crs.identifier: crs for crs in coordinate_systems}
 
         for field in field_results:
             crs_id = field["projected_coordinate_system"]
@@ -93,12 +94,7 @@ class SmdaService:
             if crs_id in seen_field_crs_ids:
                 continue
 
-            field_crs = None
-            for crs in coordinate_systems:
-                if crs.identifier == crs_id:
-                    field_crs = crs
-                    break
-
+            field_crs = crs_dict.get(crs_id)
             if field_crs is None:
                 field_id = field["identifier"]
                 raise ValueError(
