@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
+from pydantic import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -25,10 +27,11 @@ def attach_fmu_settings_handler(
     ) -> dict[str, Any]:
         """Forward structured log to fmu-settings LogManager."""
         try:
+            now_iso = datetime.now(UTC).isoformat()
             log_entry_data = {
                 "level": event_dict.get("level", "info").upper(),
                 "event": event_dict.get("event", "unknown"),
-                "timestamp": event_dict.get("timestamp"),
+                "timestamp": event_dict.get("timestamp") or now_iso,
                 **{
                     k: v
                     for k, v in event_dict.items()
@@ -37,8 +40,10 @@ def attach_fmu_settings_handler(
             }
             log_entry = entry_class.model_validate(log_entry_data)
             log_manager.add_log_entry(log_entry)
-        except Exception:
-            pass
+        except ValidationError as e:
+            print(f"Failed to add log entry: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected logging error: {e}", file=sys.stderr)
 
         return event_dict
 

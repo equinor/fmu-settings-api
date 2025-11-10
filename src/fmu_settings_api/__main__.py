@@ -12,7 +12,7 @@ from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 from fmu.settings._resources.log_manager import LogManager
 from fmu.settings.models.log import Log
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import HttpHeader, settings
@@ -26,11 +26,11 @@ from .v1.main import api_v1_router
 class LogEntry(BaseModel):
     """Log entry model for fmu-settings LogManager."""
 
-    model_config = {"extra": "allow"}
+    model_config = ConfigDict(extra="allow")
 
     level: str = "INFO"
     event: str = "unknown"
-    timestamp: str | None = None
+    timestamp: str
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
