@@ -8,9 +8,15 @@ from contextlib import asynccontextmanager, suppress
 import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings._init import init_user_fmu_directory
+from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
+from fmu.settings.models.event_info import EventInfo
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import HttpHeader, settings
+from .logging import get_logger, setup_logging
+from .middleware.logging import LoggingMiddleware
 from .models import Ok
 from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
@@ -21,6 +27,9 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
 
 
+logger = get_logger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """App lifespan for startup/shutdown housekeeping.
@@ -28,7 +37,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     On shutdown, releases any acquired project locks so other processes
     are not blocked by stale locks after a graceful stop.
     """
+    logger.info(
+        "starting_application",
+        app_name=settings.APP_NAME,
+        app_version=settings.APP_VERSION,
+        log_level=settings.log_level,
+        log_format=settings.log_format,
+        environment=settings.environment,
+    )
+
     yield
+
+    logger.info("stopping_application")
 
     for session in tuple(session_manager.storage.values()):
         if not isinstance(session, ProjectSession):
@@ -46,6 +66,7 @@ app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id,
     lifespan=lifespan,
 )
+app.add_middleware(LoggingMiddleware)
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
 
@@ -76,6 +97,27 @@ def run_server(  # noqa: PLR0913
 ) -> None:
     """Starts the API server."""
     log_level = log_level.lower()
+
+    try:
+        user_fmu_dir = UserFMUDirectory(
+            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+        )
+        fmu_dir_status = "loaded"
+    except FileNotFoundError:
+        user_fmu_dir = init_user_fmu_directory(
+            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+        )
+        fmu_dir_status = "initialized"
+
+    log_manager = UserSessionLogManager(user_fmu_dir)
+
+    settings.log_level = log_level.upper()  # type: ignore[assignment]
+    setup_logging(settings, fmu_log_manager=log_manager, log_entry_class=EventInfo)
+
+    if fmu_dir_status == "initialized":
+        logger.info("fmu_directory_initialized", path=str(user_fmu_dir.path))
+    else:
+        logger.debug("fmu_directory_loaded", path=str(user_fmu_dir.path))
 
     if token:
         settings.TOKEN = token

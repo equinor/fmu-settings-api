@@ -86,3 +86,74 @@ def test_update_frontend_host_invalid_protocol() -> None:
 async def test_get_settings() -> None:
     """Tests that get_settings returns settings."""
     assert settings == await get_settings()
+
+
+def test_log_level_default() -> None:
+    """Test log_level defaults to INFO."""
+    settings = APISettings()
+    assert settings.log_level == "INFO"
+
+
+def test_log_format_default() -> None:
+    """Test log_format defaults to console."""
+    settings = APISettings()
+    assert settings.log_format == "console"
+
+
+def test_environment_default() -> None:
+    """Test environment defaults to development."""
+    settings = APISettings()
+    assert settings.environment == "development"
+
+
+def test_is_production_property_true() -> None:
+    """Test is_production returns True for production environment."""
+    settings = APISettings(environment="production")
+    assert settings.is_production is True
+
+
+def test_is_production_property_false() -> None:
+    """Test is_production returns False for non-production environments."""
+    settings = APISettings(environment="development")
+    assert settings.is_production is False
+
+
+def test_app_name_constant() -> None:
+    """Test APP_NAME is set correctly."""
+    settings = APISettings()
+    assert settings.APP_NAME == "fmu-settings-api"
+
+
+def test_app_version_constant() -> None:
+    """Test APP_VERSION is set from package version."""
+    settings = APISettings()
+    assert settings.APP_VERSION is not None
+    assert isinstance(settings.APP_VERSION, str)
+
+
+def test_session_expire_seconds() -> None:
+    """Test SESSION_EXPIRE_SECONDS is set correctly."""
+    settings = APISettings()
+    expected_seconds = 1200  # 20 minutes
+    assert expected_seconds == settings.SESSION_EXPIRE_SECONDS
+
+
+def test_log_level_accepts_valid_values() -> None:
+    """Test log_level accepts valid logging levels."""
+    for level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+        settings = APISettings(log_level=level)  # type: ignore[arg-type]
+        assert settings.log_level == level
+
+
+def test_log_format_accepts_valid_values() -> None:
+    """Test log_format accepts valid format types."""
+    for fmt in ["console", "json"]:
+        settings = APISettings(log_format=fmt)  # type: ignore[arg-type]
+        assert settings.log_format == fmt
+
+
+def test_environment_accepts_valid_values() -> None:
+    """Test environment accepts valid environment types."""
+    for env in ["development", "production"]:
+        settings = APISettings(environment=env)  # type: ignore[arg-type]
+        assert settings.environment == env
