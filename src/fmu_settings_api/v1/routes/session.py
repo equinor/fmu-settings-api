@@ -18,6 +18,7 @@ from fmu_settings_api.deps import (
 )
 from fmu_settings_api.models import AccessToken, Message, SessionResponse
 from fmu_settings_api.session import (
+    ProjectSession,
     add_fmu_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
@@ -61,8 +62,12 @@ async def create_session(
     fmu_settings_session: Annotated[str | None, Cookie()] = None,
 ) -> SessionResponse:
     """Establishes a user session."""
+    old_session = None
     if fmu_settings_session:
-        await destroy_fmu_session(fmu_settings_session)
+        with contextlib.suppress(Exception):
+            old_session = await session_manager.get_session(
+                fmu_settings_session, extend_expiration=False
+            )
 
     try:
         session_id = await create_fmu_session(user_fmu_dir)
@@ -74,12 +79,23 @@ async def create_session(
             samesite="lax",
         )
 
-        with contextlib.suppress(FileNotFoundError, LockError):
-            path = Path.cwd()
-            project_fmu_dir = find_nearest_fmu_directory(
-                path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-            )
-            await add_fmu_project_to_session(session_id, project_fmu_dir)
+        if old_session and fmu_settings_session:
+            new_session = await session_manager.get_session(session_id)
+            new_session.access_tokens = old_session.access_tokens
+
+            if isinstance(old_session, ProjectSession):
+                await add_fmu_project_to_session(
+                    session_id, old_session.project_fmu_directory
+                )
+
+            await destroy_fmu_session(fmu_settings_session)
+        else:
+            with contextlib.suppress(FileNotFoundError, LockError):
+                path = Path.cwd()
+                project_fmu_dir = find_nearest_fmu_directory(
+                    path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
+                )
+                await add_fmu_project_to_session(session_id, project_fmu_dir)
 
         session = await session_manager.get_session(session_id)
         return SessionResponse(

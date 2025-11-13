@@ -464,3 +464,81 @@ def test_post_session_handles_general_exception(
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert "Session creation failed" in response.json()["detail"]
+
+
+async def test_new_session_preserves_state_from_old_session(
+    tmp_path_mocked_home: Path,
+    mock_token: str,
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Tests that creating a new session.
+
+    Preserves access tokens and project from the old session.
+    """
+    client = TestClient(app)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+    monkeypatch.chdir(project_path)
+
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+    assert response.status_code == status.HTTP_200_OK
+
+    session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    client.patch(
+        f"{ROUTE}/access_token",
+        json={"id": "smda_api", "key": "secret_token"},
+    )
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    assert session.access_tokens.smda_api == SecretStr("secret_token")
+    assert session.project_fmu_directory.path == project_fmu_dir.path
+
+    different_path = tmp_path_mocked_home / "different_project"
+    different_path.mkdir()
+    monkeypatch.chdir(different_path)
+
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+    assert response.status_code == status.HTTP_200_OK
+
+    new_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert new_session_id is not None
+    assert new_session_id != session_id
+
+    new_session = await session_manager.get_session(new_session_id)
+    assert isinstance(new_session, ProjectSession)
+    assert new_session.access_tokens.smda_api == SecretStr("secret_token")
+    assert new_session.project_fmu_directory.path == project_fmu_dir.path
+
+    with pytest.raises(SessionNotFoundError):
+        await session_manager.get_session(session_id)
+
+
+async def test_new_session_without_old_session_finds_nearest_project(
+    tmp_path_mocked_home: Path,
+    mock_token: str,
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Tests that when there's no old session, new session finds nearest project."""
+    client = TestClient(app)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+    monkeypatch.chdir(project_path)
+
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+    assert response.status_code == status.HTTP_200_OK
+
+    session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    assert session.project_fmu_directory.path == project_fmu_dir.path
