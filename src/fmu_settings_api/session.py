@@ -161,15 +161,6 @@ class SessionManager:
             expiration_duration = timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
             session.expires_at = now + expiration_duration
 
-        if isinstance(session, ProjectSession):
-            lock = session.project_fmu_directory._lock
-            try:
-                if lock.is_acquired():
-                    lock.refresh()
-                session.lock_errors.refresh = None
-            except Exception as e:
-                session.lock_errors.refresh = str(e)
-
         await self._update_session(session_id, session)
         return session
 
@@ -236,7 +227,14 @@ async def add_fmu_project_to_session(
 
 
 async def try_acquire_project_lock(session_id: str) -> ProjectSession:
-    """Attempts to acquire or refresh the project lock for a session."""
+    """Attempts to acquire the project lock for a session.
+
+    Returns:
+        The ProjectSession with updated lock error state
+
+    Raises:
+        SessionNotFoundError: If no valid session or project is found
+    """
     session = await session_manager.get_session(session_id)
 
     if not isinstance(session, ProjectSession):
@@ -252,6 +250,34 @@ async def try_acquire_project_lock(session_id: str) -> ProjectSession:
         session.lock_errors.acquire = str(e)
 
     await session_manager._store_session(session_id, session)
+    return session
+
+
+async def refresh_project_lock(session_id: str) -> ProjectSession:
+    """Refreshes the project lock if it is currently held by this session.
+
+    This should be called on write operations to extend the lock timeout.
+
+    Returns:
+        The ProjectSession with updated lock error state
+
+    Raises:
+        SessionNotFoundError: If no valid session or project is found
+    """
+    session = await session_manager.get_session(session_id, extend_expiration=False)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    lock = session.project_fmu_directory._lock
+    try:
+        if lock.is_acquired():
+            lock.refresh()
+        session.lock_errors.refresh = None
+    except Exception as e:
+        session.lock_errors.refresh = str(e)
+
+    await session_manager._update_session(session_id, session)
     return session
 
 

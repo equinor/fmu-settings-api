@@ -14,6 +14,7 @@ from fmu_settings_api.deps import (
     ProjectServiceDep,
     ProjectSessionServiceDep,
     ProjectSessionServiceNoExtendDep,
+    RefreshLockDep,
     SessionServiceDep,
     WritePermissionDep,
 )
@@ -314,7 +315,7 @@ async def init_project(
 @router.post(
     "/global_config",
     response_model=Message,
-    dependencies=[WritePermissionDep],
+    dependencies=[WritePermissionDep, RefreshLockDep],
     summary="Loads the global config into the project masterdata.",
     description=dedent(
         """
@@ -431,6 +432,48 @@ async def post_lock_acquire(session_service: ProjectSessionServiceDep) -> Messag
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post(
+    "/lock_refresh",
+    response_model=Message,
+    dependencies=[RefreshLockDep],
+    summary="Refreshes the project lock timeout",
+    description=dedent(
+        """
+        Explicitly refreshes the project lock timeout if the current session
+        holds the lock. This should be called when the user actively indicates they
+        want to continue editing (e.g., pressing an 'Edit' button in the GUI).
+
+        Returns a message indicating whether the lock was successfully refreshed.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+    },
+)
+async def post_lock_refresh(
+    session_service: ProjectSessionServiceNoExtendDep,
+) -> Message:
+    """Refreshes the project lock and returns a status message."""
+    try:
+        lock_status = session_service.get_lock_status()
+        if lock_status.is_lock_acquired and lock_status.last_lock_refresh_error is None:
+            message = "Project lock refreshed successfully."
+        elif lock_status.last_lock_refresh_error:
+            message = (
+                "Lock refresh attempted but an error occurred. "
+                "Check lock status for details."
+            )
+        else:
+            message = (
+                "Lock was not refreshed because the lock is not currently acquired."
+            )
+        return Message(message=message)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get(
     "/lock_status",
     response_model=LockStatus,
@@ -458,7 +501,7 @@ async def get_lock_status(
 @router.patch(
     "/masterdata",
     response_model=Message,
-    dependencies=[WritePermissionDep],
+    dependencies=[WritePermissionDep, RefreshLockDep],
     summary="Saves SMDA masterdata to the project .fmu directory",
     description=dedent(
         """
@@ -488,7 +531,7 @@ async def patch_masterdata(
 @router.patch(
     "/model",
     response_model=Message,
-    dependencies=[WritePermissionDep],
+    dependencies=[WritePermissionDep, RefreshLockDep],
     summary="Saves model data to the project .fmu directory",
     description=dedent(
         """
@@ -516,7 +559,7 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
 @router.patch(
     "/access",
     response_model=Message,
-    dependencies=[WritePermissionDep],
+    dependencies=[WritePermissionDep, RefreshLockDep],
     summary="Saves access data to the project .fmu directory",
     description=dedent(
         """

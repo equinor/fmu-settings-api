@@ -92,9 +92,7 @@ async def create_session(
         else:
             with contextlib.suppress(FileNotFoundError, LockError):
                 path = Path.cwd()
-                project_fmu_dir = find_nearest_fmu_directory(
-                    path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-                )
+                project_fmu_dir = find_nearest_fmu_directory(path)
                 await add_fmu_project_to_session(session_id, project_fmu_dir)
 
         session = await session_manager.get_session(session_id)

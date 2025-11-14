@@ -6,8 +6,6 @@ from fastapi import Depends, HTTPException
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 
-from fmu_settings_api.config import settings
-
 
 async def ensure_user_fmu_directory() -> UserFMUDirectory:
     """Ensures the user's FMU Directory exists.
@@ -16,12 +14,10 @@ async def ensure_user_fmu_directory() -> UserFMUDirectory:
         The user's UserFMUDirectory
     """
     try:
-        return UserFMUDirectory(lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS)
+        return UserFMUDirectory()
     except FileNotFoundError:
         try:
-            return init_user_fmu_directory(
-                lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-            )
+            return init_user_fmu_directory()
         except PermissionError as e:
             raise HTTPException(
                 status_code=403,

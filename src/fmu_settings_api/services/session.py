@@ -10,7 +10,6 @@ from fmu.settings import (
 )
 from fmu.settings._init import init_fmu_directory
 
-from fmu_settings_api.config import settings
 from fmu_settings_api.models import AccessToken, SessionResponse
 from fmu_settings_api.models.project import LockStatus
 from fmu_settings_api.services.user import remove_from_recent_projects
@@ -51,9 +50,7 @@ class SessionService:
             return self._session.project_fmu_directory
 
         path = Path.cwd()
-        fmu_dir = find_nearest_fmu_directory(
-            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
+        fmu_dir = find_nearest_fmu_directory(path)
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 
@@ -63,18 +60,13 @@ class SessionService:
             remove_from_recent_projects(path, self._session.user_fmu_directory)
             raise FileNotFoundError(f"Path {path} does not exist")
 
-        fmu_dir = get_fmu_directory(
-            path, lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
+        fmu_dir = get_fmu_directory(path)
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 
     async def initialize_project(self, path: Path) -> ProjectFMUDirectory:
         """Initialize a new project .fmu directory at the specified path."""
-        fmu_dir = init_fmu_directory(
-            path,
-            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS,
-        )
+        fmu_dir = init_fmu_directory(path)
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 

@@ -139,112 +139,6 @@ async def test_get_existing_session_does_not_update_expires_at(
     assert orig_session.expires_at == session.expires_at
 
 
-async def test_get_session_refreshes_project_lock_when_acquired(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests that fetching a project session refreshes its lock."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.is_acquired.return_value = True
-    mock_lock.refresh = Mock()
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-    result = await session_manager.get_session(session_id)
-
-    assert isinstance(result, ProjectSession)
-    mock_lock.refresh.assert_called_once_with()
-    assert result.lock_errors.refresh is None
-
-
-async def test_get_session_handles_lock_refresh_error(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests that lock refresh failures are recorded but not raised."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.is_acquired.return_value = True
-    mock_lock.refresh = Mock(side_effect=LockError("Refresh failed"))
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-    result = await session_manager.get_session(session_id)
-
-    assert isinstance(result, ProjectSession)
-    mock_lock.refresh.assert_called_once_with()
-    assert result.lock_errors.refresh == "Refresh failed"
-
-
-async def test_try_acquire_project_lock_refreshes_when_held(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests that try_acquire_project_lock refreshes the lock when already held."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "lock_refresh_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.is_acquired.return_value = True
-    mock_lock.refresh = Mock()
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-        mock_lock.reset_mock()
-        result = await try_acquire_project_lock(session_id)
-
-    assert isinstance(result, ProjectSession)
-    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
-    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
-    assert result.lock_errors.refresh is None
-
-
-async def test_try_acquire_project_lock_handles_refresh_error(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests that refresh errors are recorded by try_acquire_project_lock."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "lock_refresh_error_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.is_acquired.return_value = True
-    mock_lock.refresh = Mock(side_effect=LockError("Refresh failed"))
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-        mock_lock.reset_mock()
-        result = await try_acquire_project_lock(session_id)
-
-    assert isinstance(result, ProjectSession)
-    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
-    assert mock_lock.refresh.call_count == 1  # noqa: PLR2004
-    assert result.lock_errors.refresh == "Refresh failed"
-
-
 async def test_try_acquire_project_lock_acquires_when_not_held(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
@@ -267,7 +161,7 @@ async def test_try_acquire_project_lock_acquires_when_not_held(
         result = await try_acquire_project_lock(session_id)
 
     assert isinstance(result, ProjectSession)
-    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    assert mock_lock.is_acquired.call_count == 1  # noqa: PLR2004
     mock_lock.acquire.assert_called_once_with()
     assert result.lock_errors.acquire is None
 
@@ -294,7 +188,7 @@ async def test_try_acquire_project_lock_records_acquire_error(
         result = await try_acquire_project_lock(session_id)
 
     assert isinstance(result, ProjectSession)
-    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    assert mock_lock.is_acquired.call_count == 1  # noqa: PLR2004
     mock_lock.acquire.assert_called_once_with()
     assert result.lock_errors.acquire == "Acquire failed"
 
@@ -336,7 +230,7 @@ async def test_try_acquire_project_lock_handles_is_acquired_error(
         result = await try_acquire_project_lock(session_id)
 
     assert isinstance(result, ProjectSession)
-    assert mock_lock.is_acquired.call_count == 2  # noqa: PLR2004
+    assert mock_lock.is_acquired.call_count == 1  # noqa: PLR2004
     mock_lock.refresh.assert_not_called()
     mock_lock.acquire.assert_not_called()
 
