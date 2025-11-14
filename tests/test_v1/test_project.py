@@ -1530,7 +1530,7 @@ async def test_get_lock_status_with_lock_status_error(
             assert lock_status["lock_file_read_error"] is None
             assert lock_status["last_lock_acquire_error"] is None
             assert lock_status["last_lock_release_error"] is None
-            assert lock_status["last_lock_refresh_error"] == "Lock status check failed"
+            assert lock_status["last_lock_refresh_error"] is None
 
 
 async def test_get_lock_status_with_lock_file_read_error(
@@ -1875,3 +1875,150 @@ async def test_post_lock_acquire_unexpected_error(
     mock_try_acquire.assert_awaited_once()
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json() == {"detail": "boom"}
+
+
+# POST project/lock_refresh #
+
+
+async def test_post_lock_refresh_success(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock refresh route returns success message after refreshing the lock."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.exists = True
+    mock_lock.refresh = Mock()
+    mock_lock.load.return_value = {
+        "user": "test_user",
+        "hostname": "test_host",
+        "pid": 12345,
+        "acquired_at": 1234567890.0,
+        "expires_at": 1234569090.0,
+        "version": "1.0.0",
+    }
+    session.project_fmu_directory._lock = mock_lock
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["message"] == "Project lock refreshed successfully."
+    mock_lock.refresh.assert_called_once()
+
+
+async def test_post_lock_refresh_when_not_held(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock refresh route when lock is not held."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.exists = False
+    mock_lock.refresh = Mock()
+    session.project_fmu_directory._lock = mock_lock
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "message" in response.json()
+    assert "not currently held" in response.json()["message"]
+    mock_lock.refresh.assert_not_called()
+
+
+async def test_post_lock_refresh_session_not_found(
+    client_with_session: TestClient,
+) -> None:
+    """Test lock refresh route returns 401 when no project session exists."""
+    response = client_with_session.post(f"{ROUTE}/lock_refresh")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_post_lock_refresh_records_refresh_error(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock refresh route records error if refresh fails."""
+    from fmu.settings._resources.lock_manager import LockError  # noqa: PLC0415
+
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.exists = True
+    mock_lock.refresh.side_effect = LockError("Lock conflict")
+    mock_lock.load.return_value = {
+        "user": "test_user",
+        "hostname": "test_host",
+        "pid": 12345,
+        "acquired_at": 1234567890.0,
+        "expires_at": 1234569090.0,
+        "version": "1.0.0",
+    }
+    session.project_fmu_directory._lock = mock_lock
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "message" in response.json()
+    assert "error occurred" in response.json()["message"]
+    assert "Lock conflict" in response.json()["message"]
+
+
+async def test_post_lock_refresh_permission_error(
+    client_with_project_session: TestClient,
+    session_id: str,
+) -> None:
+    """Test lock refresh route swallows permission errors gracefully."""
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.exists = True
+    mock_lock.refresh.side_effect = PermissionError("Permission denied")
+    mock_lock.load.return_value = {
+        "user": "test_user",
+        "hostname": "test_host",
+        "pid": 12345,
+        "acquired_at": 1234567890.0,
+        "expires_at": 1234569090.0,
+        "version": "1.0.0",
+    }
+    session.project_fmu_directory._lock = mock_lock
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "message" in response.json()
+    assert "error occurred" in response.json()["message"]
+    assert "Permission denied" in response.json()["message"]
+
+
+async def test_post_lock_refresh_general_exception(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock refresh route returns 500 on unexpected error in get_lock_status."""
+    with patch(
+        "fmu_settings_api.services.session.SessionService.get_lock_status",
+        side_effect=RuntimeError("Unexpected error"),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Unexpected error"

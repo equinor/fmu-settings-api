@@ -99,14 +99,10 @@ def run_server(  # noqa: PLR0913
     log_level = log_level.lower()
 
     try:
-        user_fmu_dir = UserFMUDirectory(
-            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
+        user_fmu_dir = UserFMUDirectory()
         fmu_dir_status = "loaded"
     except FileNotFoundError:
-        user_fmu_dir = init_user_fmu_directory(
-            lock_timeout_seconds=settings.SESSION_EXPIRE_SECONDS
-        )
+        user_fmu_dir = init_user_fmu_directory()
         fmu_dir_status = "initialized"
 
     log_manager = UserSessionLogManager(user_fmu_dir)

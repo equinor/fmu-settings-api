@@ -9,11 +9,15 @@ import pytest
 from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import ProjectSmdaSessionDep, SmdaInterfaceDep
-from fmu_settings_api.deps.permissions import check_write_permissions
+from fmu_settings_api.deps.permissions import (
+    check_write_permissions,
+    refresh_project_lock_dep,
+)
 from fmu_settings_api.deps.project import get_project_service
 from fmu_settings_api.deps.session import (
     get_project_session,
@@ -486,3 +490,118 @@ async def test_get_project_service_returns_project_service(
     assert isinstance(project_service, ProjectService)
     assert project_service._fmu_dir == project_fmu_dir
     assert project_service._fmu_dir.path == project_fmu_dir.path
+
+
+async def test_refresh_lock_dep_refreshes_lock_when_acquired(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep refreshes the lock when it is acquired."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    await refresh_project_lock_dep(session_id)
+    mock_lock.refresh.assert_called_once()
+
+
+async def test_refresh_lock_dep_does_nothing_when_not_acquired(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep does nothing when lock is not acquired."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.refresh = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    await refresh_project_lock_dep(session_id)
+    mock_lock.refresh.assert_not_called()
+
+
+async def test_refresh_lock_dep_handles_lock_error(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep handles lock errors gracefully."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh.side_effect = LockError("Lock refresh failed")
+    project_fmu_dir._lock = mock_lock
+
+    await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    await refresh_project_lock_dep(session_id)
+    session = await session_manager.get_session(session_id, extend_expiration=False)
+    assert isinstance(session, ProjectSession)
+    assert session.lock_errors.refresh is not None
+    assert "Lock refresh failed" in session.lock_errors.refresh
+
+
+async def test_refresh_lock_dep_handles_permission_error(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep swallows PermissionError exceptions."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh.side_effect = PermissionError("Permission denied")
+    project_fmu_dir._lock = mock_lock
+
+    await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    await refresh_project_lock_dep(session_id)
+
+
+async def test_refresh_lock_dep_no_session_cookie(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep raises 401 when no session cookie is provided."""
+    with pytest.raises(HTTPException) as exc_info:
+        await refresh_project_lock_dep(None)
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert "No active session found" in str(exc_info.value.detail)
+
+
+async def test_refresh_lock_dep_no_project_session(
+    tmp_path_mocked_home: Path, session_manager: SessionManager
+) -> None:
+    """Tests that RefreshLockDep raises 401 when no project session exists."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await refresh_project_lock_dep(session_id)
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert "No FMU project directory open" in str(exc_info.value.detail)

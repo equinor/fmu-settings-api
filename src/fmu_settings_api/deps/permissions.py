@@ -1,6 +1,9 @@
 """Permission dependencies."""
 
-from fastapi import Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException
+
+from fmu_settings_api.config import HttpHeader
+from fmu_settings_api.session import SessionNotFoundError, refresh_project_lock
 
 from .session import ProjectSessionDep
 
@@ -42,3 +45,32 @@ async def check_write_permissions(project_session: ProjectSessionDep) -> None:
 
 
 WritePermissionDep = Depends(check_write_permissions)
+
+
+async def refresh_project_lock_dep(
+    fmu_settings_session: str | None = Cookie(None),
+) -> None:
+    """Refreshes the project lock for write operations."""
+    if not fmu_settings_session:
+        raise HTTPException(
+            status_code=401,
+            detail="No active session found",
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
+        )
+    try:
+        await refresh_project_lock(fmu_settings_session)
+    except SessionNotFoundError as e:
+        raise HTTPException(
+            status_code=401,
+            detail="No FMU project directory open",
+            headers={
+                HttpHeader.WWW_AUTHENTICATE_KEY: HttpHeader.WWW_AUTHENTICATE_COOKIE
+            },
+        ) from e
+    except Exception:
+        pass
+
+
+RefreshLockDep = Depends(refresh_project_lock_dep)
