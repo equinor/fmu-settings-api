@@ -1975,6 +1975,7 @@ async def test_post_lock_refresh_records_refresh_error(
     assert response.status_code == status.HTTP_200_OK
     assert "message" in response.json()
     assert "error occurred" in response.json()["message"]
+    assert "Lock conflict" in response.json()["message"]
 
 
 async def test_post_lock_refresh_permission_error(
@@ -2006,6 +2007,7 @@ async def test_post_lock_refresh_permission_error(
     assert response.status_code == status.HTTP_200_OK
     assert "message" in response.json()
     assert "error occurred" in response.json()["message"]
+    assert "Permission denied" in response.json()["message"]
 
 
 async def test_post_lock_refresh_general_exception(

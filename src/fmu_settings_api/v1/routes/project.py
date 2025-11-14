@@ -460,8 +460,8 @@ async def post_lock_refresh(
             message = "Project lock refreshed successfully."
         elif lock_status.last_lock_refresh_error:
             message = (
-                "Lock refresh attempted but an error occurred. "
-                "Check lock status for details."
+                f"Lock refresh attempted but an error occurred: "
+                f"{lock_status.last_lock_refresh_error}"
             )
         else:
             message = (
