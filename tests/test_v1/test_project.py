@@ -1911,11 +1911,11 @@ async def test_post_lock_refresh_success(
     mock_lock.refresh.assert_called_once()
 
 
-async def test_post_lock_refresh_when_not_acquired(
+async def test_post_lock_refresh_when_not_held(
     client_with_project_session: TestClient,
     session_id: str,
 ) -> None:
-    """Test lock refresh route when lock is not acquired."""
+    """Test lock refresh route when lock is not held."""
     from fmu_settings_api.session import session_manager  # noqa: PLC0415
 
     session = await session_manager.get_session(session_id)
@@ -1931,7 +1931,7 @@ async def test_post_lock_refresh_when_not_acquired(
 
     assert response.status_code == status.HTTP_200_OK
     assert "message" in response.json()
-    assert "not currently acquired" in response.json()["message"]
+    assert "not currently held" in response.json()["message"]
     mock_lock.refresh.assert_not_called()
 
 

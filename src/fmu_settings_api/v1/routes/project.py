@@ -464,9 +464,7 @@ async def post_lock_refresh(
                 f"{lock_status.last_lock_refresh_error}"
             )
         else:
-            message = (
-                "Lock was not refreshed because the lock is not currently acquired."
-            )
+            message = "Lock was not refreshed because the lock is not currently held."
         return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
