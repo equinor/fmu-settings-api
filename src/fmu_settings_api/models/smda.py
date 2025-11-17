@@ -15,10 +15,6 @@ from pydantic import Field
 from fmu_settings_api.models.common import BaseResponseModel
 
 # Pydantic custom types
-UuidStr = Annotated[
-    str,
-    Field(pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
-]
 StratLevelInt = Annotated[int, Field(ge=1, le=6)]
 NonNanNonNegativeFloat = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
@@ -81,8 +77,8 @@ class SmdaMasterdataResult(BaseResponseModel):
 class StratigraphicUnit(BaseResponseModel):
     """Stratigraphic unit item."""
 
-    identifier: str
-    """The stratigraphic unit identifier."""
+    identifier: str = Field(examples=["NORDLAND GP."])
+    """The stratigraphic unit identifier (name)."""
 
     uuid: UUID
     """The SMDA UUID identifier corresponding to the stratigraphic unit."""
