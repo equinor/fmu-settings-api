@@ -1,5 +1,6 @@
 """Models (schemas) for the SMDA routes."""
 
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fmu.datamodels.fmu_results.fields import (
@@ -12,6 +13,14 @@ from fmu.datamodels.fmu_results.fields import (
 from pydantic import Field
 
 from fmu_settings_api.models.common import BaseResponseModel
+
+# Pydantic custom types
+UuidStr = Annotated[
+    str,
+    Field(pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+]
+StratLevelInt = Annotated[int, Field(ge=1, le=6)]
+NonNanNonNegativeFloat = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
 
 class SmdaField(BaseResponseModel):
@@ -67,3 +76,39 @@ class SmdaMasterdataResult(BaseResponseModel):
 
     These are provided when the user needs to select a different coordinate system that
     applies to the model they are working on."""
+
+
+class StratigraphicUnit(BaseResponseModel):
+    """Stratigraphic unit item."""
+
+    identifier: str
+    """The stratigraphic unit identifier."""
+
+    uuid: UUID
+    """The SMDA UUID identifier corresponding to the stratigraphic unit."""
+
+    strat_unit_type: str
+    strat_unit_level: StratLevelInt
+    top_age: NonNanNonNegativeFloat
+    base_age: NonNanNonNegativeFloat
+    strat_unit_parent: str | None
+    strat_column_type: Annotated[
+        str,
+        (
+            Literal["lithostratigraphy"]
+            | Literal["sequence stratigraphy"]
+            | Literal["chronostratigraphy"]
+            | Literal["biostratigraphy"]
+        ),
+    ]
+    color_html: Annotated[str, Field(pattern="#[0-9a-fA-F]{6}")] | None
+    color_r: int | None
+    color_g: int | None
+    color_b: int | None
+
+
+class SmdaStratigraphicUnitsResult(BaseResponseModel):
+    """Result containing a list of stratigraphic units."""
+
+    stratigraphic_units: list[StratigraphicUnit]
+    """List of stratigraphic units from SMDA."""

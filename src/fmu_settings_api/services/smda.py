@@ -16,6 +16,8 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaStratigraphicUnitsResult,
+    StratigraphicUnit,
 )
 
 
@@ -123,6 +125,32 @@ class SmdaService:
             coordinate_systems=field_crs_list,
         )
 
+    async def get_stratigraphic_units(
+        self, smda_fields: list[SmdaField]
+    ) -> SmdaStratigraphicUnitsResult:
+        """Retrieve stratigraphic units for fields to be confirmed in the GUI."""
+        if not smda_fields:
+            raise ValueError("At least one SMDA field must be provided")
+
+        # Sorted for tests as sets don't guarantee order
+        unique_field_identifiers = sorted({field.identifier for field in smda_fields})
+
+        # Query initial list of fields (with duplicates removed)
+        field_res = await self._smda.field(
+            unique_field_identifiers,
+            columns=["identifier", "uuid"],
+        )
+        field_results = field_res.json()["data"]["results"]
+        if not field_results:
+            raise ValueError(
+                f"No fields found for identifiers: {unique_field_identifiers}"
+            )
+
+        field_identifiers = [field["identifier"] for field in field_results]
+        strat_unit_items = await self._get_strat_units(field_identifiers)
+
+        return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
+
     async def _get_countries(
         self, country_identifiers: Sequence[str]
     ) -> list[CountryItem]:
@@ -187,6 +215,36 @@ class SmdaService:
             if strat_column_item not in strat_column_items:
                 strat_column_items.append(strat_column_item)
         return strat_column_items
+
+    async def _get_strat_units(
+        self, field_identifiers: Sequence[str]
+    ) -> list[StratigraphicUnit]:
+        """Queries stratigraphic units relevant for the list of field identifiers."""
+        strat_unit_res = await self._smda.strat_units(
+            field_identifiers,
+            [
+                "identifier",
+                "uuid",
+                "strat_unit_type",
+                "strat_unit_level",
+                "top_age",
+                "base_age",
+                "strat_unit_parent",
+                "strat_column_type",
+                "color_html",
+                "color_r",
+                "color_g",
+                "color_b",
+            ],
+        )
+        strat_unit_results = strat_unit_res.json()["data"]["results"]
+
+        strat_unit_items = []
+        for strat_unit_data in strat_unit_results:
+            strat_unit_item = StratigraphicUnit.model_validate(strat_unit_data)
+            if strat_unit_item not in strat_unit_items:
+                strat_unit_items.append(strat_unit_item)
+        return strat_unit_items
 
     async def _get_coordinate_systems(
         self, crs_identifiers: Sequence[str] | None = None

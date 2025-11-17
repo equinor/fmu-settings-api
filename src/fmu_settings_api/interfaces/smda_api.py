@@ -17,6 +17,7 @@ class SmdaRoutes:
     COUNTRIES_SEARCH: Final[str] = "smda-api/countries/search"
     DISCOVERIES_SEARCH: Final[str] = "smda-api/discoveries/search"
     STRAT_COLUMN_AREAS_SEARCH: Final[str] = "smda-api/strat-column-areas/search"
+    STRAT_UNITS_SEARCH: Final[str] = "smda-api/strat-units/search"
     COORDINATE_SYSTEM_SEARCH: Final[str] = "smda-api/crs/search"
 
 
@@ -112,6 +113,19 @@ class SmdaAPI:
                 "_projection": _projection,
                 "strat_area_identifier": field_identifiers,
                 "strat_column_status": "official",
+            },
+        )
+
+    async def strat_units(
+        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx.Response:
+        """Searches for the stratigraphic units related to a strat column identifier."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        return await self.post(
+            SmdaRoutes.STRAT_UNITS_SEARCH,
+            json={
+                "_projection": _projection,
+                "strat_column_identifier": field_identifiers,
             },
         )
 
