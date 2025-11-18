@@ -216,14 +216,16 @@ async def post_masterdata(
 @router.post(
     "/strat-units",
     response_model=SmdaStratigraphicUnitsResult,
-    summary="Retrieves stratigraphic units for fields",
+    summary="Retrieves stratigraphic units for a stratigraphic column",
     description=dedent(
         """
-        A route to gather stratigraphic units from SMDA for specified fields.
+        A route to gather stratigraphic units from SMDA for a specified
+        stratigraphic column.
 
-        This route receives a list of valid field names and returns stratigraphic
-        units associated with them. The field names should be valid as returned from
-        the `smda/field` route.
+        This route receives a valid stratigraphic column identifier
+        and returns stratigraphic units associated with it. The identifier
+        should be obtained from the `stratigraphic_columns` field in the
+        `smda/masterdata` response.
         """
     ),
     responses={
@@ -238,18 +240,20 @@ async def post_masterdata(
     },
 )
 async def post_strat_units(
-    smda_fields: list[SmdaField],
+    strat_column_identifier: str,
     smda_service: ProjectSmdaServiceDep,
 ) -> SmdaStratigraphicUnitsResult:
-    """Queries SMDA stratigraphic units for specified fields."""
+    """Queries SMDA stratigraphic units for a specified stratigraphic column."""
     try:
-        return await smda_service.get_stratigraphic_units(smda_fields)
+        return await smda_service.get_stratigraphic_units(strat_column_identifier)
     except ValueError as e:
         error_msg = str(e)
         match error_msg:
-            case msg if "At least one SMDA field must be provided" in msg:
+            case msg if (
+                "At least one stratigraphic column identifier must be provided" in msg
+            ):
                 status_code = 400
-            case msg if "No fields found for identifiers" in msg:
+            case msg if "No stratigraphic units found" in msg:
                 status_code = 422
             case _:
                 status_code = 400

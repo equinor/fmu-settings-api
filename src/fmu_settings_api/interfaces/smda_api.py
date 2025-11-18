@@ -117,15 +117,17 @@ class SmdaAPI:
         )
 
     async def strat_units(
-        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+        self,
+        strat_column_identifier: str,
+        columns: Sequence[str] | None = None,
     ) -> httpx.Response:
-        """Searches for the stratigraphic units related to a field identifier."""
+        """Searches for the stratigraphic units related to a stratigraphic column."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
         return await self.post(
             SmdaRoutes.STRAT_UNITS_SEARCH,
             json={
                 "_projection": _projection,
-                "strat_column_identifier": field_identifiers,
+                "strat_column_identifier": strat_column_identifier,
             },
         )
 
