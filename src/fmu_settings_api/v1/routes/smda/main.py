@@ -16,6 +16,7 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaStratColumn,
     SmdaStratigraphicUnitsResult,
 )
 from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_response
@@ -214,7 +215,7 @@ async def post_masterdata(
 
 
 @router.post(
-    "/strat-units",
+    "/strat_units",
     response_model=SmdaStratigraphicUnitsResult,
     summary="Retrieves stratigraphic units for a stratigraphic column",
     description=dedent(
@@ -240,18 +241,18 @@ async def post_masterdata(
     },
 )
 async def post_strat_units(
-    strat_column_identifier: str,
+    strat_column: SmdaStratColumn,
     smda_service: ProjectSmdaServiceDep,
 ) -> SmdaStratigraphicUnitsResult:
     """Queries SMDA stratigraphic units for a specified stratigraphic column."""
     try:
-        return await smda_service.get_stratigraphic_units(strat_column_identifier)
+        return await smda_service.get_stratigraphic_units(
+            strat_column.strat_column_identifier
+        )
     except ValueError as e:
         error_msg = str(e)
         match error_msg:
-            case msg if (
-                "At least one stratigraphic column identifier must be provided" in msg
-            ):
+            case msg if "A stratigraphic column identifier must be provided" in msg:
                 status_code = 400
             case msg if "No stratigraphic units found" in msg:
                 status_code = 422

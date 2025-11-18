@@ -81,3 +81,46 @@ async def test_smda_post_without_json(mock_httpx_post: MagicMock) -> None:
         json=None,
     )
     res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_strat_units_with_identifier(mock_httpx_post: MagicMock) -> None:
+    """Tests strat_units method sends correct payload with identifier."""
+    api = SmdaAPI("token", "key")
+    res = await api.strat_units("LITHO_DROGON")
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.STRAT_UNITS_SEARCH}",
+        headers={
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
+        },
+        json={
+            "_projection": "identifier,uuid",
+            "strat_column_identifier": "LITHO_DROGON",
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_strat_units_with_columns(mock_httpx_post: MagicMock) -> None:
+    """Tests strat_units method with custom column projection."""
+    api = SmdaAPI("token", "key")
+    res = await api.strat_units(
+        "LITHO_DROGON",
+        columns=["identifier", "uuid", "strat_unit_type"],
+    )
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.STRAT_UNITS_SEARCH}",
+        headers={
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
+        },
+        json={
+            "_projection": "identifier,uuid,strat_unit_type",
+            "strat_column_identifier": "LITHO_DROGON",
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore

@@ -1,6 +1,6 @@
 """Models (schemas) for the SMDA routes."""
 
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID
 
 from fmu.datamodels.fmu_results.fields import (
@@ -14,16 +14,19 @@ from pydantic import Field
 
 from fmu_settings_api.models.common import BaseResponseModel
 
-# Pydantic custom types
-StratLevelInt = Annotated[int, Field(ge=1, le=6)]
-NonNanNonNegativeFloat = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-
 
 class SmdaField(BaseResponseModel):
     """An identifier for a field to be searched for."""
 
     identifier: str = Field(examples=["TROLL"])
     """A field identifier (name)."""
+
+
+class SmdaStratColumn(BaseResponseModel):
+    """An identifier for a stratigraphic column."""
+
+    strat_column_identifier: str = Field(examples=["LITHO_TROLL"])
+    """A stratigraphic column identifier."""
 
 
 class SmdaFieldUUID(BaseResponseModel):
@@ -77,30 +80,46 @@ class SmdaMasterdataResult(BaseResponseModel):
 class StratigraphicUnit(BaseResponseModel):
     """Stratigraphic unit item."""
 
-    identifier: str = Field(examples=["NORDLAND GP."])
+    identifier: str = Field(examples=["DROGON GP."])
     """The stratigraphic unit identifier (name)."""
 
     uuid: UUID
     """The SMDA UUID identifier corresponding to the stratigraphic unit."""
 
-    strat_unit_type: str
-    strat_unit_level: StratLevelInt
-    top_age: NonNanNonNegativeFloat
-    base_age: NonNanNonNegativeFloat
+    strat_unit_type: str = Field(examples=["formation", "group"])
+    """The type of stratigraphic unit."""
+
+    strat_unit_level: int = Field(ge=1, le=6)
+    """The hierarchical level of the stratigraphic unit (1-6)."""
+
+    top_age: float = Field(ge=0, allow_inf_nan=False)
+    """The age (in Ma) at the top of the stratigraphic unit."""
+
+    base_age: float = Field(ge=0, allow_inf_nan=False)
+    """The age (in Ma) at the base of the stratigraphic unit."""
+
     strat_unit_parent: str | None
-    strat_column_type: Annotated[
-        str,
-        (
-            Literal["lithostratigraphy"]
-            | Literal["sequence stratigraphy"]
-            | Literal["chronostratigraphy"]
-            | Literal["biostratigraphy"]
-        ),
+    """The parent stratigraphic unit identifier, if applicable."""
+
+    strat_column_type: Literal[
+        "lithostratigraphy",
+        "sequence stratigraphy",
+        "chronostratigraphy",
+        "biostratigraphy",
     ]
-    color_html: Annotated[str, Field(pattern="#[0-9a-fA-F]{6}")] | None
+    """The type of stratigraphic column this unit belongs to."""
+
+    color_html: str | None = Field(default=None, pattern="#[0-9a-fA-F]{6}")
+    """The HTML hex color code for visualization."""
+
     color_r: int | None
+    """The red component of the RGB color."""
+
     color_g: int | None
+    """The green component of the RGB color."""
+
     color_b: int | None
+    """The blue component of the RGB color."""
 
 
 class SmdaStratigraphicUnitsResult(BaseResponseModel):
