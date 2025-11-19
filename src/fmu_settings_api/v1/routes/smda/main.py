@@ -16,6 +16,8 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaStratColumn,
+    SmdaStratigraphicUnitsResult,
 )
 from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_response
 
@@ -179,6 +181,81 @@ async def post_masterdata(
                 status_code = 422
             case msg if "not found in SMDA" in msg:
                 status_code = 404
+            case _:
+                status_code = 400
+        raise HTTPException(
+            status_code=status_code,
+            detail=error_msg,
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except KeyError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Malformed response from SMDA: {e}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except TimeoutError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="SMDA API request timed out. Please try again.",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+
+
+@router.post(
+    "/strat_units",
+    response_model=SmdaStratigraphicUnitsResult,
+    summary="Retrieves stratigraphic units for a stratigraphic column",
+    description=dedent(
+        """
+        A route to gather stratigraphic units from SMDA for a specified
+        stratigraphic column.
+
+        This route receives a valid stratigraphic column identifier
+        and returns stratigraphic units associated with it. The identifier
+        should be obtained from the `stratigraphic_columns` field in the
+        `smda/masterdata` response.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **inline_add_response(
+            503,
+            "Occurs when an API call to SMDA times out.",
+            [
+                {"detail": "SMDA API request timed out. Please try again."},
+            ],
+        ),
+    },
+)
+async def post_strat_units(
+    strat_column: SmdaStratColumn,
+    smda_service: ProjectSmdaServiceDep,
+) -> SmdaStratigraphicUnitsResult:
+    """Queries SMDA stratigraphic units for a specified stratigraphic column."""
+    try:
+        return await smda_service.get_stratigraphic_units(
+            strat_column.strat_column_identifier
+        )
+    except ValueError as e:
+        error_msg = str(e)
+        match error_msg:
+            case msg if "A stratigraphic column identifier must be provided" in msg:
+                status_code = 400
+            case msg if "No stratigraphic units found" in msg:
+                status_code = 422
             case _:
                 status_code = 400
         raise HTTPException(

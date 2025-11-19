@@ -867,3 +867,175 @@ async def test_post_masterdata_request_timeout(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert response.json()["detail"] == "SMDA API request timed out. Please try again."
+
+
+async def test_post_strat_units_success(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests successful post to strat_units with valid identifier."""
+    strat_unit_uuid = uuid4()
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "identifier": "DROGON GP.",
+                    "uuid": str(strat_unit_uuid),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                }
+            ]
+        }
+    }
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": "LITHO_DROGON"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    response_data = response.json()
+    assert len(response_data["stratigraphic_units"]) == 1
+    assert response_data["stratigraphic_units"][0]["identifier"] == "DROGON GP."
+    assert response_data["stratigraphic_units"][0]["strat_unit_type"] == "group"
+
+
+async def test_post_strat_units_empty_results(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests error when no stratigraphic units found for identifier."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": {"results": []}}
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": "NONEXISTENT"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "No stratigraphic units found" in response.json()["detail"]
+
+
+async def test_post_strat_units_empty_identifier(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests 400 error when empty identifier is provided."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": ""},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "must be provided" in response.json()["detail"]
+
+
+async def test_post_strat_units_malformed_response(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests error handling for malformed SMDA response."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"malformed": "response"}
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": "LITHO_DROGON"},
+    )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "Malformed response from SMDA" in response.json()["detail"]
+
+
+async def test_post_strat_units_request_timeout(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when a post request to SMDA times out."""
+    with patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class:
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.strat_units.side_effect = TimeoutError("Request timed out")
+        mock_smda_class.return_value = mock_smda_instance
+
+        response = client_with_smda_session.post(
+            f"{ROUTE}/strat_units",
+            json={"strat_column_identifier": "LITHO_DROGON"},
+        )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json()["detail"] == "SMDA API request timed out. Please try again."
+
+
+async def test_post_strat_units_http_error(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests when SMDA returns HTTP error."""
+    mock_request = MagicMock(spec=httpx.Request)
+    mock_request.url = "https://smda/strat-units"
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 401
+    mock_SmdaAPI_post.side_effect = httpx.HTTPStatusError(
+        "401 Client Error: Access Denied",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": "LITHO_DROGON"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "SMDA error requesting" in response.json()["detail"]

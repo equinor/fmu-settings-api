@@ -264,3 +264,122 @@ async def test_get_coordinate_systems(
         assert [mock_val[0]] == res
     else:
         assert res == mock_val
+
+
+async def test_get_stratigraphic_units_success() -> None:
+    """Tests get_stratigraphic_units returns units correctly."""
+    mock_smda = AsyncMock()
+    strat_unit_resp = MagicMock()
+    strat_unit_resp.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "identifier": "DROGON GP.",
+                    "uuid": gen_uuid("DROGON"),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                }
+            ]
+        }
+    }
+    mock_smda.strat_units.return_value = strat_unit_resp
+
+    service = SmdaService(mock_smda)
+    result = await service.get_stratigraphic_units("LITHO_DROGON")
+
+    mock_smda.strat_units.assert_called_with(
+        "LITHO_DROGON",
+        [
+            "identifier",
+            "uuid",
+            "strat_unit_type",
+            "strat_unit_level",
+            "top_age",
+            "base_age",
+            "strat_unit_parent",
+            "strat_column_type",
+            "color_html",
+            "color_r",
+            "color_g",
+            "color_b",
+        ],
+    )
+    assert len(result.stratigraphic_units) == 1
+    assert result.stratigraphic_units[0].identifier == "DROGON GP."
+    assert result.stratigraphic_units[0].strat_unit_type == "group"
+
+
+async def test_get_stratigraphic_units_empty_identifier() -> None:
+    """Tests ValueError raised when empty identifier provided."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(ValueError, match="must be provided"):
+        await service.get_stratigraphic_units("")
+
+
+async def test_get_stratigraphic_units_no_results() -> None:
+    """Tests ValueError raised when SMDA returns empty results."""
+    mock_smda = AsyncMock()
+    strat_unit_resp = MagicMock()
+    strat_unit_resp.json.return_value = {"data": {"results": []}}
+    mock_smda.strat_units.return_value = strat_unit_resp
+
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(ValueError, match="No stratigraphic units found"):
+        await service.get_stratigraphic_units("NONEXISTENT")
+
+
+async def test_get_stratigraphic_units_deduplicates() -> None:
+    """Tests duplicate stratigraphic units are filtered out."""
+    mock_smda = AsyncMock()
+    strat_unit_resp = MagicMock()
+    strat_unit_resp.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "identifier": "DROGON GP.",
+                    "uuid": gen_uuid("DROGON"),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                },
+                {
+                    "identifier": "DROGON GP.",
+                    "uuid": gen_uuid("DROGON"),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                },
+            ]
+        }
+    }
+    mock_smda.strat_units.return_value = strat_unit_resp
+
+    service = SmdaService(mock_smda)
+    result = await service.get_stratigraphic_units("LITHO_DROGON")
+
+    assert len(result.stratigraphic_units) == 1

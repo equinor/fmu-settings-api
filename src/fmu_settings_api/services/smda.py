@@ -16,6 +16,8 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaStratigraphicUnitsResult,
+    StratigraphicUnit,
 )
 
 
@@ -122,6 +124,45 @@ class SmdaService:
             field_coordinate_system=field_coordinate_system,
             coordinate_systems=field_crs_list,
         )
+
+    async def get_stratigraphic_units(
+        self, strat_column_identifier: str
+    ) -> SmdaStratigraphicUnitsResult:
+        """Queries stratigraphic units for a stratigraphic column identifier."""
+        if not strat_column_identifier:
+            raise ValueError("A stratigraphic column identifier must be provided")
+
+        strat_unit_res = await self._smda.strat_units(
+            strat_column_identifier,
+            [
+                "identifier",
+                "uuid",
+                "strat_unit_type",
+                "strat_unit_level",
+                "top_age",
+                "base_age",
+                "strat_unit_parent",
+                "strat_column_type",
+                "color_html",
+                "color_r",
+                "color_g",
+                "color_b",
+            ],
+        )
+        strat_unit_results = strat_unit_res.json()["data"]["results"]
+
+        if not strat_unit_results:
+            raise ValueError(
+                f"No stratigraphic units found for identifier: "
+                f"{strat_column_identifier}"
+            )
+
+        strat_unit_items = []
+        for strat_unit_data in strat_unit_results:
+            strat_unit_item = StratigraphicUnit.model_validate(strat_unit_data)
+            if strat_unit_item not in strat_unit_items:
+                strat_unit_items.append(strat_unit_item)
+        return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
 
     async def _get_countries(
         self, country_identifiers: Sequence[str]
