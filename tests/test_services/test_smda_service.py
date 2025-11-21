@@ -275,7 +275,7 @@ async def test_get_stratigraphic_units_success() -> None:
             "results": [
                 {
                     "identifier": "VIKING GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
                     "top": "VIKING GP. Top",
@@ -352,7 +352,7 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
             "results": [
                 {
                     "identifier": "VIKING GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
                     "top": "VIKING GP. Top",
@@ -368,7 +368,7 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
                 },
                 {
                     "identifier": "VIKING GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
                     "top": "VIKING GP. Top",
