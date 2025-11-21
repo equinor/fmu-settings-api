@@ -16,20 +16,20 @@ mostly on [fmu-settings](https://github.com/equinor/fmu-settings) to work with
 With `fmu-settings-cli` installed, to run the API by itself just
 
 ```sh
-fmu-settings api
+fmu settings api
 ```
 
 An authorization token is required to create a session. When developing you
 can print this token to the the terminal with
 
 ```sh
-fmu-settings api --print-token
+fmu settings api --print-token
 ```
 
 It's useful to be able to reload while developing.
 
 ```sh
-fmu-settings api --print-token --reload
+fmu settings api --print-token --reload
 ```
 
 ## API Documentation
