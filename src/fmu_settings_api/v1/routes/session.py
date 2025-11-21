@@ -40,14 +40,16 @@ router = APIRouter(prefix="/session", tags=["session"])
     description=dedent(
         """
         When creating a session the application will ensure that the user
-        .fmu directory exists by creating it if it does not. It will also
-        heck for the nearest project .fmu directory above the current
-        working directory, and if one exists, add it to the session. If
-        it does not exist its value will be `null`.
+        .fmu directory exists by creating it if it does not.
 
-        If a session already exists when POSTing to this route, the existing
-        session will be silently destroyed. This will remove any state for
-        a project .fmu that may be opened.
+        If a session already exists when POSTing to this route, the new session
+        will preserve the access tokens from the old session. If the old session
+        had a project .fmu directory, it will also be added to the new session.
+        After migrating the state, the old session is destroyed.
+
+        If no previous session exists, the application will attempt to find the
+        nearest project .fmu directory above the current working directory and
+        add it to the session if found. If not found, no project will be associated.
 
         The session cookie set by this route is required for all other
         routes. Sessions are not persisted when the API is shut down.
