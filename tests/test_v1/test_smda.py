@@ -886,6 +886,8 @@ async def test_post_strat_units_success(
                     "uuid": str(strat_unit_uuid),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
                     "top_age": 2.58,
                     "base_age": 5.33,
                     "strat_unit_parent": None,
