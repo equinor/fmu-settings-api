@@ -139,6 +139,8 @@ class SmdaService:
                 "uuid",
                 "strat_unit_type",
                 "strat_unit_level",
+                "top",
+                "base",
                 "top_age",
                 "base_age",
                 "strat_unit_parent",

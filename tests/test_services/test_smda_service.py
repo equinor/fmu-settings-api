@@ -274,10 +274,12 @@ async def test_get_stratigraphic_units_success() -> None:
         "data": {
             "results": [
                 {
-                    "identifier": "DROGON GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "identifier": "VIKING GP.",
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
                     "top_age": 2.58,
                     "base_age": 5.33,
                     "strat_unit_parent": None,
@@ -302,6 +304,8 @@ async def test_get_stratigraphic_units_success() -> None:
             "uuid",
             "strat_unit_type",
             "strat_unit_level",
+            "top",
+            "base",
             "top_age",
             "base_age",
             "strat_unit_parent",
@@ -313,7 +317,7 @@ async def test_get_stratigraphic_units_success() -> None:
         ],
     )
     assert len(result.stratigraphic_units) == 1
-    assert result.stratigraphic_units[0].identifier == "DROGON GP."
+    assert result.stratigraphic_units[0].identifier == "VIKING GP."
     assert result.stratigraphic_units[0].strat_unit_type == "group"
 
 
@@ -347,10 +351,12 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
         "data": {
             "results": [
                 {
-                    "identifier": "DROGON GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "identifier": "VIKING GP.",
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
                     "top_age": 2.58,
                     "base_age": 5.33,
                     "strat_unit_parent": None,
@@ -361,10 +367,12 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
                     "color_b": 0,
                 },
                 {
-                    "identifier": "DROGON GP.",
-                    "uuid": gen_uuid("DROGON"),
+                    "identifier": "VIKING GP.",
+                    "uuid": gen_uuid("VIKING GP."),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
                     "top_age": 2.58,
                     "base_age": 5.33,
                     "strat_unit_parent": None,

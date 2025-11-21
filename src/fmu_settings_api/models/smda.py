@@ -80,7 +80,7 @@ class SmdaMasterdataResult(BaseResponseModel):
 class StratigraphicUnit(BaseResponseModel):
     """Stratigraphic unit item."""
 
-    identifier: str = Field(examples=["DROGON GP."])
+    identifier: str = Field(examples=["VIKING GP."])
     """The stratigraphic unit identifier (name)."""
 
     uuid: UUID
@@ -91,6 +91,12 @@ class StratigraphicUnit(BaseResponseModel):
 
     strat_unit_level: int = Field(ge=1, le=6)
     """The hierarchical level of the stratigraphic unit (1-6)."""
+
+    top: str = Field(examples=["VIKING GP. Top"])
+    """The identifier (name) of the stratigraphic unit top pick (horizon)."""
+
+    base: str = Field(examples=["VIKING GP. Base"])
+    """The identifier (name) of the stratigraphic unit base pick (horizon)."""
 
     top_age: float = Field(ge=0, allow_inf_nan=False)
     """The age (in Ma) at the top of the stratigraphic unit."""
