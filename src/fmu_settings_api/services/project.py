@@ -28,6 +28,16 @@ class ProjectService:
             is_read_only=is_read_only,
         )
 
+    @property
+    def fmu_dir_path(self) -> Path:
+        """Returns the path to the .fmu directory."""
+        return self._fmu_dir.path
+
+    @property
+    def config_path(self) -> Path:
+        """Returns the path to the project config file."""
+        return self._fmu_dir.config.path
+
     def check_valid_global_config(self) -> None:
         """Check if a valid global config exists at the default location."""
         project_root = self._fmu_dir.path.parent
@@ -59,26 +69,26 @@ class ProjectService:
             "masterdata", global_config.masterdata.model_dump()
         )
 
-    def update_masterdata(self, smda_masterdata: Smda) -> tuple[bool, Path]:
+    def update_masterdata(self, smda_masterdata: Smda) -> bool:
         """Save SMDA masterdata to the project FMU directory."""
         self._fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
-        return True, self._fmu_dir.path
+        return True
 
-    def update_model(self, model: Model) -> tuple[bool, Path]:
+    def update_model(self, model: Model) -> bool:
         """Save model data to the project FMU directory."""
         self._fmu_dir.set_config_value("model", model.model_dump())
-        return True, self._fmu_dir.path
+        return True
 
-    def update_access(self, access: Access) -> tuple[bool, Path]:
+    def update_access(self, access: Access) -> bool:
         """Save access data to the project FMU directory."""
         self._fmu_dir.set_config_value("access", access.model_dump())
-        return True, self._fmu_dir.path
+        return True
 
     def get_rms_projects(self) -> list[Path]:
         """Get the paths of RMS projects in this project directory."""
         return self._fmu_dir.find_rms_projects()
 
-    def update_rms_project_path(self, rms_project_path: Path) -> tuple[bool, Path]:
+    def update_rms_project_path(self, rms_project_path: Path) -> bool:
         """Save the RMS project path in the project FMU directory."""
         self._fmu_dir.set_config_value("rms_project_path", str(rms_project_path))
-        return True, self._fmu_dir.path
+        return True

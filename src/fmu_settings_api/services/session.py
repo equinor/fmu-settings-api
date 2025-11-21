@@ -30,6 +30,12 @@ class SessionService:
         """Initialize the service with a session."""
         self._session = session
 
+    @property
+    def fmu_dir_path(self) -> Path:
+        """Returns the path to the attached project .fmu directory."""
+        project_session = cast("ProjectSession", self._session)
+        return project_session.project_fmu_directory.path
+
     def get_session_response(self) -> SessionResponse:
         """Get the session data in a serializable format."""
         return SessionResponse(
@@ -70,12 +76,10 @@ class SessionService:
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 
-    async def close_project(self) -> tuple[bool, Path]:
+    async def close_project(self) -> bool:
         """Remove (close) a project .fmu directory from the session."""
-        project_session = cast("ProjectSession", self._session)
-        project_path = project_session.project_fmu_directory.path
         await remove_fmu_project_from_session(self._session.id)
-        return True, project_path
+        return True
 
     async def acquire_project_lock(self) -> bool:
         """Attempt to acquire the project lock for editing."""

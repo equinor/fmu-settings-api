@@ -2044,9 +2044,9 @@ async def test_get_rms_projects_empty_list(
     assert response.status_code == status.HTTP_200_OK, response.json()
 
     result = response.json()
-    assert "rms_project_paths" in result
-    assert isinstance(result["rms_project_paths"], list)
-    assert len(result["rms_project_paths"]) == 0
+    assert "results" in result
+    assert isinstance(result["results"], list)
+    assert len(result["results"]) == 0
 
 
 async def test_get_rms_projects_returns_list(
@@ -2079,14 +2079,14 @@ async def test_get_rms_projects_returns_list(
         assert response.status_code == status.HTTP_200_OK, response.json()
 
         result = response.json()
-        assert "rms_project_paths" in result
-        assert isinstance(result["rms_project_paths"], list)
-        assert len(result["rms_project_paths"]) == 2  # noqa: PLR2004
+        assert "results" in result
+        assert isinstance(result["results"], list)
+        assert len(result["results"]) == 2  # noqa: PLR2004
 
-        for item in result["rms_project_paths"]:
-            assert "rms_project_path" in item
-            assert isinstance(item["rms_project_path"], str)
-            assert Path(item["rms_project_path"]).exists()
+        for item in result["results"]:
+            assert "path" in item
+            assert isinstance(item["path"], str)
+            assert Path(item["path"]).exists()
 
 
 async def test_get_rms_projects_permission_error(
@@ -2170,7 +2170,7 @@ async def test_patch_rms_project_path_requires_project_session(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     response = client_with_session.patch(
         f"{ROUTE}/rms_project_path",
-        json={"rms_project_path": str(rms_path)},
+        json={"path": str(rms_path)},
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
     assert response.json()["detail"] == "No FMU project directory open"
@@ -2190,7 +2190,7 @@ async def test_patch_rms_project_path_success(
 
     response = client_with_project_session.patch(
         f"{ROUTE}/rms_project_path",
-        json={"rms_project_path": str(rms_path)},
+        json={"path": str(rms_path)},
     )
     assert response.status_code == status.HTTP_200_OK
     assert (
@@ -2217,7 +2217,7 @@ async def test_patch_rms_project_path_updates_existing(
 
     response = client_with_project_session.patch(
         f"{ROUTE}/rms_project_path",
-        json={"rms_project_path": str(rms_path1)},
+        json={"path": str(rms_path1)},
     )
     assert response.status_code == status.HTTP_200_OK
 
@@ -2228,7 +2228,7 @@ async def test_patch_rms_project_path_updates_existing(
 
     response = client_with_project_session.patch(
         f"{ROUTE}/rms_project_path",
-        json={"rms_project_path": str(rms_path2)},
+        json={"path": str(rms_path2)},
     )
     assert response.status_code == status.HTTP_200_OK
 
@@ -2250,7 +2250,7 @@ async def test_patch_rms_project_path_no_directory_permissions(
     with no_permissions(bad_project_dir):
         response = client_with_project_session.patch(
             f"{ROUTE}/rms_project_path",
-            json={"rms_project_path": str(rms_path)},
+            json={"path": str(rms_path)},
         )
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -2272,7 +2272,7 @@ async def test_patch_rms_project_path_no_directory(
 
     response = client_with_project_session.patch(
         f"{ROUTE}/rms_project_path",
-        json={"rms_project_path": str(rms_path)},
+        json={"path": str(rms_path)},
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
 
@@ -2299,7 +2299,7 @@ async def test_patch_rms_project_path_general_exception(
     ):
         response = client_with_project_session.patch(
             f"{ROUTE}/rms_project_path",
-            json={"rms_project_path": str(rms_path)},
+            json={"path": str(rms_path)},
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "Invalid RMS project path"}
