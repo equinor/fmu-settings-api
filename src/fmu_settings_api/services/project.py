@@ -73,3 +73,12 @@ class ProjectService:
         """Save access data to the project FMU directory."""
         self._fmu_dir.set_config_value("access", access.model_dump())
         return True, self._fmu_dir.path
+
+    def get_rms_projects(self) -> list[Path]:
+        """Get the paths of RMS projects in this project directory."""
+        return self._fmu_dir.find_rms_projects()
+
+    def update_rms_project_path(self, rms_project_path: Path) -> tuple[bool, Path]:
+        """Save the RMS project path in the project FMU directory."""
+        self._fmu_dir.set_config_value("rms_project_path", str(rms_project_path))
+        return True, self._fmu_dir.path

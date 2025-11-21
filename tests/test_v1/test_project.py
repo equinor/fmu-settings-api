@@ -2022,3 +2022,284 @@ async def test_post_lock_refresh_general_exception(
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "Unexpected error"
+
+
+# GET project/rms_projects #
+
+
+async def test_get_rms_projects_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test getting RMS projects requires an active project session."""
+    response = client_with_session.get(f"{ROUTE}/rms_projects")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_get_rms_projects_empty_list(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test getting RMS projects returns empty list when none exist."""
+    response = client_with_project_session.get(f"{ROUTE}/rms_projects")
+    assert response.status_code == status.HTTP_200_OK, response.json()
+
+    result = response.json()
+    assert "rms_project_paths" in result
+    assert isinstance(result["rms_project_paths"], list)
+    assert len(result["rms_project_paths"]) == 0
+
+
+async def test_get_rms_projects_returns_list(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    session_manager: SessionManager,
+) -> None:
+    """Test getting RMS projects returns list of found projects."""
+    rms_dir = session_tmp_path / "rms" / "model"
+    rms_dir.mkdir(parents=True)
+
+    project1 = rms_dir / "project1.rms13.1.2"
+    project2 = rms_dir / "project2.rms14.2.2"
+    project1.mkdir()
+    project2.mkdir()
+
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch.object(
+        session.project_fmu_directory,
+        "find_rms_projects",
+        return_value=[project1, project2],
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/rms_projects")
+        assert response.status_code == status.HTTP_200_OK, response.json()
+
+        result = response.json()
+        assert "rms_project_paths" in result
+        assert isinstance(result["rms_project_paths"], list)
+        assert len(result["rms_project_paths"]) == 2  # noqa: PLR2004
+
+        for item in result["rms_project_paths"]:
+            assert "rms_project_path" in item
+            assert isinstance(item["rms_project_path"], str)
+            assert Path(item["rms_project_path"]).exists()
+
+
+async def test_get_rms_projects_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 403 when scanning RMS projects hits permission errors."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch.object(
+        session.project_fmu_directory,
+        "find_rms_projects",
+        side_effect=PermissionError("No permission"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/rms_projects")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": "Permission denied while scanning for RMS projects."
+    }
+
+
+async def test_get_rms_projects_file_not_found(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 404 when RMS project scan raises FileNotFoundError."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch.object(
+        session.project_fmu_directory,
+        "find_rms_projects",
+        side_effect=FileNotFoundError("Project directory missing"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/rms_projects")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Project directory missing"}
+
+
+async def test_get_rms_projects_general_exception(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in get_rms_projects."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch.object(
+        session.project_fmu_directory,
+        "find_rms_projects",
+        side_effect=RuntimeError("Failed to scan directories"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/rms_projects")
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Failed to scan directories"}
+
+
+# PATCH project/rms_project_path #
+
+
+async def test_patch_rms_project_path_requires_project_session(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS project path requires an active project session."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    response = client_with_session.patch(
+        f"{ROUTE}/rms_project_path",
+        json={"rms_project_path": str(rms_path)},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_rms_project_path_success(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS project path to project .fmu config."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms_project_path is None
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms_project_path",
+        json={"rms_project_path": str(rms_path)},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Saved RMS project path to {get_fmu_project.path / '.fmu'}"
+    )
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms_project_path is not None
+    assert Path(get_fmu_project.config.rms_project_path) == rms_path
+
+
+async def test_patch_rms_project_path_updates_existing(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test updating an existing RMS project path."""
+    rms_path1 = session_tmp_path / "rms/model/project1.rms14.2.2"
+    rms_path1.mkdir(parents=True)
+
+    rms_path2 = session_tmp_path / "rms/model/project2.rms14.2.2"
+    rms_path2.mkdir(parents=True)
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms_project_path",
+        json={"rms_project_path": str(rms_path1)},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms_project_path is not None
+    assert Path(get_fmu_project.config.rms_project_path) == rms_path1
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms_project_path",
+        json={"rms_project_path": str(rms_path2)},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms_project_path is not None
+    assert Path(get_fmu_project.config.rms_project_path) == rms_path2
+
+
+async def test_patch_rms_project_path_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions to write to .fmu."""
+    bad_project_dir = session_tmp_path / ".fmu"
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms_project_path",
+            json={"rms_project_path": str(rms_path)},
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
+    }
+
+
+async def test_patch_rms_project_path_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test that if .fmu/ is deleted during a session an error is raised."""
+    project_dir = session_tmp_path / ".fmu"
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms_project_path",
+        json={"rms_project_path": str(rms_path)},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
+
+
+async def test_patch_rms_project_path_general_exception(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_rms_project_path."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+
+    with patch.object(
+        session.project_fmu_directory,
+        "set_config_value",
+        side_effect=ValueError("Invalid RMS project path"),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms_project_path",
+            json={"rms_project_path": str(rms_path)},
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Invalid RMS project path"}

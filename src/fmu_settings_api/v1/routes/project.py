@@ -21,6 +21,7 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
+from fmu_settings_api.models.rms import RMSProjectPath, RMSProjectPathsResult
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.session import SessionNotFoundError
 from fmu_settings_api.v1.responses import (
@@ -578,6 +579,75 @@ async def patch_access(project_service: ProjectServiceDep, access: Access) -> Me
     try:
         _, path = project_service.update_access(access)
         return Message(message=f"Saved access data to {path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get(
+    "/rms_projects",
+    response_model=RMSProjectPathsResult,
+    summary="Gets the paths of RMS projects in this project directory",
+    description=dedent(
+        """
+        Returns a list of paths to RMS projects found in the current project directory.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+    },
+)
+async def get_rms_projects(
+    project_service: ProjectServiceDep,
+) -> RMSProjectPathsResult:
+    """Get the paths of RMS projects in this project directory."""
+    try:
+        rms_project_paths = project_service.get_rms_projects()
+        return RMSProjectPathsResult(
+            rms_project_paths=[
+                RMSProjectPath(rms_project_path=path) for path in rms_project_paths
+            ]
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied while scanning for RMS projects.",
+        ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch(
+    "/rms_project_path",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves the RMS project path in the project .fmu directory",
+    description=dedent(
+        """
+        Saves the RMS project path to the project .fmu directory.
+        If existing RMS project path is present, it will be replaced by the new
+        RMS project path.
+       """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ProjectExistsResponses,
+        **LockConflictResponses,
+    },
+)
+async def patch_rms_project_path(
+    project_service: ProjectServiceDep,
+    rms_project_path: RMSProjectPath,
+) -> Message:
+    """Saves the RMS project path in the project .fmu directory."""
+    try:
+        _, path = project_service.update_rms_project_path(
+            rms_project_path.rms_project_path
+        )
+        return Message(message=f"Saved RMS project path to {path}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
