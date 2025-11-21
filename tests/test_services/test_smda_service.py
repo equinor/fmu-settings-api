@@ -274,7 +274,7 @@ async def test_get_stratigraphic_units_success() -> None:
         "data": {
             "results": [
                 {
-                    "identifier": "DROGON GP.",
+                    "identifier": "VIKING GP.",
                     "uuid": gen_uuid("DROGON"),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
@@ -317,7 +317,7 @@ async def test_get_stratigraphic_units_success() -> None:
         ],
     )
     assert len(result.stratigraphic_units) == 1
-    assert result.stratigraphic_units[0].identifier == "DROGON GP."
+    assert result.stratigraphic_units[0].identifier == "VIKING GP."
     assert result.stratigraphic_units[0].strat_unit_type == "group"
 
 
@@ -351,7 +351,7 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
         "data": {
             "results": [
                 {
-                    "identifier": "DROGON GP.",
+                    "identifier": "VIKING GP.",
                     "uuid": gen_uuid("DROGON"),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
@@ -367,7 +367,7 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
                     "color_b": 0,
                 },
                 {
-                    "identifier": "DROGON GP.",
+                    "identifier": "VIKING GP.",
                     "uuid": gen_uuid("DROGON"),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,

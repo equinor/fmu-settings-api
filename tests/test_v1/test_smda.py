@@ -882,7 +882,7 @@ async def test_post_strat_units_success(
         "data": {
             "results": [
                 {
-                    "identifier": "DROGON GP.",
+                    "identifier": "VIKING GP.",
                     "uuid": str(strat_unit_uuid),
                     "strat_unit_type": "group",
                     "strat_unit_level": 2,
@@ -915,7 +915,7 @@ async def test_post_strat_units_success(
     )
     response_data = response.json()
     assert len(response_data["stratigraphic_units"]) == 1
-    assert response_data["stratigraphic_units"][0]["identifier"] == "DROGON GP."
+    assert response_data["stratigraphic_units"][0]["identifier"] == "VIKING GP."
     assert response_data["stratigraphic_units"][0]["strat_unit_type"] == "group"
 
 
