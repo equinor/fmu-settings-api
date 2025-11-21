@@ -80,7 +80,7 @@ class SmdaMasterdataResult(BaseResponseModel):
 class StratigraphicUnit(BaseResponseModel):
     """Stratigraphic unit item."""
 
-    identifier: str = Field(examples=["DROGON GP."])
+    identifier: str = Field(examples=["VIKING GP."])
     """The stratigraphic unit identifier (name)."""
 
     uuid: UUID
