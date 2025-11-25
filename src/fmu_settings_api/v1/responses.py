@@ -44,6 +44,7 @@ CreateSessionResponses: Final[Responses] = {
             """
         ),
         [
+            {"detail": "Not authenticated"},
             {"detail": "Not authorized"},
         ],
     ),

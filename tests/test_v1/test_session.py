@@ -28,7 +28,7 @@ def test_get_session_no_token() -> None:
     """Tests the fmu routes require a session."""
     client = TestClient(app)
     response = client.post(ROUTE)
-    assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
     assert response.json() == {"detail": "Not authenticated"}
 
 
@@ -47,7 +47,7 @@ def test_get_session_no_token_does_not_create_user_fmu(
     """Tests unauthenticated requests do not create a user .fmu."""
     client = TestClient(app)
     response = client.post(ROUTE)
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Not authenticated"}
     assert not (tmp_path_mocked_home / "home/.fmu").exists()
 
