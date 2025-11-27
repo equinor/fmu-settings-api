@@ -1,5 +1,6 @@
 """Functionality for managing sessions."""
 
+import contextlib
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Self
@@ -8,6 +9,7 @@ from uuid import uuid4
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
 from pydantic import BaseModel, SecretStr
+from runrms.api import RmsApiProxy
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
@@ -51,6 +53,7 @@ class ProjectSession(Session):
 
     project_fmu_directory: ProjectFMUDirectory
     lock_errors: LockErrors = field(default_factory=LockErrors)
+    rms_project: RmsApiProxy | None = None
 
 
 class SessionManager:
@@ -99,6 +102,10 @@ class SessionManager:
                         session.project_fmu_directory._lock.release()
                     except Exception as e:
                         session.lock_errors.release = str(e)
+                    if session.rms_project is not None:
+                        with contextlib.suppress(Exception):
+                            session.rms_project.close()
+                        session.rms_project = None
             finally:
                 del self.storage[session_id]
 
@@ -200,6 +207,10 @@ async def add_fmu_project_to_session(
             session.project_fmu_directory._lock.release()
         except Exception as e:
             lock_errors.release = str(e)
+        if session.rms_project is not None:
+            with contextlib.suppress(Exception):
+                session.rms_project.close()
+            session.rms_project = None
 
     try:
         project_fmu_directory._lock.acquire()
@@ -224,6 +235,33 @@ async def add_fmu_project_to_session(
     )
     await session_manager._store_session(session_id, project_session)
     return project_session
+
+
+async def add_rms_project_to_session(
+    session_id: str,
+    rms_api: RmsApiProxy,
+) -> ProjectSession:
+    """Adds an opened RMS project to the session.
+
+    Returns:
+        The updated ProjectSession
+
+    Raises:
+        SessionNotFoundError: If no valid session was found
+    """
+    session = await session_manager.get_session(session_id)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    if session.rms_project is not None:
+        with contextlib.suppress(Exception):
+            session.rms_project.close()
+
+    session.rms_project = rms_api
+
+    await session_manager._store_session(session_id, session)
+    return session
 
 
 async def try_acquire_project_lock(session_id: str) -> ProjectSession:
@@ -301,10 +339,40 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     except Exception as e:
         maybe_project_session.lock_errors.release = str(e)
 
+    if maybe_project_session.rms_project is not None:
+        with contextlib.suppress(Exception):
+            maybe_project_session.rms_project.close()
+        maybe_project_session.rms_project = None
+
     project_session_dict = asdict(maybe_project_session)
     project_session_dict.pop("project_fmu_directory", None)
     project_session_dict.pop("lock_errors", None)
+    project_session_dict.pop("rms_project", None)
     session = Session(**project_session_dict)
+    await session_manager._store_session(session_id, session)
+    return session
+
+
+async def remove_rms_project_from_session(session_id: str) -> ProjectSession:
+    """Removes (closes) an open RMS project from a project session.
+
+    Returns:
+        The updated ProjectSession with rms_project set to None
+
+    Raises:
+        SessionNotFoundError: If no valid session was found
+    """
+    session = await session_manager.get_session(session_id)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    if session.rms_project is not None:
+        with contextlib.suppress(Exception):
+            session.rms_project.close()
+
+    session.rms_project = None
+
     await session_manager._store_session(session_id, session)
     return session
 

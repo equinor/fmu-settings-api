@@ -1427,6 +1427,23 @@ async def test_create_opened_project_response_direct_exception() -> None:
         assert "Test exception" in str(e.detail)
 
 
+async def test_create_opened_project_response_permission_error() -> None:
+    """Test the _create_opened_project_response function with PermissionError."""
+    mock_fmu_dir = Mock()
+    mock_fmu_dir.config.load.side_effect = PermissionError("Permission denied")
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_fmu_dir._lock = mock_lock
+
+    try:
+        _create_opened_project_response(mock_fmu_dir)
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as e:
+        assert e.status_code == status.HTTP_403_FORBIDDEN
+        assert "Permission denied accessing .fmu" in str(e.detail)
+
+
 async def test_get_lock_status(
     client_with_session: TestClient,
     session_tmp_path: Path,
