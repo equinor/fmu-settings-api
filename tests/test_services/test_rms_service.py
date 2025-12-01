@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fmu_settings_api.models.rms import (
-    HorizonList,
+    RmsHorizonList,
     RmsStratigraphicColumn,
-    WellList,
+    RmsWellList,
 )
 from fmu_settings_api.services.rms import RmsService
 
@@ -100,7 +100,7 @@ def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> Non
 
     horizons = rms_service.get_horizons(mock_rms_proxy)
 
-    assert isinstance(horizons, HorizonList)
+    assert isinstance(horizons, RmsHorizonList)
     assert [h.name for h in horizons.horizons] == ["H1", "H2"]
 
 
@@ -114,5 +114,5 @@ def test_get_wells(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
 
     wells = rms_service.get_wells(mock_rms_proxy)
 
-    assert isinstance(wells, WellList)
+    assert isinstance(wells, RmsWellList)
     assert [w.name for w in wells.wells] == ["W1", "W2"]

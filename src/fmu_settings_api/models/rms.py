@@ -7,17 +7,17 @@ from pydantic import Field
 from fmu_settings_api.models.common import BaseResponseModel
 
 
-class RMSProjectPath(BaseResponseModel):
+class RmsProjectPath(BaseResponseModel):
     """Path to an RMS project within the FMU project."""
 
     path: Path = Field(examples=["/path/to/some.project.rms.14.2.2"])
     """Absolute path to the RMS project within the FMU project."""
 
 
-class RMSProjectPathsResult(BaseResponseModel):
+class RmsProjectPathsResult(BaseResponseModel):
     """List of RMS project paths within the FMU project."""
 
-    results: list[RMSProjectPath]
+    results: list[RmsProjectPath]
     """List of absolute paths to RMS projects within the FMU project."""
 
 
@@ -41,29 +41,29 @@ class RmsStratigraphicColumn(BaseResponseModel):
     """List of zones in the stratigraphic column."""
 
 
-class Horizon(BaseResponseModel):
+class RmsHorizon(BaseResponseModel):
     """A horizon from an RMS project."""
 
     name: str
     """Name of the horizon."""
 
 
-class HorizonList(BaseResponseModel):
+class RmsHorizonList(BaseResponseModel):
     """List of horizons from an RMS project."""
 
-    horizons: list[Horizon]
+    horizons: list[RmsHorizon]
     """List of horizons in the project."""
 
 
-class Well(BaseResponseModel):
+class RmsWell(BaseResponseModel):
     """A well from an RMS project."""
 
     name: str
     """Name of the well."""
 
 
-class WellList(BaseResponseModel):
+class RmsWellList(BaseResponseModel):
     """List of wells from an RMS project."""
 
-    wells: list[Well]
+    wells: list[RmsWell]
     """List of wells in the project."""

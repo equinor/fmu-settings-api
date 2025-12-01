@@ -58,7 +58,7 @@ router = APIRouter(prefix="/session", tags=["session"])
     ),
     responses=CreateSessionResponses,
 )
-async def create_session(
+async def post_session(
     response: Response,
     auth_token: AuthTokenDep,
     user_fmu_dir: UserFMUDirDep,
@@ -172,7 +172,7 @@ async def patch_access_token(
     ),
     responses=GetSessionResponses,
 )
-async def read_session(
+async def get_session(
     session_service: SessionServiceNoExtendDep,
 ) -> SessionResponse:
     """Returns the current session in a serialisable format."""

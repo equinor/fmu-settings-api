@@ -7,17 +7,29 @@ from runrms.api import RmsApiProxy
 from runrms.config._rms_project import RmsProject
 
 from fmu_settings_api.models.rms import (
-    Horizon,
-    HorizonList,
+    RmsHorizon,
+    RmsHorizonList,
     RmsStratigraphicColumn,
     RmsStratigraphicZone,
-    Well,
-    WellList,
+    RmsWell,
+    RmsWellList,
 )
 
 
 class RmsService:
     """Service for handling RMS projects."""
+
+    def get_rms_version(self, rms_project_path: Path) -> str:
+        """Get the RMS version from the project's .master file.
+
+        Args:
+            rms_project_path: Path to the RMS project
+
+        Returns:
+            str: The RMS version string (e.g., "14.2.2")
+        """
+        rms_project_info = RmsProject.from_filepath(str(rms_project_path))
+        return rms_project_info.master.version
 
     def open_rms_project(self, rms_project_path: Path) -> RmsApiProxy:
         """Open an RMS project at the specified path.
@@ -30,8 +42,7 @@ class RmsService:
         Returns:
             RmsApiProxy: The opened RMS project proxy
         """
-        rms_project_info = RmsProject.from_filepath(str(rms_project_path))
-        version = rms_project_info.master.version
+        version = self.get_rms_version(rms_project_path)
 
         rms_proxy = get_rmsapi(version=version)
         return rms_proxy.Project.open(str(rms_project_path), readonly=True)
@@ -45,40 +56,38 @@ class RmsService:
         Returns:
             StratigraphicColumn: The stratigraphic column with zones
         """
-        zones = []
-        for zone in rms_project.zones:
-            strat_zone = RmsStratigraphicZone(
+        zones = [
+            RmsStratigraphicZone(
                 name=zone.name.get(),
                 top=zone.horizon_above.name.get(),
                 base=zone.horizon_below.name.get(),
             )
-            zones.append(strat_zone)
+            for zone in rms_project.zones
+        ]
         return RmsStratigraphicColumn(zones=zones)
 
-    def get_horizons(self, rms_project: RmsApiProxy) -> HorizonList:
+    def get_horizons(self, rms_project: RmsApiProxy) -> RmsHorizonList:
         """Retrieve all horizons from the RMS project.
 
         Args:
             rms_project: The opened RMS project proxy
 
         Returns:
-            HorizonList: List of horizons in the project
+            RmsHorizonList: List of horizons in the project
         """
-        horizons = []
-        for horizon in rms_project.horizons:
-            horizons.append(Horizon(name=horizon.name.get()))
-        return HorizonList(horizons=horizons)
+        horizons = [
+            RmsHorizon(name=horizon.name.get()) for horizon in rms_project.horizons
+        ]
+        return RmsHorizonList(horizons=horizons)
 
-    def get_wells(self, rms_project: RmsApiProxy) -> WellList:
+    def get_wells(self, rms_project: RmsApiProxy) -> RmsWellList:
         """Retrieve all wells from the RMS project.
 
         Args:
             rms_project: The opened RMS project proxy
 
         Returns:
-            WellList: List of wells in the project
+            RmsWellList: List of wells in the project
         """
-        wells = []
-        for well in rms_project.wells:
-            wells.append(Well(name=well.name.get()))
-        return WellList(wells=wells)
+        wells = [RmsWell(name=well.name.get()) for well in rms_project.wells]
+        return RmsWellList(wells=wells)

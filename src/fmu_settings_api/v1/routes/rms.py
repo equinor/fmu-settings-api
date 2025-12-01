@@ -10,9 +10,9 @@ from fmu_settings_api.deps.rms import (
 from fmu_settings_api.deps.session import ProjectSessionDep
 from fmu_settings_api.models.common import Message
 from fmu_settings_api.models.rms import (
-    HorizonList,
+    RmsHorizonList,
     RmsStratigraphicColumn,
-    WellList,
+    RmsWellList,
 )
 from fmu_settings_api.session import (
     SessionNotFoundError,
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/rms", tags=["rms"])
     summary="Open an RMS project and store it in the session",
     responses=GetSessionResponses,
 )
-async def open_rms_project(
+async def post_rms_project(
     rms_service: RmsServiceDep,
     project_session: ProjectSessionDep,
     rms_project_path: RmsProjectPathDep,
@@ -41,19 +41,14 @@ async def open_rms_project(
     Once opened, the project remains open in the session until explicitly closed
     or the session expires. This allows for efficient repeated access without
     reopening the project each time.
-
-    Args:
-        rms_service: RMS service instance
-        project_session: Current project session
-        rms_project_path: Path to the RMS project configured in the .fmu config file
-
-    Returns:
-        A success message
     """
     try:
         opened_project = rms_service.open_rms_project(rms_project_path)
+        rms_version = rms_service.get_rms_version(rms_project_path)
         await add_rms_project_to_session(project_session.id, opened_project)
-        return Message(message="RMS project opened successfully")
+        return Message(
+            message=f"RMS project opened successfully with RMS version {rms_version}"
+        )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
@@ -66,16 +61,13 @@ async def open_rms_project(
     summary="Close the RMS project in the session",
     responses=GetSessionResponses,
 )
-async def close_rms_project(
+async def delete_rms_project(
     project_session: ProjectSessionDep,
 ) -> Message:
     """Close the RMS project that is currently open in the session.
 
     This removes the RMS project reference from the session. The project
     should be closed when it is no longer needed to free up resources.
-
-    Returns:
-        A success message
     """
     try:
         await remove_rms_project_from_session(project_session.id)
@@ -92,7 +84,7 @@ async def close_rms_project(
     summary="Get the stratigraphic column from the open RMS project",
     responses=GetSessionResponses,
 )
-async def get_stratigraphic_column(
+async def get_strat_column(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
 ) -> RmsStratigraphicColumn:
@@ -100,9 +92,6 @@ async def get_stratigraphic_column(
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
-
-    Returns:
-        The stratigraphic column containing zones with their horizons
     """
     try:
         return rms_service.get_strat_column(opened_rms_project)
@@ -112,21 +101,18 @@ async def get_stratigraphic_column(
 
 @router.get(
     "/horizons",
-    response_model=HorizonList,
+    response_model=RmsHorizonList,
     summary="Get all horizons from the open RMS project",
     responses=GetSessionResponses,
 )
 async def get_horizons(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> HorizonList:
+) -> RmsHorizonList:
     """Retrieve all horizons from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
-
-    Returns:
-        List of horizons in the project
     """
     try:
         return rms_service.get_horizons(opened_rms_project)
@@ -136,21 +122,18 @@ async def get_horizons(
 
 @router.get(
     "/wells",
-    response_model=WellList,
+    response_model=RmsWellList,
     summary="Get all wells from the open RMS project",
     responses=GetSessionResponses,
 )
 async def get_wells(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> WellList:
+) -> RmsWellList:
     """Retrieve all wells from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
-
-    Returns:
-        List of wells in the project
     """
     try:
         return rms_service.get_wells(opened_rms_project)
