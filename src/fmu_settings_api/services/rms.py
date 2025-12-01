@@ -9,10 +9,10 @@ from runrms.config._rms_project import RmsProject
 from fmu_settings_api.models.rms import (
     RmsHorizon,
     RmsHorizonList,
-    RmsStratigraphicColumn,
     RmsStratigraphicZone,
     RmsWell,
     RmsWellList,
+    RmsZoneList,
 )
 
 
@@ -47,14 +47,14 @@ class RmsService:
         rms_proxy = get_rmsapi(version=version)
         return rms_proxy.Project.open(str(rms_project_path), readonly=True)
 
-    def get_strat_column(self, rms_project: RmsApiProxy) -> RmsStratigraphicColumn:
-        """Retrieve the stratigraphic column from the RMS project.
+    def get_zones(self, rms_project: RmsApiProxy) -> RmsZoneList:
+        """Retrieve the zones from the RMS project.
 
         Args:
             rms_project: The opened RMS project proxy
 
         Returns:
-            StratigraphicColumn: The stratigraphic column with zones
+            RmsZoneList: List of zones in the project
         """
         zones = [
             RmsStratigraphicZone(
@@ -64,7 +64,7 @@ class RmsService:
             )
             for zone in rms_project.zones
         ]
-        return RmsStratigraphicColumn(zones=zones)
+        return RmsZoneList(zones=zones)
 
     def get_horizons(self, rms_project: RmsApiProxy) -> RmsHorizonList:
         """Retrieve all horizons from the RMS project.

@@ -15,10 +15,10 @@ from fmu_settings_api.deps.rms import (
 from fmu_settings_api.models.rms import (
     RmsHorizon,
     RmsHorizonList,
-    RmsStratigraphicColumn,
     RmsStratigraphicZone,
     RmsWell,
     RmsWellList,
+    RmsZoneList,
 )
 from fmu_settings_api.session import SessionNotFoundError
 
@@ -110,35 +110,35 @@ async def test_close_rms_project_no_session() -> None:
     assert response.json()["detail"] == "No active session found"
 
 
-async def test_get_strat_column_success(
+async def test_get_zones_success(
     client_with_project_session: TestClient,
 ) -> None:
-    """Test getting stratigraphic column successfully."""
+    """Test getting zones successfully."""
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
-    expected_column = RmsStratigraphicColumn(
+    expected_column = RmsZoneList(
         zones=[
             RmsStratigraphicZone(name="Zone1", top="TopHorizon", base="BaseHorizon"),
             RmsStratigraphicZone(name="Zone2", top="BaseHorizon", base="BottomHorizon"),
         ]
     )
-    mock_service.get_strat_column.return_value = expected_column
+    mock_service.get_zones.return_value = expected_column
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
 
-    response = client_with_project_session.get(f"{ROUTE}/strat_column")
+    response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_200_OK
-    assert RmsStratigraphicColumn(**response.json()) == expected_column
-    mock_service.get_strat_column.assert_called_once_with(mock_rms_project)
+    assert RmsZoneList(**response.json()) == expected_column
+    mock_service.get_zones.assert_called_once_with(mock_rms_project)
 
 
-async def test_get_strat_column_no_project_open(
+async def test_get_zones_no_project_open(
     client_with_project_session: TestClient,
 ) -> None:
-    """Test getting stratigraphic column when no project is open."""
-    response = client_with_project_session.get(f"{ROUTE}/strat_column")
+    """Test getting zones when no project is open."""
+    response = client_with_project_session.get(f"{ROUTE}/zones")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json() == {
         "detail": "No RMS project is currently open. Please open an RMS project first."
@@ -269,17 +269,17 @@ async def test_close_rms_project_generic_error(
     assert response.json()["detail"] == "Unexpected error"
 
 
-async def test_get_strat_column_service_error(
+async def test_get_zones_service_error(
     client_with_project_session: TestClient,
 ) -> None:
-    """Test getting stratigraphic column when service raises an error."""
+    """Test getting zones when service raises an error."""
     mock_service = MagicMock()
-    mock_service.get_strat_column.side_effect = Exception("Service error")
+    mock_service.get_zones.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
 
-    response = client_with_project_session.get(f"{ROUTE}/strat_column")
+    response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "Service error"

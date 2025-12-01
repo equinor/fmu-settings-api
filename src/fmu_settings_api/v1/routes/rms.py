@@ -11,8 +11,8 @@ from fmu_settings_api.deps.session import ProjectSessionDep
 from fmu_settings_api.models.common import Message
 from fmu_settings_api.models.rms import (
     RmsHorizonList,
-    RmsStratigraphicColumn,
     RmsWellList,
+    RmsZoneList,
 )
 from fmu_settings_api.session import (
     SessionNotFoundError,
@@ -79,22 +79,22 @@ async def delete_rms_project(
 
 
 @router.get(
-    "/strat_column",
-    response_model=RmsStratigraphicColumn,
-    summary="Get the stratigraphic column from the open RMS project",
+    "/zones",
+    response_model=RmsZoneList,
+    summary="Get the zones from the open RMS project",
     responses=GetSessionResponses,
 )
-async def get_strat_column(
+async def get_zones(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> RmsStratigraphicColumn:
-    """Retrieve the stratigraphic column from the currently open RMS project.
+) -> RmsZoneList:
+    """Retrieve the zones from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
     try:
-        return rms_service.get_strat_column(opened_rms_project)
+        return rms_service.get_zones(opened_rms_project)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

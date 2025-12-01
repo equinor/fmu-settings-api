@@ -34,11 +34,11 @@ class RmsStratigraphicZone(BaseResponseModel):
     """Name of the horizon at the base of the zone."""
 
 
-class RmsStratigraphicColumn(BaseResponseModel):
-    """Stratigraphic column containing zones from an RMS project."""
+class RmsZoneList(BaseResponseModel):
+    """List of zones from an RMS project."""
 
     zones: list[RmsStratigraphicZone]
-    """List of zones in the stratigraphic column."""
+    """List of zones in the project."""
 
 
 class RmsHorizon(BaseResponseModel):

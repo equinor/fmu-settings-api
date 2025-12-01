@@ -7,8 +7,8 @@ import pytest
 
 from fmu_settings_api.models.rms import (
     RmsHorizonList,
-    RmsStratigraphicColumn,
     RmsWellList,
+    RmsZoneList,
 )
 from fmu_settings_api.services.rms import RmsService
 
@@ -74,20 +74,20 @@ def test_open_rms_project_reads_version_from_master(rms_service: RmsService) -> 
         mock_get_rmsapi.assert_called_once_with(version="13.0.3")
 
 
-def test_get_strat_column(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
-    """Test retrieving the stratigraphic column."""
+def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
+    """Test retrieving the zones."""
     zone = MagicMock()
     zone.name.get.return_value = "Zone A"
     zone.horizon_above.name.get.return_value = "Top"
     zone.horizon_below.name.get.return_value = "Base"
     mock_rms_proxy.zones = [zone]
 
-    strat_column = rms_service.get_strat_column(mock_rms_proxy)
+    zones = rms_service.get_zones(mock_rms_proxy)
 
-    assert isinstance(strat_column, RmsStratigraphicColumn)
-    assert strat_column.zones[0].name == "Zone A"
-    assert strat_column.zones[0].top == "Top"
-    assert strat_column.zones[0].base == "Base"
+    assert isinstance(zones, RmsZoneList)
+    assert zones.zones[0].name == "Zone A"
+    assert zones.zones[0].top == "Top"
+    assert zones.zones[0].base == "Base"
 
 
 def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
