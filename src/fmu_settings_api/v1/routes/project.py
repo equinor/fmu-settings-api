@@ -644,9 +644,9 @@ async def patch_rms(
 ) -> Message:
     """Saves the RMS project path and version in the project .fmu directory."""
     try:
-        _, rms_version = project_service.update_rms(rms_project_path.path)
+        rms_config = project_service.update_rms(rms_project_path.path)
         return Message(
-            message=f"Saved RMS project path with RMS version {rms_version} "
+            message=f"Saved RMS project path with RMS version {rms_config.version} "
             f"to {project_service.fmu_dir_path}"
         )
     except FileNotFoundError as e:

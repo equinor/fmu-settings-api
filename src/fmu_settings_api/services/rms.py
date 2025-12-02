@@ -19,7 +19,8 @@ from fmu_settings_api.models.rms import (
 class RmsService:
     """Service for handling RMS projects."""
 
-    def get_rms_version(self, rms_project_path: Path) -> str:
+    @staticmethod
+    def get_rms_version(rms_project_path: Path) -> str:
         """Get the RMS version from the project's .master file.
 
         Args:
