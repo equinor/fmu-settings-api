@@ -619,15 +619,16 @@ async def get_rms_projects(
 
 
 @router.patch(
-    "/rms_project_path",
+    "/rms",
     response_model=Message,
     dependencies=[WritePermissionDep, RefreshLockDep],
-    summary="Saves the RMS project path in the project .fmu directory",
+    summary="Saves the RMS project path and version in the project .fmu directory",
     description=dedent(
         """
-        Saves the RMS project path to the project .fmu directory.
-        If existing RMS project path is present, it will be replaced by the new
-        RMS project path.
+        Saves the RMS project path and version to the project .fmu directory.
+        The RMS version is set automatically based on the provided RMS project path.
+        If existing RMS project path and version are present, they will be
+        replaced by the new RMS project path and version.
        """
     ),
     responses={
@@ -637,16 +638,19 @@ async def get_rms_projects(
         **LockConflictResponses,
     },
 )
-async def patch_rms_project_path(
+async def patch_rms(
     project_service: ProjectServiceDep,
     rms_project_path: RmsProjectPath,
 ) -> Message:
-    """Saves the RMS project path in the project .fmu directory."""
+    """Saves the RMS project path and version in the project .fmu directory."""
     try:
-        project_service.update_rms_project_path(rms_project_path.path)
+        _, rms_version = project_service.update_rms(rms_project_path.path)
         return Message(
-            message=f"Saved RMS project path to {project_service.fmu_dir_path}"
+            message=f"Saved RMS project path with RMS version {rms_version} "
+            f"to {project_service.fmu_dir_path}"
         )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

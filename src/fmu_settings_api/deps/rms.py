@@ -8,6 +8,7 @@ from runrms.api import RmsApiProxy
 
 from fmu_settings_api.services.rms import RmsService
 
+from .project import ProjectServiceDep
 from .session import ProjectSessionDep
 
 
@@ -19,11 +20,9 @@ async def get_rms_service() -> RmsService:
 RmsServiceDep = Annotated[RmsService, Depends(get_rms_service)]
 
 
-async def get_rms_project_path(project_session: ProjectSessionDep) -> Path:
+async def get_rms_project_path(project_service: ProjectServiceDep) -> Path:
     """Returns the RMS project path configured in the project."""
-    rms_project_path = (
-        project_session.project_fmu_directory.config.load().rms_project_path
-    )
+    rms_project_path = project_service.rms_project_path
     if rms_project_path is None:
         raise HTTPException(
             status_code=400,

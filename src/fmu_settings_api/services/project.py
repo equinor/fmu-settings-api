@@ -9,6 +9,8 @@ from fmu.settings._global_config import find_global_config
 from fmu_settings_api.models import FMUProject
 from fmu_settings_api.models.project import GlobalConfigPath
 
+from .rms import RmsService
+
 
 class ProjectService:
     """Service for handling FMU project business logic."""
@@ -41,7 +43,11 @@ class ProjectService:
     @property
     def rms_project_path(self) -> Path | None:
         """Returns the path to the RMS project from the config file."""
-        return self._fmu_dir.config.load().rms_project_path
+        config = self._fmu_dir.config.load()
+        rms_config = getattr(config, "rms", None)
+        if rms_config is None or getattr(rms_config, "path", None) is None:
+            return None
+        return Path(rms_config.path)
 
     def check_valid_global_config(self) -> None:
         """Check if a valid global config exists at the default location."""
@@ -93,7 +99,21 @@ class ProjectService:
         """Get the paths of RMS projects in this project directory."""
         return self._fmu_dir.find_rms_projects()
 
-    def update_rms_project_path(self, rms_project_path: Path) -> bool:
-        """Save the RMS project path in the project FMU directory."""
-        self._fmu_dir.set_config_value("rms_project_path", str(rms_project_path))
-        return True
+    def update_rms(self, rms_project_path: Path) -> tuple[bool, str]:
+        """Save the RMS project path and version in the project FMU directory."""
+        rms_service = RmsService()
+        try:
+            rms_version = rms_service.get_rms_version(rms_project_path)
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"RMS project path {rms_project_path} does not exist."
+            ) from e
+
+        self._fmu_dir.set_config_value(
+            "rms",
+            {
+                "path": rms_project_path,
+                "version": rms_version,
+            },
+        )
+        return True, rms_version

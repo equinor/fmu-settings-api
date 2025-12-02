@@ -2176,24 +2176,24 @@ async def test_get_rms_projects_general_exception(
         assert response.json() == {"detail": "Failed to scan directories"}
 
 
-# PATCH project/rms_project_path #
+# PATCH project/rms #
 
 
-async def test_patch_rms_project_path_requires_project_session(
+async def test_patch_rms_requires_project_session(
     client_with_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
     """Test saving RMS project path requires an active project session."""
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     response = client_with_session.patch(
-        f"{ROUTE}/rms_project_path",
+        f"{ROUTE}/rms",
         json={"path": str(rms_path)},
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
     assert response.json()["detail"] == "No FMU project directory open"
 
 
-async def test_patch_rms_project_path_success(
+async def test_patch_rms_success(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
@@ -2203,25 +2203,33 @@ async def test_patch_rms_project_path_success(
 
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.rms_project_path is None
+    assert get_fmu_project.config.rms is None
 
-    response = client_with_project_session.patch(
-        f"{ROUTE}/rms_project_path",
-        json={"path": str(rms_path)},
-    )
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
     assert response.status_code == status.HTTP_200_OK
-    assert (
-        response.json()["message"]
-        == f"Saved RMS project path to {get_fmu_project.path / '.fmu'}"
+    expected_message = (
+        f"Saved RMS project path with RMS version 14.2.2 "
+        f"to {get_fmu_project.path / '.fmu'}"
     )
+    assert response.json()["message"] == expected_message
 
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.rms_project_path is not None
-    assert Path(get_fmu_project.config.rms_project_path) == rms_path
+    assert get_fmu_project.config.rms is not None
+    assert Path(get_fmu_project.config.rms.path) == rms_path
 
 
-async def test_patch_rms_project_path_updates_existing(
+async def test_patch_rms_updates_existing(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
@@ -2232,30 +2240,37 @@ async def test_patch_rms_project_path_updates_existing(
     rms_path2 = session_tmp_path / "rms/model/project2.rms14.2.2"
     rms_path2.mkdir(parents=True)
 
-    response = client_with_project_session.patch(
-        f"{ROUTE}/rms_project_path",
-        json={"path": str(rms_path1)},
-    )
-    assert response.status_code == status.HTTP_200_OK
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
 
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.rms_project_path is not None
-    assert Path(get_fmu_project.config.rms_project_path) == rms_path1
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path1)},
+        )
+        assert response.status_code == status.HTTP_200_OK
 
-    response = client_with_project_session.patch(
-        f"{ROUTE}/rms_project_path",
-        json={"path": str(rms_path2)},
-    )
-    assert response.status_code == status.HTTP_200_OK
+        get_response = client_with_project_session.get(ROUTE)
+        get_fmu_project = FMUProject.model_validate(get_response.json())
+        assert get_fmu_project.config.rms is not None
+        assert Path(get_fmu_project.config.rms.path) == rms_path1
 
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.rms_project_path is not None
-    assert Path(get_fmu_project.config.rms_project_path) == rms_path2
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path2)},
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        get_response = client_with_project_session.get(ROUTE)
+        get_fmu_project = FMUProject.model_validate(get_response.json())
+        assert get_fmu_project.config.rms is not None
+        assert Path(get_fmu_project.config.rms.path) == rms_path2
 
 
-async def test_patch_rms_project_path_no_directory_permissions(
+async def test_patch_rms_no_directory_permissions(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     no_permissions: Callable[[str | Path], AbstractContextManager[None]],
@@ -2266,7 +2281,7 @@ async def test_patch_rms_project_path_no_directory_permissions(
 
     with no_permissions(bad_project_dir):
         response = client_with_project_session.patch(
-            f"{ROUTE}/rms_project_path",
+            f"{ROUTE}/rms",
             json={"path": str(rms_path)},
         )
 
@@ -2276,7 +2291,7 @@ async def test_patch_rms_project_path_no_directory_permissions(
     }
 
 
-async def test_patch_rms_project_path_no_directory(
+async def test_patch_rms_no_directory(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
@@ -2288,18 +2303,37 @@ async def test_patch_rms_project_path_no_directory(
     assert not project_dir.exists()
 
     response = client_with_project_session.patch(
-        f"{ROUTE}/rms_project_path",
+        f"{ROUTE}/rms",
         json={"path": str(rms_path)},
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
 
 
-async def test_patch_rms_project_path_general_exception(
+async def test_patch_rms_path_not_found(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test 404 returns when RMS path does not exist."""
+    rms_path = session_tmp_path / "missing_project.rms14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.project.RmsService.get_rms_version",
+        side_effect=FileNotFoundError("master file not found"),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": f"RMS project path {rms_path} does not exist."}
+
+
+async def test_patch_rms_general_exception(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
     session_manager: SessionManager,
 ) -> None:
-    """Test 500 returns when general exceptions occur in patch_rms_project_path."""
+    """Test 500 returns when general exceptions occur in patch_rms."""
     session_id = client_with_project_session.cookies.get(
         settings.SESSION_COOKIE_KEY, None
     )
@@ -2308,14 +2342,24 @@ async def test_patch_rms_project_path_general_exception(
     assert isinstance(session, ProjectSession)
 
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
 
-    with patch.object(
-        session.project_fmu_directory,
-        "set_config_value",
-        side_effect=ValueError("Invalid RMS project path"),
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with (
+        patch(
+            "fmu_settings_api.services.rms.RmsProject.from_filepath",
+            return_value=mock_rms_project_info,
+        ),
+        patch.object(
+            session.project_fmu_directory,
+            "set_config_value",
+            side_effect=ValueError("Invalid RMS project path"),
+        ),
     ):
         response = client_with_project_session.patch(
-            f"{ROUTE}/rms_project_path",
+            f"{ROUTE}/rms",
             json={"path": str(rms_path)},
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR

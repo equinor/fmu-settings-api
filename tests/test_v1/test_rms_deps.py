@@ -24,23 +24,21 @@ async def test_get_rms_service() -> None:
 async def test_get_rms_project_path_success() -> None:
     """Test getting RMS project path when configured."""
     expected_path = Path("/path/to/rms/project")
-    project_session_mock = MagicMock()
-    config_load = project_session_mock.project_fmu_directory.config.load
-    config_load.return_value.rms_project_path = expected_path
+    project_service_mock = MagicMock()
+    project_service_mock.rms_project_path = expected_path
 
-    result = await get_rms_project_path(project_session_mock)
+    result = await get_rms_project_path(project_service_mock)
 
     assert result == expected_path
 
 
 async def test_get_rms_project_path_not_configured() -> None:
     """Test that HTTPException is raised when RMS path is not configured."""
-    project_session_mock = MagicMock()
-    config_load = project_session_mock.project_fmu_directory.config.load
-    config_load.return_value.rms_project_path = None
+    project_service_mock = MagicMock()
+    project_service_mock.rms_project_path = None
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_rms_project_path(project_session_mock)
+        await get_rms_project_path(project_service_mock)
 
     assert exc_info.value.status_code == 400  # noqa: PLR2004
     assert (
