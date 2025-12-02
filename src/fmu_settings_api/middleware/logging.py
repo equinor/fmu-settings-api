@@ -5,7 +5,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from fmu_settings_api.logging import get_logger
 
@@ -49,6 +51,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 duration_ms=round(duration * 1000, 2),
             )
             return response
+        except HTTPException:
+            raise
         except Exception as e:
             duration = time.time() - start_time
             logger.exception(
@@ -59,4 +63,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 error_type=type(e).__name__,
                 duration_ms=round(duration * 1000, 2),
             )
-            raise
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "An unexpected error occurred."},
+            )

@@ -174,8 +174,6 @@ async def get_project(session_service: SessionServiceDep) -> FMUProject:
         raise HTTPException(
             status_code=404, detail=f"No .fmu directory found from {path}"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
     return _create_opened_project_response(fmu_dir)
 
@@ -215,8 +213,6 @@ async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
                 "validation_errors": e.errors(),
             },
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -259,8 +255,6 @@ async def post_project(
         raise HTTPException(
             status_code=409, detail=f".fmu exists at {path} but is not a directory"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
     return _create_opened_project_response(fmu_dir)
 
@@ -307,8 +301,6 @@ async def post_init_project(
         raise HTTPException(
             status_code=409, detail=f".fmu already exists at {path}"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
     return _create_opened_project_response(fmu_dir)
 
@@ -368,8 +360,6 @@ async def post_global_config(
                 "validation_errors": e.errors(),
             },
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete(
@@ -397,8 +387,6 @@ async def delete_project_session(
         )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -430,8 +418,6 @@ async def post_lock_acquire(session_service: ProjectSessionServiceDep) -> Messag
         return Message(message=message)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post(
@@ -456,20 +442,17 @@ async def post_lock_refresh(
     session_service: ProjectSessionServiceNoExtendDep,
 ) -> Message:
     """Refreshes the project lock and returns a status message."""
-    try:
-        lock_status = session_service.get_lock_status()
-        if lock_status.is_lock_acquired and lock_status.last_lock_refresh_error is None:
-            message = "Project lock refreshed successfully."
-        elif lock_status.last_lock_refresh_error:
-            message = (
-                f"Lock refresh attempted but an error occurred: "
-                f"{lock_status.last_lock_refresh_error}"
-            )
-        else:
-            message = "Lock was not refreshed because the lock is not currently held."
-        return Message(message=message)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    lock_status = session_service.get_lock_status()
+    if lock_status.is_lock_acquired and lock_status.last_lock_refresh_error is None:
+        message = "Project lock refreshed successfully."
+    elif lock_status.last_lock_refresh_error:
+        message = (
+            f"Lock refresh attempted but an error occurred: "
+            f"{lock_status.last_lock_refresh_error}"
+        )
+    else:
+        message = "Lock was not refreshed because the lock is not currently held."
+    return Message(message=message)
 
 
 @router.get(
@@ -519,13 +502,8 @@ async def patch_masterdata(
     smda_masterdata: Smda,
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
-    try:
-        project_service.update_masterdata(smda_masterdata)
-        return Message(
-            message=f"Saved SMDA masterdata to {project_service.fmu_dir_path}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    project_service.update_masterdata(smda_masterdata)
+    return Message(message=f"Saved SMDA masterdata to {project_service.fmu_dir_path}")
 
 
 @router.patch(
@@ -549,11 +527,8 @@ async def patch_masterdata(
 )
 async def patch_model(project_service: ProjectServiceDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
-    try:
-        project_service.update_model(model)
-        return Message(message=f"Saved model data to {project_service.fmu_dir_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    project_service.update_model(model)
+    return Message(message=f"Saved model data to {project_service.fmu_dir_path}")
 
 
 @router.patch(
@@ -577,11 +552,8 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
 )
 async def patch_access(project_service: ProjectServiceDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
-    try:
-        project_service.update_access(access)
-        return Message(message=f"Saved access data to {project_service.fmu_dir_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    project_service.update_access(access)
+    return Message(message=f"Saved access data to {project_service.fmu_dir_path}")
 
 
 @router.get(
@@ -614,8 +586,6 @@ async def get_rms_projects(
         ) from e
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.patch(
@@ -651,8 +621,6 @@ async def patch_rms(
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
@@ -664,14 +632,17 @@ def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     try:
         service = ProjectService(fmu_dir)
         return service.get_project_data()
-    except (FileNotFoundError, ValueError) as e:
+    except FileNotFoundError as e:
         raise HTTPException(
-            status_code=500,
+            status_code=404,
+            detail=f"Missing configuration file in project at {fmu_dir.path}: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
             detail=f"Corrupt project found at {fmu_dir.path}: {e}",
         ) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403, detail="Permission denied accessing .fmu"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e

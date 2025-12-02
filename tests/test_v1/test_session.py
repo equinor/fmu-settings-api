@@ -346,7 +346,7 @@ def test_get_session_unknown_failure(client_with_session: TestClient) -> None:
     ):
         response = client_with_session.get(ROUTE)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json()["detail"] == "boom"
+        assert response.json()["detail"] == "An unexpected error occurred."
 
 
 def test_patch_invalid_access_token_key_to_session(
@@ -416,7 +416,7 @@ async def test_patch_access_token_unknown_failure(
             },
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json()["detail"] == "foo"
+        assert response.json()["detail"] == "An unexpected error occurred."
 
 
 def test_post_session_handles_general_exception(
@@ -432,7 +432,7 @@ def test_post_session_handles_general_exception(
         response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert "Session creation failed" in response.json()["detail"]
+        assert response.json()["detail"] == "An unexpected error occurred."
 
 
 async def test_new_session_preserves_state_from_old_session(

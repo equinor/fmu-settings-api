@@ -90,7 +90,7 @@ async def test_open_rms_project_service_error(
     response = client_with_project_session.post(f"{ROUTE}/")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json() == {"detail": "RMS service error."}
+    assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_close_rms_project_success(
@@ -266,7 +266,7 @@ async def test_close_rms_project_generic_error(
         response = client_with_project_session.delete(f"{ROUTE}/")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"] == "Unexpected error"
+    assert response.json()["detail"] == "An unexpected error occurred."
 
 
 async def test_get_zones_service_error(
@@ -282,7 +282,7 @@ async def test_get_zones_service_error(
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"] == "Service error"
+    assert response.json()["detail"] == "An unexpected error occurred."
 
 
 async def test_get_horizons_service_error(
@@ -298,7 +298,7 @@ async def test_get_horizons_service_error(
     response = client_with_project_session.get(f"{ROUTE}/horizons")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"] == "Service error"
+    assert response.json()["detail"] == "An unexpected error occurred."
 
 
 async def test_get_wells_service_error(
@@ -314,4 +314,4 @@ async def test_get_wells_service_error(
     response = client_with_project_session.get(f"{ROUTE}/wells")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"] == "Service error"
+    assert response.json()["detail"] == "An unexpected error occurred."

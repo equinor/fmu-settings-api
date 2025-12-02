@@ -152,13 +152,13 @@ async def test_get_project_raises_other_exceptions(
     ):
         response = client_with_session.get(ROUTE)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "foo"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_get_project_directory_config_missing(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Test 500 returns when project .fmu has missing config."""
+    """Test 404 returns when project .fmu has missing config."""
     monkeypatch.chdir(session_tmp_path)
 
     fmu_dir = init_fmu_directory(session_tmp_path)
@@ -168,9 +168,9 @@ async def test_get_project_directory_config_missing(
     assert not fmu_dir.config.exists
 
     response = client_with_session.get(ROUTE)
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"].startswith(
-        f"Corrupt project found at {session_tmp_path}"
+        f"Missing configuration file in project at {session_tmp_path}"
     )
 
 
@@ -187,7 +187,7 @@ async def test_get_project_directory_corrupt(
     response = client_with_session.get(ROUTE)
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     detail = response.json()["detail"]
-    assert "Invalid JSON in resource file for 'ProjectConfigManager'" in detail
+    assert detail == "An unexpected error occurred."
 
 
 async def test_get_project_directory_exists(
@@ -334,7 +334,7 @@ async def test_post_fmu_directory_is_not_directory(
 async def test_post_project_directory_config_missing(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
-    """Test 500 returns when project .fmu has missing config."""
+    """Test 404 returns when project .fmu has missing config."""
     fmu_dir = init_fmu_directory(session_tmp_path)
     assert fmu_dir.config.exists
 
@@ -342,9 +342,9 @@ async def test_post_project_directory_config_missing(
     assert not fmu_dir.config.exists
 
     response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"].startswith(
-        f"Corrupt project found at {session_tmp_path}"
+        f"Missing configuration file in project at {session_tmp_path}"
     )
 
 
@@ -359,7 +359,7 @@ async def test_post_project_directory_corrupt(
     response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     detail = response.json()["detail"]
-    assert "Invalid JSON in resource file for 'ProjectConfigManager'" in detail
+    assert detail == "An unexpected error occurred."
 
 
 async def test_post_project_directory_not_exists(
@@ -398,7 +398,7 @@ async def test_post_fmu_directory_raises_other_exceptions(
         path = "/dev/null"
         response = client_with_session.post(ROUTE, json={"path": path})
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "foo"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_post_project_writes_to_user_recent_projects(
@@ -591,7 +591,7 @@ async def test_delete_project_session_other_exception(
     ):
         response = client_with_project_session.delete(ROUTE)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Unexpected error"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 # POST project/init #
@@ -676,7 +676,7 @@ async def test_post_init_fmu_directory_raises_other_exceptions(
         path = "/dev/null"
         response = client_with_session.post(f"{ROUTE}/init", json={"path": path})
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "foo"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_post_init_and_get_fmu_directory_succeeds(
@@ -909,7 +909,7 @@ async def test_patch_masterdata_general_exception(
             f"{ROUTE}/masterdata", json=smda_masterdata
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Invalid config value"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_load_global_config_from_default_path(
@@ -1090,7 +1090,7 @@ async def test_load_global_config_general_exception(
     ):
         response = client_with_project_session.post(f"{ROUTE}/global_config")
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Config processing error"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_load_global_config_existing_masterdata(
@@ -1166,7 +1166,7 @@ async def test_check_global_config_status_general_exception(
     ):
         response = client_with_project_session.get(f"{ROUTE}/global_config_status")
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Global config lookup failed"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_check_global_config_status_with_disallowed_content(
@@ -1305,7 +1305,7 @@ async def test_patch_model_general_exception(
     ):
         response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Invalid model data"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 # PATCH project/access #
@@ -1406,7 +1406,7 @@ async def test_patch_access_general_exception(
             f"{ROUTE}/access", json=access_data
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Invalid access data"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 async def test_create_opened_project_response_direct_exception() -> None:
@@ -1421,10 +1421,9 @@ async def test_create_opened_project_response_direct_exception() -> None:
 
     try:
         _create_opened_project_response(mock_fmu_dir)
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as e:
-        assert e.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert "Test exception" in str(e.detail)
+        raise AssertionError("Expected Exception")
+    except Exception as e:
+        assert str(e) == "Test exception"
 
 
 async def test_create_opened_project_response_permission_error() -> None:
@@ -1891,7 +1890,7 @@ async def test_post_lock_acquire_unexpected_error(
 
     mock_try_acquire.assert_awaited_once()
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json() == {"detail": "boom"}
+    assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 # POST project/lock_refresh #
@@ -2038,7 +2037,7 @@ async def test_post_lock_refresh_general_exception(
         response = client_with_project_session.post(f"{ROUTE}/lock_refresh")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json()["detail"] == "Unexpected error"
+    assert response.json()["detail"] == "An unexpected error occurred."
 
 
 # GET project/rms_projects #
@@ -2173,7 +2172,7 @@ async def test_get_rms_projects_general_exception(
     ):
         response = client_with_project_session.get(f"{ROUTE}/rms_projects")
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Failed to scan directories"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 # PATCH project/rms #
@@ -2363,4 +2362,4 @@ async def test_patch_rms_general_exception(
             json={"path": str(rms_path)},
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json() == {"detail": "Invalid RMS project path"}
+        assert response.json() == {"detail": "An unexpected error occurred."}
