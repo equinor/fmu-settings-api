@@ -1,7 +1,7 @@
 """Tests the /api/v1/session routes."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import status
@@ -19,6 +19,7 @@ from fmu_settings_api.session import (
     Session,
     SessionManager,
     SessionNotFoundError,
+    add_rms_project_to_session,
 )
 
 ROUTE = "/api/v1/session"
@@ -485,6 +486,54 @@ async def test_new_session_preserves_state_from_old_session(
 
     with pytest.raises(SessionNotFoundError):
         await session_manager.get_session(session_id)
+
+
+async def test_new_session_preserves_rms_project_from_old_session(
+    tmp_path_mocked_home: Path,
+    mock_token: str,
+    session_manager: SessionManager,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Tests that creating a new session migrates an open RMS project."""
+    client = TestClient(app)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_path.mkdir()
+    init_fmu_directory(project_path)
+    monkeypatch.chdir(project_path)
+
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+    assert response.status_code == status.HTTP_200_OK
+
+    session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    rms_proxy = MagicMock(close=MagicMock())
+    await add_rms_project_to_session(session_id, rms_proxy)
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    assert session.rms_project is rms_proxy
+
+    different_path = tmp_path_mocked_home / "different_project"
+    different_path.mkdir()
+    monkeypatch.chdir(different_path)
+
+    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
+    assert response.status_code == status.HTTP_200_OK
+
+    new_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert new_session_id is not None
+    assert new_session_id != session_id
+
+    new_session = await session_manager.get_session(new_session_id)
+    assert isinstance(new_session, ProjectSession)
+    assert new_session.rms_project is rms_proxy
+
+    with pytest.raises(SessionNotFoundError):
+        await session_manager.get_session(session_id)
+
+    rms_proxy.close.assert_not_called()
 
 
 async def test_new_session_without_old_session_finds_nearest_project(

@@ -21,7 +21,7 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
-from fmu_settings_api.models.rms import RMSProjectPath, RMSProjectPathsResult
+from fmu_settings_api.models.rms import RmsProjectPath, RmsProjectPathsResult
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.session import SessionNotFoundError
 from fmu_settings_api.v1.responses import (
@@ -284,7 +284,7 @@ async def post_project(
         **ProjectExistsResponses,
     },
 )
-async def init_project(
+async def post_init_project(
     session_service: SessionServiceDep,
     fmu_dir_path: FMUDirPath,
 ) -> FMUProject:
@@ -468,8 +468,6 @@ async def post_lock_refresh(
         else:
             message = "Lock was not refreshed because the lock is not currently held."
         return Message(message=message)
-    except SessionNotFoundError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -588,7 +586,7 @@ async def patch_access(project_service: ProjectServiceDep, access: Access) -> Me
 
 @router.get(
     "/rms_projects",
-    response_model=RMSProjectPathsResult,
+    response_model=RmsProjectPathsResult,
     summary="Gets the paths of RMS projects in this project directory",
     description=dedent(
         """
@@ -602,12 +600,12 @@ async def patch_access(project_service: ProjectServiceDep, access: Access) -> Me
 )
 async def get_rms_projects(
     project_service: ProjectServiceDep,
-) -> RMSProjectPathsResult:
+) -> RmsProjectPathsResult:
     """Get the paths of RMS projects in this project directory."""
     try:
         rms_project_paths = project_service.get_rms_projects()
-        return RMSProjectPathsResult(
-            results=[RMSProjectPath(path=path) for path in rms_project_paths]
+        return RmsProjectPathsResult(
+            results=[RmsProjectPath(path=path) for path in rms_project_paths]
         )
     except PermissionError as e:
         raise HTTPException(
@@ -641,7 +639,7 @@ async def get_rms_projects(
 )
 async def patch_rms_project_path(
     project_service: ProjectServiceDep,
-    rms_project_path: RMSProjectPath,
+    rms_project_path: RmsProjectPath,
 ) -> Message:
     """Saves the RMS project path in the project .fmu directory."""
     try:

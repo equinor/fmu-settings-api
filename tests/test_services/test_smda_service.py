@@ -12,6 +12,7 @@ from fmu.datamodels.fmu_results.fields import (
     StratigraphicColumn,
 )
 
+from fmu_settings_api.models.smda import SmdaField
 from fmu_settings_api.services.smda import SmdaService
 
 
@@ -391,3 +392,18 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     result = await service.get_stratigraphic_units("LITHO_DROGON")
 
     assert len(result.stratigraphic_units) == 1
+
+
+async def test_get_masterdata_no_fields_found() -> None:
+    """Tests that get_masterdata raises ValueError when no fields are found."""
+    mock_smda = AsyncMock()
+    field_resp = MagicMock()
+    field_resp.json.return_value = {"data": {"results": []}}
+    mock_smda.field.return_value = field_resp
+
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(ValueError) as exc_info:
+        await service.get_masterdata([SmdaField(identifier="NONEXISTENT")])
+
+    assert "No fields found for identifiers" in str(exc_info.value)

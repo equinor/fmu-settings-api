@@ -20,6 +20,7 @@ from fmu_settings_api.models import AccessToken, Message, SessionResponse
 from fmu_settings_api.session import (
     ProjectSession,
     add_fmu_project_to_session,
+    add_rms_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
     session_manager,
@@ -57,7 +58,7 @@ router = APIRouter(prefix="/session", tags=["session"])
     ),
     responses=CreateSessionResponses,
 )
-async def create_session(
+async def post_session(
     response: Response,
     auth_token: AuthTokenDep,
     user_fmu_dir: UserFMUDirDep,
@@ -89,6 +90,10 @@ async def create_session(
                 await add_fmu_project_to_session(
                     session_id, old_session.project_fmu_directory
                 )
+                rms_project = old_session.rms_project
+                if rms_project is not None:
+                    old_session.rms_project = None
+                    await add_rms_project_to_session(session_id, rms_project)
 
             await destroy_fmu_session(fmu_settings_session)
         else:
@@ -167,7 +172,7 @@ async def patch_access_token(
     ),
     responses=GetSessionResponses,
 )
-async def read_session(
+async def get_session(
     session_service: SessionServiceNoExtendDep,
 ) -> SessionResponse:
     """Returns the current session in a serialisable format."""

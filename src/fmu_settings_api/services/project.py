@@ -38,6 +38,11 @@ class ProjectService:
         """Returns the path to the project config file."""
         return self._fmu_dir.config.path
 
+    @property
+    def rms_project_path(self) -> Path | None:
+        """Returns the path to the RMS project from the config file."""
+        return self._fmu_dir.config.load().rms_project_path
+
     def check_valid_global_config(self) -> None:
         """Check if a valid global config exists at the default location."""
         project_root = self._fmu_dir.path.parent

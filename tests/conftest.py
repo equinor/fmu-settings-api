@@ -20,6 +20,14 @@ from fmu_settings_api.deps import get_session
 from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
 
 
+@pytest.fixture(autouse=True)
+def reset_dependency_overrides() -> Generator[None, None, None]:
+    """Ensure FastAPI dependency overrides do not leak between tests."""
+    original_overrides = app.dependency_overrides.copy()
+    yield
+    app.dependency_overrides = original_overrides
+
+
 @pytest.fixture
 def mock_token() -> str:
     """Sets a token."""
