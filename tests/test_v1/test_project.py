@@ -1512,6 +1512,92 @@ async def test_get_lock_status(
                         )
 
 
+async def test_get_lock_status_deletes_stale_lock(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test that lock status endpoint deletes stale lock files."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        lock_path = existing_fmu_dir._lock.path
+        assert lock_path.exists() is True
+        lock_info = existing_fmu_dir._lock.load(force=True, store_cache=False)
+        assert lock_info is not None
+
+        future_time = lock_info.expires_at + 1
+        with patch("time.time", return_value=future_time):
+            assert existing_fmu_dir._lock._is_stale(lock_info) is True
+
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["lock_file_exists"] is False
+            assert lock_status["is_lock_acquired"] is False
+            assert lock_status["lock_info"] is None
+
+        assert lock_path.exists() is False
+
+
+async def test_get_lock_status_stale_lock_deletion_fails(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test that lock status endpoint handles stale lock deletion errors gracefully."""
+    existing_fmu_dir = init_fmu_directory(session_tmp_path)
+
+    ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
+    ert_model_path.mkdir(parents=True)
+    monkeypatch.chdir(ert_model_path)
+
+    with patch(
+        "fmu_settings_api.services.session.find_nearest_fmu_directory",
+        return_value=existing_fmu_dir,
+    ):
+        response = client_with_session.get(ROUTE)
+        assert response.status_code == status.HTTP_200_OK
+
+        lock_path = existing_fmu_dir._lock.path
+        assert lock_path.exists() is True
+        lock_info = existing_fmu_dir._lock.load(force=True, store_cache=False)
+        assert lock_info is not None
+
+        future_time = lock_info.expires_at + 1
+        with (
+            patch("time.time", return_value=future_time),
+            patch("pathlib.Path.unlink") as mock_unlink,
+        ):
+            mock_unlink.side_effect = OSError("Permission denied")
+
+            lock_response = client_with_session.get(f"{ROUTE}/lock_status")
+            assert lock_response.status_code == status.HTTP_200_OK
+
+            lock_status = lock_response.json()
+            assert lock_status["lock_file_exists"] is True
+            assert lock_status["lock_info"] is None
+            assert lock_status["lock_file_read_error"] is not None
+            assert (
+                "Failed to delete stale lock file"
+                in lock_status["lock_file_read_error"]
+            )
+            assert "Permission denied" in lock_status["lock_file_read_error"]
+
+        lock_path.unlink()
+
+
 async def test_get_lock_status_with_lock_status_error(
     client_with_session: TestClient,
     session_tmp_path: Path,
