@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fmu_settings_api.models.rms import (
+    RmsCoordinateSystem,
     RmsHorizonList,
     RmsWellList,
     RmsZoneList,
@@ -116,3 +117,19 @@ def test_get_wells(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
 
     assert isinstance(wells, RmsWellList)
     assert [w.name for w in wells.wells] == ["W1", "W2"]
+
+
+def test_get_coordinate_system(
+    rms_service: RmsService, mock_rms_proxy: MagicMock
+) -> None:
+    """Test retrieving the coordinate system."""
+    mock_cs = MagicMock()
+    mock_cs.name.get.return_value = "westeros"
+    mock_rms_proxy.coordinate_systems.get_project_coordinate_system.return_value = (
+        mock_cs
+    )
+
+    coord_system = rms_service.get_coordinate_system(mock_rms_proxy)
+
+    assert isinstance(coord_system, RmsCoordinateSystem)
+    assert coord_system.name == "westeros"

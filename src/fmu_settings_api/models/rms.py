@@ -67,3 +67,10 @@ class RmsWellList(BaseResponseModel):
 
     wells: list[RmsWell]
     """List of wells in the project."""
+
+
+class RmsCoordinateSystem(BaseResponseModel):
+    """The project coordinate system of an RMS project."""
+
+    name: str
+    """Name of the coordinate system."""

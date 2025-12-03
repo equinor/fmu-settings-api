@@ -10,6 +10,7 @@ from fmu_settings_api.deps.rms import (
 from fmu_settings_api.deps.session import ProjectSessionDep
 from fmu_settings_api.models.common import Message
 from fmu_settings_api.models.rms import (
+    RmsCoordinateSystem,
     RmsHorizonList,
     RmsWellList,
     RmsZoneList,
@@ -126,3 +127,21 @@ async def get_wells(
     Use the POST / endpoint first to open an RMS project.
     """
     return rms_service.get_wells(opened_rms_project)
+
+
+@router.get(
+    "/coordinate_system",
+    response_model=RmsCoordinateSystem,
+    summary="Get the project coordinate system from the open RMS project",
+    responses=GetSessionResponses,
+)
+async def get_coordinate_system(
+    rms_service: RmsServiceDep,
+    opened_rms_project: RmsProjectDep,
+) -> RmsCoordinateSystem:
+    """Retrieve the project coordinate system from the currently open RMS project.
+
+    This endpoint requires an RMS project to be open in the session.
+    Use the POST / endpoint first to open an RMS project.
+    """
+    return rms_service.get_coordinate_system(opened_rms_project)
