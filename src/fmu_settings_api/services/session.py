@@ -109,6 +109,16 @@ class SessionService:
                 lock_file_exists = True
                 try:
                     lock_info = fmu_dir._lock.load(force=True, store_cache=False)
+                    if fmu_dir._lock._is_stale(lock_info):
+                        try:
+                            fmu_dir._lock.path.unlink()
+                            lock_file_exists = False
+                            lock_info = None
+                        except OSError as e:
+                            lock_file_read_error = (
+                                f"Failed to delete stale lock file: {str(e)}"
+                            )
+                            lock_info = None
                 except (OSError, PermissionError) as e:
                     lock_file_read_error = f"Failed to read lock file: {str(e)}"
                 except ValueError as e:
