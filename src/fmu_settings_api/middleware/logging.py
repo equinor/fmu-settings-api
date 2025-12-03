@@ -51,7 +51,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 duration_ms=round(duration * 1000, 2),
             )
             return response
-        except HTTPException:
+        except HTTPException as e:
+            duration = time.time() - start_time
+            logger.warning(
+                "request_failed",
+                method=request.method,
+                path=request.url.path,
+                status_code=e.status_code,
+                error=e.detail,
+                error_type=type(e).__name__,
+                duration_ms=round(duration * 1000, 2),
+            )
             raise
         except Exception as e:
             duration = time.time() - start_time
