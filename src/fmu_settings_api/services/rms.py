@@ -7,6 +7,7 @@ from runrms.api import RmsApiProxy
 from runrms.config._rms_project import RmsProject
 
 from fmu_settings_api.models.rms import (
+    RmsCoordinateSystem,
     RmsHorizon,
     RmsHorizonList,
     RmsStratigraphicZone,
@@ -92,3 +93,15 @@ class RmsService:
         """
         wells = [RmsWell(name=well.name.get()) for well in rms_project.wells]
         return RmsWellList(wells=wells)
+
+    def get_coordinate_system(self, rms_project: RmsApiProxy) -> RmsCoordinateSystem:
+        """Retrieve the project coordinate system from the RMS project.
+
+        Args:
+            rms_project: The opened RMS project proxy
+
+        Returns:
+            RmsCoordinateSystem: The project coordinate system
+        """
+        cs = rms_project.coordinate_systems.get_project_coordinate_system()
+        return RmsCoordinateSystem(name=cs.name.get())

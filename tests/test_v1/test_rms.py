@@ -315,3 +315,49 @@ async def test_get_wells_service_error(
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "An unexpected error occurred."
+
+
+async def test_get_coordinate_system_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test getting coordinate system successfully."""
+    mock_service = MagicMock()
+    mock_rms_project = MagicMock()
+    expected_coord_system = {"name": "westeros"}
+    mock_service.get_coordinate_system.return_value = expected_coord_system
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
+
+    response = client_with_project_session.get(f"{ROUTE}/coordinate_system")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == expected_coord_system
+    mock_service.get_coordinate_system.assert_called_once_with(mock_rms_project)
+
+
+async def test_get_coordinate_system_no_project_open(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test getting coordinate system when no project is open."""
+    response = client_with_project_session.get(f"{ROUTE}/coordinate_system")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {
+        "detail": "No RMS project is currently open. Please open an RMS project first."
+    }
+
+
+async def test_get_coordinate_system_service_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test getting coordinate system when service raises an error."""
+    mock_service = MagicMock()
+    mock_service.get_coordinate_system.side_effect = Exception("Service error")
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.get(f"{ROUTE}/coordinate_system")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "An unexpected error occurred."
