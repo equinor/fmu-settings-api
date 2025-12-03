@@ -68,8 +68,6 @@ async def get_user(session: SessionDep) -> UserConfig:
         raise HTTPException(
             status_code=404, detail=f"User .fmu config at {config.path} does not exist"
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.patch(
@@ -132,5 +130,3 @@ async def patch_api_key(
                 "not exist"
             ),
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e

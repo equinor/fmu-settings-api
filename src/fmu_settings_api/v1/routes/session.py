@@ -72,45 +72,42 @@ async def post_session(
                 fmu_settings_session, extend_expiration=False
             )
 
-    try:
-        session_id = await create_fmu_session(user_fmu_dir)
-        response.set_cookie(
-            key=settings.SESSION_COOKIE_KEY,
-            value=session_id,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-        )
+    session_id = await create_fmu_session(user_fmu_dir)
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_KEY,
+        value=session_id,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+    )
 
-        if old_session and fmu_settings_session:
-            new_session = await session_manager.get_session(session_id)
-            new_session.access_tokens = old_session.access_tokens
+    if old_session and fmu_settings_session:
+        new_session = await session_manager.get_session(session_id)
+        new_session.access_tokens = old_session.access_tokens
 
-            if isinstance(old_session, ProjectSession):
-                await add_fmu_project_to_session(
-                    session_id, old_session.project_fmu_directory
-                )
-                rms_project = old_session.rms_project
-                if rms_project is not None:
-                    old_session.rms_project = None
-                    await add_rms_project_to_session(session_id, rms_project)
+        if isinstance(old_session, ProjectSession):
+            await add_fmu_project_to_session(
+                session_id, old_session.project_fmu_directory
+            )
+            rms_project = old_session.rms_project
+            if rms_project is not None:
+                old_session.rms_project = None
+                await add_rms_project_to_session(session_id, rms_project)
 
-            await destroy_fmu_session(fmu_settings_session)
-        else:
-            with contextlib.suppress(FileNotFoundError, LockError):
-                path = Path.cwd()
-                project_fmu_dir = find_nearest_fmu_directory(path)
-                await add_fmu_project_to_session(session_id, project_fmu_dir)
+        await destroy_fmu_session(fmu_settings_session)
+    else:
+        with contextlib.suppress(FileNotFoundError, LockError):
+            path = Path.cwd()
+            project_fmu_dir = find_nearest_fmu_directory(path)
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-        session = await session_manager.get_session(session_id)
-        return SessionResponse(
-            id=session.id,
-            created_at=session.created_at,
-            expires_at=session.expires_at,
-            last_accessed=session.last_accessed,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    session = await session_manager.get_session(session_id)
+    return SessionResponse(
+        id=session.id,
+        created_at=session.created_at,
+        expires_at=session.expires_at,
+        last_accessed=session.last_accessed,
+    )
 
 
 @router.patch(
@@ -157,8 +154,6 @@ async def patch_access_token(
             status_code=400,
             detail=f"Access token id {access_token.id} is not known or supported",
         ) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(
@@ -176,7 +171,4 @@ async def get_session(
     session_service: SessionServiceNoExtendDep,
 ) -> SessionResponse:
     """Returns the current session in a serialisable format."""
-    try:
-        return session_service.get_session_response()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return session_service.get_session_response()

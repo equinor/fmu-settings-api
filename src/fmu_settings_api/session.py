@@ -1,6 +1,5 @@
 """Functionality for managing sessions."""
 
-import contextlib
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Self
@@ -12,8 +11,11 @@ from pydantic import BaseModel, SecretStr
 from runrms.api import RmsApiProxy
 
 from fmu_settings_api.config import settings
+from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models.common import AccessToken
 from fmu_settings_api.services.user import add_to_user_recent_projects
+
+logger = get_logger(__name__)
 
 
 class SessionNotFoundError(ValueError):
@@ -103,8 +105,15 @@ class SessionManager:
                     except Exception as e:
                         session.lock_errors.release = str(e)
                     if session.rms_project is not None:
-                        with contextlib.suppress(Exception):
+                        try:
                             session.rms_project.close()
+                        except Exception as e:
+                            logger.error(
+                                "rms_project_close_failed",
+                                session_id=session_id,
+                                error=str(e),
+                                error_type=type(e).__name__,
+                            )
                         session.rms_project = None
             finally:
                 del self.storage[session_id]
@@ -208,8 +217,15 @@ async def add_fmu_project_to_session(
         except Exception as e:
             lock_errors.release = str(e)
         if session.rms_project is not None:
-            with contextlib.suppress(Exception):
+            try:
                 session.rms_project.close()
+            except Exception as e:
+                logger.error(
+                    "rms_project_close_failed",
+                    session_id=session_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
             session.rms_project = None
 
     try:
@@ -255,8 +271,15 @@ async def add_rms_project_to_session(
         raise SessionNotFoundError("No FMU project directory open")
 
     if session.rms_project is not None:
-        with contextlib.suppress(Exception):
+        try:
             session.rms_project.close()
+        except Exception as e:
+            logger.error(
+                "rms_project_close_failed",
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
     session.rms_project = rms_api
 
@@ -340,8 +363,15 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
         maybe_project_session.lock_errors.release = str(e)
 
     if maybe_project_session.rms_project is not None:
-        with contextlib.suppress(Exception):
+        try:
             maybe_project_session.rms_project.close()
+        except Exception as e:
+            logger.error(
+                "rms_project_close_failed",
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
         maybe_project_session.rms_project = None
 
     project_session_dict = asdict(maybe_project_session)
@@ -368,8 +398,15 @@ async def remove_rms_project_from_session(session_id: str) -> ProjectSession:
         raise SessionNotFoundError("No FMU project directory open")
 
     if session.rms_project is not None:
-        with contextlib.suppress(Exception):
+        try:
             session.rms_project.close()
+        except Exception as e:
+            logger.error(
+                "rms_project_close_failed",
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
     session.rms_project = None
 

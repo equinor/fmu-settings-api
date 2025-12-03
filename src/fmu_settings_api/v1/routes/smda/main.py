@@ -65,12 +65,6 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
             detail=f"SMDA error requesting {e.request.url}",
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        ) from e
 
 
 @router.post(
@@ -118,12 +112,6 @@ async def post_field(
         raise HTTPException(
             status_code=503,
             detail="SMDA API request timed out. Please try again.",
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
 
@@ -206,12 +194,6 @@ async def post_masterdata(
             detail="SMDA API request timed out. Please try again.",
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        ) from e
 
 
 @router.post(
@@ -279,11 +261,5 @@ async def post_strat_units(
         raise HTTPException(
             status_code=503,
             detail="SMDA API request timed out. Please try again.",
-            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
-        ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e

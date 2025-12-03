@@ -51,8 +51,6 @@ async def post_rms_project(
         )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete(
@@ -74,8 +72,6 @@ async def delete_rms_project(
         return Message(message="RMS project closed successfully")
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(
@@ -93,10 +89,7 @@ async def get_zones(
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
-    try:
-        return rms_service.get_zones(opened_rms_project)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return rms_service.get_zones(opened_rms_project)
 
 
 @router.get(
@@ -114,10 +107,7 @@ async def get_horizons(
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
-    try:
-        return rms_service.get_horizons(opened_rms_project)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return rms_service.get_horizons(opened_rms_project)
 
 
 @router.get(
@@ -135,7 +125,4 @@ async def get_wells(
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
-    try:
-        return rms_service.get_wells(opened_rms_project)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return rms_service.get_wells(opened_rms_project)
