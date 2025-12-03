@@ -6,14 +6,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
 
 from .config import HttpHeader, settings
 from .logging import get_logger, setup_logging
@@ -69,26 +68,6 @@ app = FastAPI(
 )
 app.add_middleware(LoggingMiddleware)
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
-
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle unexpected errors."""
-    logger.exception(
-        "Unexpected error occurred",
-        extra={
-            "path": request.url.path,
-            "error": str(exc),
-            "error_type": type(exc).__name__,
-        },
-    )
-
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "An unexpected error occurred.",
-        },
-    )
 
 
 @app.get(
