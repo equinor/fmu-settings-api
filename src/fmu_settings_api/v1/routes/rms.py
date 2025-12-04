@@ -1,6 +1,12 @@
 """Routes for interacting with RMS projects."""
 
 from fastapi import APIRouter, HTTPException
+from fmu.settings.models.project_config import (
+    RmsCoordinateSystem,
+    RmsHorizon,
+    RmsStratigraphicZone,
+    RmsWell,
+)
 
 from fmu_settings_api.deps.rms import (
     RmsProjectDep,
@@ -9,12 +15,6 @@ from fmu_settings_api.deps.rms import (
 )
 from fmu_settings_api.deps.session import ProjectSessionDep
 from fmu_settings_api.models.common import Message
-from fmu_settings_api.models.rms import (
-    RmsCoordinateSystem,
-    RmsHorizonList,
-    RmsWellList,
-    RmsZoneList,
-)
 from fmu_settings_api.session import (
     SessionNotFoundError,
     add_rms_project_to_session,
@@ -77,14 +77,14 @@ async def delete_rms_project(
 
 @router.get(
     "/zones",
-    response_model=RmsZoneList,
+    response_model=list[RmsStratigraphicZone],
     summary="Get the zones from the open RMS project",
     responses=GetSessionResponses,
 )
 async def get_zones(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> RmsZoneList:
+) -> list[RmsStratigraphicZone]:
     """Retrieve the zones from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
@@ -95,14 +95,14 @@ async def get_zones(
 
 @router.get(
     "/horizons",
-    response_model=RmsHorizonList,
+    response_model=list[RmsHorizon],
     summary="Get all horizons from the open RMS project",
     responses=GetSessionResponses,
 )
 async def get_horizons(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> RmsHorizonList:
+) -> list[RmsHorizon]:
     """Retrieve all horizons from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
@@ -113,14 +113,14 @@ async def get_horizons(
 
 @router.get(
     "/wells",
-    response_model=RmsWellList,
+    response_model=list[RmsWell],
     summary="Get all wells from the open RMS project",
     responses=GetSessionResponses,
 )
 async def get_wells(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-) -> RmsWellList:
+) -> list[RmsWell]:
     """Retrieve all wells from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.

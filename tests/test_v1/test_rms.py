@@ -5,20 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
+from fmu.settings.models.project_config import RmsHorizon, RmsStratigraphicZone, RmsWell
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.deps.rms import (
     get_opened_rms_project,
     get_rms_project_path,
     get_rms_service,
-)
-from fmu_settings_api.models.rms import (
-    RmsHorizon,
-    RmsHorizonList,
-    RmsStratigraphicZone,
-    RmsWell,
-    RmsWellList,
-    RmsZoneList,
 )
 from fmu_settings_api.session import SessionNotFoundError
 
@@ -116,12 +109,16 @@ async def test_get_zones_success(
     """Test getting zones successfully."""
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
-    expected_column = RmsZoneList(
-        zones=[
-            RmsStratigraphicZone(name="Zone1", top="TopHorizon", base="BaseHorizon"),
-            RmsStratigraphicZone(name="Zone2", top="BaseHorizon", base="BottomHorizon"),
-        ]
-    )
+    expected_column = [
+        RmsStratigraphicZone(
+            name="Zone1", top_horizon_name="TopHorizon", base_horizon_name="BaseHorizon"
+        ),
+        RmsStratigraphicZone(
+            name="Zone2",
+            top_horizon_name="BaseHorizon",
+            base_horizon_name="BottomHorizon",
+        ),
+    ]
     mock_service.get_zones.return_value = expected_column
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
@@ -130,7 +127,7 @@ async def test_get_zones_success(
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_200_OK
-    assert RmsZoneList(**response.json()) == expected_column
+    assert response.json() == [zone.model_dump() for zone in expected_column]
     mock_service.get_zones.assert_called_once_with(mock_rms_project)
 
 
@@ -151,13 +148,11 @@ async def test_get_horizons_success(
     """Test getting horizons successfully."""
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
-    expected_horizons = RmsHorizonList(
-        horizons=[
-            RmsHorizon(name="TopHorizon"),
-            RmsHorizon(name="BaseHorizon"),
-            RmsHorizon(name="BottomHorizon"),
-        ]
-    )
+    expected_horizons = [
+        RmsHorizon(name="TopHorizon"),
+        RmsHorizon(name="BaseHorizon"),
+        RmsHorizon(name="BottomHorizon"),
+    ]
     mock_service.get_horizons.return_value = expected_horizons
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
@@ -166,7 +161,7 @@ async def test_get_horizons_success(
     response = client_with_project_session.get(f"{ROUTE}/horizons")
 
     assert response.status_code == status.HTTP_200_OK
-    assert RmsHorizonList(**response.json()) == expected_horizons
+    assert response.json() == [horizon.model_dump() for horizon in expected_horizons]
     mock_service.get_horizons.assert_called_once_with(mock_rms_project)
 
 
@@ -187,13 +182,11 @@ async def test_get_wells_success(
     """Test getting wells successfully."""
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
-    expected_wells = RmsWellList(
-        wells=[
-            RmsWell(name="Well_A"),
-            RmsWell(name="Well_B"),
-            RmsWell(name="Well_C"),
-        ]
-    )
+    expected_wells = [
+        RmsWell(name="Well_A"),
+        RmsWell(name="Well_B"),
+        RmsWell(name="Well_C"),
+    ]
     mock_service.get_wells.return_value = expected_wells
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
@@ -202,7 +195,7 @@ async def test_get_wells_success(
     response = client_with_project_session.get(f"{ROUTE}/wells")
 
     assert response.status_code == status.HTTP_200_OK
-    assert RmsWellList(**response.json()) == expected_wells
+    assert response.json() == [well.model_dump() for well in expected_wells]
     mock_service.get_wells.assert_called_once_with(mock_rms_project)
 
 
