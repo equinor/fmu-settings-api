@@ -8,6 +8,12 @@ from fastapi import APIRouter, HTTPException
 from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.project_config import (
+    RmsCoordinateSystem,
+    RmsHorizon,
+    RmsStratigraphicZone,
+    RmsWell,
+)
 from pydantic import ValidationError
 
 from fmu_settings_api.deps import (
@@ -131,6 +137,24 @@ GlobalConfigResponses: Final[Responses] = {
         ),
         [
             {"detail": "{A dict with 'message' and 'validation_errors'"},
+        ],
+    ),
+}
+
+
+RmsConfigNotSetResponses: Final[Responses] = {
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            RMS project path must be set before updating RMS fields.
+            """
+        ),
+        [
+            {
+                "detail": "RMS project path must be set before updating RMS fields. "
+                "Use PATCH /project/rms first."
+            },
         ],
     ),
 }
@@ -493,7 +517,6 @@ async def get_lock_status(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **ProjectExistsResponses,
         **LockConflictResponses,
     },
 )
@@ -521,7 +544,6 @@ async def patch_masterdata(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **ProjectExistsResponses,
         **LockConflictResponses,
     },
 )
@@ -546,7 +568,6 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **ProjectExistsResponses,
         **LockConflictResponses,
     },
 )
@@ -604,7 +625,6 @@ async def get_rms_projects(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **ProjectExistsResponses,
         **LockConflictResponses,
     },
 )
@@ -621,6 +641,132 @@ async def patch_rms(
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.patch(
+    "/rms/coordinate_system",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves the RMS coordinate system in the project .fmu directory",
+    description=dedent(
+        """
+        Saves the RMS coordinate system to the project .fmu directory.
+        Requires that the RMS project path has been set first via PATCH /project/rms.
+        If an existing coordinate system is present, it will be replaced.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+        **RmsConfigNotSetResponses,
+    },
+)
+async def patch_rms_coordinate_system(
+    project_service: ProjectServiceDep,
+    coordinate_system: RmsCoordinateSystem,
+) -> Message:
+    """Saves the RMS coordinate system in the project .fmu directory."""
+    try:
+        project_service.update_rms_coordinate_system(coordinate_system)
+        return Message(
+            message=f"Saved RMS coordinate system to {project_service.fmu_dir_path}"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.patch(
+    "/rms/zones",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves the RMS stratigraphic zones in the project .fmu directory",
+    description=dedent(
+        """
+        Saves the RMS stratigraphic zones to the project .fmu directory.
+        Requires that the RMS project path has been set first via PATCH /project/rms.
+        If existing zones are present, they will be replaced.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+        **RmsConfigNotSetResponses,
+    },
+)
+async def patch_rms_zones(
+    project_service: ProjectServiceDep,
+    zones: list[RmsStratigraphicZone],
+) -> Message:
+    """Saves the RMS stratigraphic zones in the project .fmu directory."""
+    try:
+        project_service.update_rms_zones(zones)
+        return Message(message=f"Saved RMS zones to {project_service.fmu_dir_path}")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.patch(
+    "/rms/horizons",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves the RMS horizons in the project .fmu directory",
+    description=dedent(
+        """
+        Saves the RMS horizons to the project .fmu directory.
+        Requires that the RMS project path has been set first via PATCH /project/rms.
+        If existing horizons are present, they will be replaced.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+        **RmsConfigNotSetResponses,
+    },
+)
+async def patch_rms_horizons(
+    project_service: ProjectServiceDep,
+    horizons: list[RmsHorizon],
+) -> Message:
+    """Saves the RMS horizons in the project .fmu directory."""
+    try:
+        project_service.update_rms_horizons(horizons)
+        return Message(message=f"Saved RMS horizons to {project_service.fmu_dir_path}")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.patch(
+    "/rms/wells",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves the RMS wells in the project .fmu directory",
+    description=dedent(
+        """
+        Saves the RMS wells to the project .fmu directory.
+        Requires that the RMS project path has been set first via PATCH /project/rms.
+        If existing wells are present, they will be replaced.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+        **RmsConfigNotSetResponses,
+    },
+)
+async def patch_rms_wells(
+    project_service: ProjectServiceDep,
+    wells: list[RmsWell],
+) -> Message:
+    """Saves the RMS wells in the project .fmu directory."""
+    try:
+        project_service.update_rms_wells(wells)
+        return Message(message=f"Saved RMS wells to {project_service.fmu_dir_path}")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:

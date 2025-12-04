@@ -5,7 +5,13 @@ from pathlib import Path
 from fmu.datamodels.fmu_results.fields import Access, Model, Smda
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._global_config import find_global_config
-from fmu.settings.models.project_config import RmsProject
+from fmu.settings.models.project_config import (
+    RmsCoordinateSystem,
+    RmsHorizon,
+    RmsProject,
+    RmsStratigraphicZone,
+    RmsWell,
+)
 
 from fmu_settings_api.models import FMUProject
 from fmu_settings_api.models.project import GlobalConfigPath
@@ -111,3 +117,46 @@ class ProjectService:
         )
         self._fmu_dir.set_config_value("rms", rms_project.model_dump())
         return rms_project
+
+    def _ensure_rms_config_exists(self) -> None:
+        """Ensure RMS config exists before updating individual fields."""
+        rms_config = self._fmu_dir.get_config_value("rms", None)
+        if rms_config is None:
+            raise ValueError(
+                "RMS project path must be set before updating RMS fields. "
+                "Use PATCH /project/rms first."
+            )
+
+    def update_rms_coordinate_system(
+        self, coordinate_system: RmsCoordinateSystem
+    ) -> bool:
+        """Save RMS coordinate system to the project FMU directory."""
+        self._ensure_rms_config_exists()
+        self._fmu_dir.set_config_value(
+            "rms.coordinate_system", coordinate_system.model_dump()
+        )
+        return True
+
+    def update_rms_zones(self, zones: list[RmsStratigraphicZone]) -> bool:
+        """Save RMS zones to the project FMU directory."""
+        self._ensure_rms_config_exists()
+        self._fmu_dir.set_config_value(
+            "rms.zones", [zone.model_dump() for zone in zones]
+        )
+        return True
+
+    def update_rms_horizons(self, horizons: list[RmsHorizon]) -> bool:
+        """Save RMS horizons to the project FMU directory."""
+        self._ensure_rms_config_exists()
+        self._fmu_dir.set_config_value(
+            "rms.horizons", [horizon.model_dump() for horizon in horizons]
+        )
+        return True
+
+    def update_rms_wells(self, wells: list[RmsWell]) -> bool:
+        """Save RMS wells to the project FMU directory."""
+        self._ensure_rms_config_exists()
+        self._fmu_dir.set_config_value(
+            "rms.wells", [well.model_dump() for well in wells]
+        )
+        return True

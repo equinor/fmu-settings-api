@@ -2449,3 +2449,261 @@ async def test_patch_rms_general_exception(
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+# PATCH project/rms/coordinate_system #
+
+
+async def test_patch_rms_coordinate_system_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test saving RMS coordinate system requires an active project session."""
+    response = client_with_session.patch(
+        f"{ROUTE}/rms/coordinate_system",
+        json={"name": "westeros"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_rms_coordinate_system_requires_rms_config(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when RMS config is not set."""
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/coordinate_system",
+        json={"name": "westeros"},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "RMS project path must be set" in response.json()["detail"]
+
+
+async def test_patch_rms_coordinate_system_success(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS coordinate system to project .fmu config."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
+
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/coordinate_system",
+        json={"name": "westeros"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "coordinate system" in response.json()["message"]
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms is not None
+    assert get_fmu_project.config.rms.coordinate_system is not None
+    assert get_fmu_project.config.rms.coordinate_system.name == "westeros"
+
+
+# PATCH project/rms/zones #
+
+
+async def test_patch_rms_zones_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test saving RMS zones requires an active project session."""
+    response = client_with_session.patch(
+        f"{ROUTE}/rms/zones",
+        json=[
+            {"name": "Zone A", "top_horizon_name": "Top", "base_horizon_name": "Base"}
+        ],
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_rms_zones_requires_rms_config(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when RMS config is not set."""
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/zones",
+        json=[
+            {"name": "Zone A", "top_horizon_name": "Top", "base_horizon_name": "Base"}
+        ],
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "RMS project path must be set" in response.json()["detail"]
+
+
+async def test_patch_rms_zones_success(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS zones to project .fmu config."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
+
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+
+    zones_data = [
+        {"name": "Zone A", "top_horizon_name": "Top A", "base_horizon_name": "Base A"},
+        {"name": "Zone B", "top_horizon_name": "Top B", "base_horizon_name": "Base B"},
+    ]
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/zones",
+        json=zones_data,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "zones" in response.json()["message"]
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms is not None
+    assert get_fmu_project.config.rms.zones is not None
+    assert len(get_fmu_project.config.rms.zones) == 2  # noqa: PLR2004
+    assert get_fmu_project.config.rms.zones[0].name == "Zone A"
+    assert get_fmu_project.config.rms.zones[1].name == "Zone B"
+
+
+# PATCH project/rms/horizons #
+
+
+async def test_patch_rms_horizons_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test saving RMS horizons requires an active project session."""
+    response = client_with_session.patch(
+        f"{ROUTE}/rms/horizons",
+        json=[{"name": "Horizon 1"}],
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_rms_horizons_requires_rms_config(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when RMS config is not set."""
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/horizons",
+        json=[{"name": "Horizon 1"}],
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "RMS project path must be set" in response.json()["detail"]
+
+
+async def test_patch_rms_horizons_success(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS horizons to project .fmu config."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
+
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+
+    horizons_data = [{"name": "H1"}, {"name": "H2"}, {"name": "H3"}]
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/horizons",
+        json=horizons_data,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "horizons" in response.json()["message"]
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms is not None
+    assert get_fmu_project.config.rms.horizons is not None
+    assert len(get_fmu_project.config.rms.horizons) == 3  # noqa: PLR2004
+    assert [h.name for h in get_fmu_project.config.rms.horizons] == ["H1", "H2", "H3"]
+
+
+# PATCH project/rms/wells #
+
+
+async def test_patch_rms_wells_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test saving RMS wells requires an active project session."""
+    response = client_with_session.patch(
+        f"{ROUTE}/rms/wells",
+        json=[{"name": "Well 1"}],
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_rms_wells_requires_rms_config(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when RMS config is not set."""
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/wells",
+        json=[{"name": "Well 1"}],
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "RMS project path must be set" in response.json()["detail"]
+
+
+async def test_patch_rms_wells_success(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test saving RMS wells to project .fmu config."""
+    rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
+    rms_path.mkdir(parents=True)
+
+    mock_rms_project_info = Mock()
+    mock_rms_project_info.master.version = "14.2.2"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsProject.from_filepath",
+        return_value=mock_rms_project_info,
+    ):
+        client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+
+    wells_data = [{"name": "W1"}, {"name": "W2"}]
+    response = client_with_project_session.patch(
+        f"{ROUTE}/rms/wells",
+        json=wells_data,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "wells" in response.json()["message"]
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.rms is not None
+    assert get_fmu_project.config.rms.wells is not None
+    assert len(get_fmu_project.config.rms.wells) == 2  # noqa: PLR2004
+    assert [w.name for w in get_fmu_project.config.rms.wells] == ["W1", "W2"]
