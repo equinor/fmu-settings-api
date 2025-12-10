@@ -5,6 +5,12 @@ from unittest.mock import patch
 
 import pytest
 from fmu.settings import ProjectFMUDirectory
+from fmu.settings.models.project_config import (
+    RmsCoordinateSystem,
+    RmsHorizon,
+    RmsStratigraphicZone,
+    RmsWell,
+)
 
 from fmu_settings_api.services.project import ProjectService
 
@@ -71,3 +77,168 @@ def test_update_rms_missing_project_path_raises_file_not_found(
 
     assert "does not exist" in str(exc_info.value)
     assert fmu_dir.config.load().rms is None
+
+
+def test_ensure_rms_config_exists_raises_when_not_set(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test that _ensure_rms_config_exists raises ValueError when RMS not set."""
+    service = ProjectService(fmu_dir)
+
+    with pytest.raises(ValueError) as exc_info:
+        service._ensure_rms_config_exists()
+
+    assert "RMS project path must be set" in str(exc_info.value)
+
+
+def test_ensure_rms_config_exists_passes_when_set(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test that _ensure_rms_config_exists passes when RMS config is set."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    # Should not raise
+    service._ensure_rms_config_exists()
+
+
+def test_update_rms_coordinate_system_success(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test saving RMS coordinate system to config."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    coord_system = RmsCoordinateSystem(name="westeros")
+    result = service.update_rms_coordinate_system(coord_system)
+
+    assert result is True
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.coordinate_system is not None
+    assert saved_config.coordinate_system.name == "westeros"
+
+
+def test_update_rms_coordinate_system_requires_rms_config(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test that updating coordinate system requires RMS config to be set."""
+    service = ProjectService(fmu_dir)
+    coord_system = RmsCoordinateSystem(name="westeros")
+
+    with pytest.raises(ValueError) as exc_info:
+        service.update_rms_coordinate_system(coord_system)
+
+    assert "RMS project path must be set" in str(exc_info.value)
+
+
+def test_update_rms_zones_success(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test saving RMS zones to config."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    zones = [
+        RmsStratigraphicZone(
+            name="Zone A", top_horizon_name="Top A", base_horizon_name="Base A"
+        ),
+        RmsStratigraphicZone(
+            name="Zone B", top_horizon_name="Top B", base_horizon_name="Base B"
+        ),
+    ]
+    result = service.update_rms_zones(zones)
+
+    assert result is True
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.zones is not None
+    assert len(saved_config.zones) == 2  # noqa: PLR2004
+    assert saved_config.zones[0].name == "Zone A"
+    assert saved_config.zones[1].name == "Zone B"
+
+
+def test_update_rms_zones_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test that updating zones requires RMS config to be set."""
+    service = ProjectService(fmu_dir)
+    zones = [
+        RmsStratigraphicZone(
+            name="Zone A", top_horizon_name="Top", base_horizon_name="Base"
+        )
+    ]
+
+    with pytest.raises(ValueError) as exc_info:
+        service.update_rms_zones(zones)
+
+    assert "RMS project path must be set" in str(exc_info.value)
+
+
+def test_update_rms_horizons_success(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test saving RMS horizons to config."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    horizons = [RmsHorizon(name="H1"), RmsHorizon(name="H2"), RmsHorizon(name="H3")]
+    result = service.update_rms_horizons(horizons)
+
+    assert result is True
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.horizons is not None
+    assert len(saved_config.horizons) == 3  # noqa: PLR2004
+    assert [h.name for h in saved_config.horizons] == ["H1", "H2", "H3"]
+
+
+def test_update_rms_horizons_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test that updating horizons requires RMS config to be set."""
+    service = ProjectService(fmu_dir)
+    horizons = [RmsHorizon(name="H1")]
+
+    with pytest.raises(ValueError) as exc_info:
+        service.update_rms_horizons(horizons)
+
+    assert "RMS project path must be set" in str(exc_info.value)
+
+
+def test_update_rms_wells_success(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test saving RMS wells to config."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    wells = [RmsWell(name="W1"), RmsWell(name="W2")]
+    result = service.update_rms_wells(wells)
+
+    assert result is True
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.wells is not None
+    assert len(saved_config.wells) == 2  # noqa: PLR2004
+    assert [w.name for w in saved_config.wells] == ["W1", "W2"]
+
+
+def test_update_rms_wells_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test that updating wells requires RMS config to be set."""
+    service = ProjectService(fmu_dir)
+    wells = [RmsWell(name="W1")]
+
+    with pytest.raises(ValueError) as exc_info:
+        service.update_rms_wells(wells)
+
+    assert "RMS project path must be set" in str(exc_info.value)
+
+
+def test_update_rms_fields_preserves_other_fields(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test that updating one RMS field preserves other fields."""
+    service = ProjectService(fmu_dir)
+    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+
+    coord_system = RmsCoordinateSystem(name="westeros")
+    service.update_rms_coordinate_system(coord_system)
+
+    horizons = [RmsHorizon(name="H1")]
+    service.update_rms_horizons(horizons)
+
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.coordinate_system is not None
+    assert saved_config.coordinate_system.name == "westeros"
+    assert saved_config.horizons is not None
+    assert saved_config.horizons[0].name == "H1"
+    assert str(saved_config.path) == "/some/path"
+    assert saved_config.version == "14.2.2"

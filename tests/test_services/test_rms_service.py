@@ -4,13 +4,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from fmu_settings_api.models.rms import (
+from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
-    RmsHorizonList,
-    RmsWellList,
-    RmsZoneList,
+    RmsHorizon,
+    RmsStratigraphicZone,
+    RmsWell,
 )
+
 from fmu_settings_api.services.rms import RmsService
 
 
@@ -77,18 +77,24 @@ def test_open_rms_project_reads_version_from_master(rms_service: RmsService) -> 
 
 def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     """Test retrieving the zones."""
-    zone = MagicMock()
-    zone.name.get.return_value = "Zone A"
-    zone.horizon_above.name.get.return_value = "Top"
-    zone.horizon_below.name.get.return_value = "Base"
-    mock_rms_proxy.zones = [zone]
+    zone_1 = MagicMock()
+    zone_1.name.get.return_value = "Zone A"
+    zone_1.horizon_above.name.get.return_value = "Top A"
+    zone_1.horizon_below.name.get.return_value = "Base A"
+    zone_2 = MagicMock()
+    zone_2.name.get.return_value = "Zone B"
+    zone_2.horizon_above.name.get.return_value = "Top B"
+    zone_2.horizon_below.name.get.return_value = "Base B"
+    mock_rms_proxy.zones = [zone_1, zone_2]
 
     zones = rms_service.get_zones(mock_rms_proxy)
 
-    assert isinstance(zones, RmsZoneList)
-    assert zones.zones[0].name == "Zone A"
-    assert zones.zones[0].top == "Top"
-    assert zones.zones[0].base == "Base"
+    assert isinstance(zones, list)
+    assert len(zones) == 2  # noqa: PLR2004
+    assert all(isinstance(z, RmsStratigraphicZone) for z in zones)
+    assert [z.name for z in zones] == ["Zone A", "Zone B"]
+    assert [z.top_horizon_name for z in zones] == ["Top A", "Top B"]
+    assert [z.base_horizon_name for z in zones] == ["Base A", "Base B"]
 
 
 def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
@@ -101,8 +107,10 @@ def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> Non
 
     horizons = rms_service.get_horizons(mock_rms_proxy)
 
-    assert isinstance(horizons, RmsHorizonList)
-    assert [h.name for h in horizons.horizons] == ["H1", "H2"]
+    assert isinstance(horizons, list)
+    assert len(horizons) == 2  # noqa: PLR2004
+    assert all(isinstance(h, RmsHorizon) for h in horizons)
+    assert [h.name for h in horizons] == ["H1", "H2"]
 
 
 def test_get_wells(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
@@ -115,8 +123,10 @@ def test_get_wells(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
 
     wells = rms_service.get_wells(mock_rms_proxy)
 
-    assert isinstance(wells, RmsWellList)
-    assert [w.name for w in wells.wells] == ["W1", "W2"]
+    assert isinstance(wells, list)
+    assert len(wells) == 2  # noqa: PLR2004
+    assert all(isinstance(w, RmsWell) for w in wells)
+    assert [w.name for w in wells] == ["W1", "W2"]
 
 
 def test_get_coordinate_system(
