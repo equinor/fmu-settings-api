@@ -112,8 +112,7 @@ class SessionService:
                     if fmu_dir._lock._is_stale(lock_info):
                         try:
                             fmu_dir._lock.path.unlink()
-                            fmu_dir._lock._cache = None
-                            fmu_dir._lock._acquired_at = None
+                            fmu_dir._lock.release()
                             lock_file_exists = False
                             lock_info = None
                         except OSError as e:
