@@ -1517,7 +1517,7 @@ async def test_get_lock_status_deletes_stale_lock(
     session_tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """Test that lock status endpoint deletes stale lock files."""
+    """Test that lock status endpoint deletes stale lock and clears internal state."""
     existing_fmu_dir = init_fmu_directory(session_tmp_path)
 
     ert_model_path = session_tmp_path / "project/24.0.3/ert/model"
@@ -1540,6 +1540,9 @@ async def test_get_lock_status_deletes_stale_lock(
         with patch("time.time", return_value=future_time):
             assert existing_fmu_dir._lock._is_stale(lock_info) is True
 
+            assert existing_fmu_dir._lock._cache is not None
+            assert existing_fmu_dir._lock._acquired_at is not None
+
             lock_response = client_with_session.get(f"{ROUTE}/lock_status")
             assert lock_response.status_code == status.HTTP_200_OK
 
@@ -1547,6 +1550,9 @@ async def test_get_lock_status_deletes_stale_lock(
             assert lock_status["lock_file_exists"] is False
             assert lock_status["is_lock_acquired"] is False
             assert lock_status["lock_info"] is None
+
+            assert existing_fmu_dir._lock._cache is None
+            assert existing_fmu_dir._lock._acquired_at is None
 
         assert lock_path.exists() is False
 
