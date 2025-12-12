@@ -229,7 +229,7 @@ class MatchService:
         """
         tokens1 = self._normalize_name(name1)
         tokens2 = self._normalize_name(name2)
-        return fuzz.ratio(tokens1, tokens2)
+        return fuzz.ratio(" ".join(tokens1), " ".join(tokens2))
 
     def _calculate_name_score(self, name1: str, name2: str) -> float:
         """Calculate similarity score for two names.
@@ -246,7 +246,7 @@ class MatchService:
         """
         tokens1 = self._normalize_name(name1)
         tokens2 = self._normalize_name(name2)
-        return fuzz.token_sort_ratio(tokens1, tokens2)
+        return fuzz.token_sort_ratio(" ".join(tokens1), " ".join(tokens2))
 
     def _determine_confidence(self, score: float) -> Literal["high", "medium", "low"]:
         """Determine confidence level based on total score.

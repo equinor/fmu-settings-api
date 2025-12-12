@@ -5,8 +5,9 @@ import stat
 from collections.abc import AsyncGenerator, Callable, Generator, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +18,54 @@ from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import get_session
+from fmu_settings_api.models.smda import StratigraphicUnit
 from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
+
+
+@pytest.fixture
+def create_stratigraphic_unit() -> Callable[..., StratigraphicUnit]:
+    """Fixture that returns a helper function to create StratigraphicUnit.
+
+    Returns a callable that creates StratigraphicUnit with minimal required fields.
+    """
+
+    def _create_stratigraphic_unit(  # noqa: PLR0913
+        identifier: str,
+        uuid: UUID | None = None,
+        strat_unit_type: str = "formation",
+        strat_unit_level: int = 3,
+        top: str | None = None,
+        base: str | None = None,
+        top_age: float = 100.0,
+        base_age: float = 150.0,
+        strat_unit_parent: str | None = None,
+        strat_column_type: Literal[
+            "lithostratigraphy",
+            "sequence stratigraphy",
+            "chronostratigraphy",
+            "biostratigraphy",
+        ] = "lithostratigraphy",
+        color_r: int | None = 255,
+        color_g: int | None = 0,
+        color_b: int | None = 0,
+    ) -> StratigraphicUnit:
+        return StratigraphicUnit(
+            identifier=identifier,
+            uuid=uuid or uuid4(),
+            strat_unit_type=strat_unit_type,
+            strat_unit_level=strat_unit_level,
+            top=top or f"{identifier} Top",
+            base=base or f"{identifier} Base",
+            top_age=top_age,
+            base_age=base_age,
+            strat_unit_parent=strat_unit_parent,
+            strat_column_type=strat_column_type,
+            color_r=color_r,
+            color_g=color_g,
+            color_b=color_b,
+        )
+
+    return _create_stratigraphic_unit
 
 
 @pytest.fixture(autouse=True)
