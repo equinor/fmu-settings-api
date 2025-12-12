@@ -40,14 +40,59 @@ def test_update_rms_saves_path_and_version(fmu_dir: ProjectFMUDirectory) -> None
         "fmu_settings_api.services.project.RmsService.get_rms_version",
         return_value="14.2.2",
     ):
-        rms_config = service.update_rms(rms_project_path)
+        rms_version = service.update_rms(rms_project_path)
 
-    assert rms_config.path == rms_project_path
-    assert rms_config.version == "14.2.2"
+    assert rms_version == "14.2.2"
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.path == rms_project_path
     assert saved_config.version == "14.2.2"
+
+
+def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test that update_rms preserves existing RMS fields when updating path/version."""
+    service = ProjectService(fmu_dir)
+
+    coordinate_system = RmsCoordinateSystem(name="westeros")
+    zone = RmsStratigraphicZone(
+        name="Zone1", top_horizon_name="TopZone1", base_horizon_name="BaseZone1"
+    )
+    horizon = RmsHorizon(name="TopReservoir")
+    well = RmsWell(name="Well-1")
+
+    fmu_dir.set_config_value(
+        "rms",
+        {
+            "path": Path("/old/path/project.rms13.1.0"),
+            "version": "13.1.0",
+            "coordinate_system": coordinate_system.model_dump(),
+            "zones": [zone.model_dump()],
+            "horizons": [horizon.model_dump()],
+            "wells": [well.model_dump()],
+        },
+    )
+
+    new_rms_project_path = Path("/new/path/project.rms14.2.2")
+    with patch(
+        "fmu_settings_api.services.project.RmsService.get_rms_version",
+        return_value="14.2.2",
+    ):
+        rms_version = service.update_rms(new_rms_project_path)
+
+    assert rms_version == "14.2.2"
+    saved_config = fmu_dir.config.load().rms
+    assert saved_config is not None
+    assert saved_config.path == new_rms_project_path
+    assert saved_config.version == "14.2.2"
+
+    assert saved_config.coordinate_system is not None
+    assert saved_config.coordinate_system.name == "westeros"
+    assert saved_config.zones is not None
+    assert saved_config.zones[0].name == "Zone1"
+    assert saved_config.horizons is not None
+    assert saved_config.horizons[0].name == "TopReservoir"
+    assert saved_config.wells is not None
+    assert saved_config.wells[0].name == "Well-1"
 
 
 def test_rms_project_path_missing_path_value(fmu_dir: ProjectFMUDirectory) -> None:

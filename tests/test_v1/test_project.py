@@ -2445,7 +2445,7 @@ async def test_patch_rms_general_exception(
         ),
         patch.object(
             session.project_fmu_directory,
-            "set_config_value",
+            "update_config",
             side_effect=ValueError("Invalid RMS project path"),
         ),
     ):

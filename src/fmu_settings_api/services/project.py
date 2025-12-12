@@ -8,7 +8,6 @@ from fmu.settings._global_config import find_global_config
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
     RmsHorizon,
-    RmsProject,
     RmsStratigraphicZone,
     RmsWell,
 )
@@ -102,7 +101,7 @@ class ProjectService:
         """Get the paths of RMS projects in this project directory."""
         return self._fmu_dir.find_rms_projects()
 
-    def update_rms(self, rms_project_path: Path) -> RmsProject:
+    def update_rms(self, rms_project_path: Path) -> str:
         """Save the RMS project path and version in the project FMU directory."""
         try:
             rms_version = RmsService.get_rms_version(rms_project_path)
@@ -111,12 +110,14 @@ class ProjectService:
                 f"RMS project path {rms_project_path} does not exist."
             ) from e
 
-        rms_project = RmsProject(
-            path=rms_project_path,
-            version=rms_version,
+        self._fmu_dir.update_config(
+            {
+                "rms.path": rms_project_path,
+                "rms.version": rms_version,
+            }
         )
-        self._fmu_dir.set_config_value("rms", rms_project.model_dump())
-        return rms_project
+
+        return rms_version
 
     def _ensure_rms_config_exists(self) -> None:
         """Ensure RMS config exists before updating individual fields."""
