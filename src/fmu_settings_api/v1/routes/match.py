@@ -1,6 +1,7 @@
 """Routes for matching."""
 
 from textwrap import dedent
+from typing import Final
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -13,7 +14,66 @@ from fmu_settings_api.models.match import (
     RmsCoordinateSystemMatch,
     RmsStratigraphyMatch,
 )
-from fmu_settings_api.v1.responses import GetSessionResponses
+from fmu_settings_api.v1.responses import (
+    GetSessionResponses,
+    Responses,
+    inline_add_response,
+)
+
+MatchResponses: Final[Responses] = {
+    **inline_add_response(
+        400,
+        dedent(
+            """
+            Required configuration is missing from the project config,
+            or invalid parameters are provided.
+            """
+        ),
+        [
+            {"detail": "RMS zones not found in project configuration"},
+            {"detail": "RMS coordinate system not found in project configuration"},
+            {"detail": "SMDA masterdata not found in project configuration"},
+            {"detail": "Stratigraphic column identifier not found in masterdata"},
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            SMDA returns valid data but no results are found,
+            or configuration exists but contains no matchable data.
+            """
+        ),
+        [
+            {"detail": "No stratigraphic units found for column: {identifier}"},
+            {"detail": "No RMS zones available for matching"},
+        ],
+    ),
+    **inline_add_response(
+        500,
+        dedent(
+            """
+            SMDA returns a malformed response that doesn't match
+            the expected structure.
+            """
+        ),
+        [
+            {"detail": "Malformed response from SMDA: {error_details}"},
+        ],
+    ),
+    **inline_add_response(
+        503,
+        dedent(
+            """
+            An API call to SMDA times out or the service is unavailable.
+            """
+        ),
+        [
+            {"detail": "SMDA API request timed out. Please try again."},
+            {"detail": "SMDA error requesting {url}"},
+        ],
+    ),
+}
 
 router = APIRouter(prefix="/match", tags=["match"])
 
@@ -45,7 +105,10 @@ router = APIRouter(prefix="/match", tags=["match"])
         - Project config must contain masterdata.smda.stratigraphic_column.identifier
         """
     ),
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **MatchResponses,
+    },
 )
 async def get_stratigraphy(
     match_service: MatchServiceDep,
@@ -58,7 +121,7 @@ async def get_stratigraphy(
     from the project configuration and returns the matching results.
     """
     try:
-        return await match_service.match_stratigraphy_from_config(
+        return await match_service.match_stratigraphy_from_config_to_smda(
             project_session, smda_service
         )
     except ValueError as e:
@@ -114,7 +177,17 @@ async def get_stratigraphy(
         - Project config must contain masterdata.smda.coordinate_system
         """
     ),
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **inline_add_response(
+            400,
+            "Required configuration is missing from the project config.",
+            [
+                {"detail": "RMS coordinate system not found in project configuration"},
+                {"detail": "SMDA coordinate system not found in masterdata"},
+            ],
+        ),
+    },
 )
 async def get_coordinate_system(
     match_service: MatchServiceDep,
@@ -126,7 +199,9 @@ async def get_coordinate_system(
     from the project configuration and returns the matching result.
     """
     try:
-        return match_service.match_coordinate_system_from_config(project_session)
+        return match_service.match_coordinate_system_from_config_to_smda(
+            project_session
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=400,

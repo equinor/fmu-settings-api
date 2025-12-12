@@ -24,12 +24,12 @@ MEDIUM_CONFIDENCE_THRESHOLD = 50
 class MatchService:
     """Service for matching two different entities."""
 
-    async def match_stratigraphy_from_config(
+    async def match_stratigraphy_from_config_to_smda(
         self,
         project_session: "ProjectSession",
         smda_service: "SmdaService",
     ) -> list[RmsStratigraphyMatch]:
-        """Match RMS zones to SMDA stratigraphic units from project config.
+        """Match RMS zones from project config to SMDA stratigraphic units.
 
         This is a convenience method that:
         1. Fetches RMS zones from project config (rms.zones)
@@ -81,7 +81,7 @@ class MatchService:
 
         return self.match_stratigraphy(rms_zones, smda_units_result.stratigraphic_units)
 
-    def match_coordinate_system_from_config(
+    def match_coordinate_system_from_config_to_smda(
         self,
         project_session: "ProjectSession",
     ) -> RmsCoordinateSystemMatch:
@@ -177,7 +177,7 @@ class MatchService:
         rms_crs_sys: RmsCoordinateSystem,
         smda_crs_sys: CoordinateSystem,
     ) -> RmsCoordinateSystemMatch:
-        """Match RMS coordinate system to target coordinate system.
+        """Match RMS coordinate system to SMDA coordinate system.
 
         Args:
             rms_crs_sys: The RMS coordinate system to be matched
