@@ -35,6 +35,7 @@ dependencies = [
     "httpx",
     "pydantic",
     "pyyaml",
+    "rapidfuzz>=3.0.0",
     "runrms>=0.6.1",
     "structlog",
     "uvicorn",

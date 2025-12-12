@@ -2,6 +2,7 @@
 
 from collections.abc import Generator
 from textwrap import dedent
+from typing import Final
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -19,7 +20,68 @@ from fmu_settings_api.models.smda import (
     SmdaStratColumn,
     SmdaStratigraphicUnitsResult,
 )
-from fmu_settings_api.v1.responses import GetSessionResponses, inline_add_response
+from fmu_settings_api.v1.responses import (
+    GetSessionResponses,
+    Responses,
+    inline_add_response,
+)
+
+SmdaUpstreamErrorResponses: Final[Responses] = {
+    **inline_add_response(
+        400,
+        "Invalid parameters are provided to SMDA API",
+        [
+            {"detail": "At least one SMDA field must be provided"},
+            {"detail": "A stratigraphic column identifier must be provided"},
+        ],
+    ),
+    **inline_add_response(
+        404,
+        "A requested resource is not found in SMDA",
+        [
+            {"detail": "Field '{field_name}' not found in SMDA"},
+            {"detail": "No fields found for identifiers: {identifiers}"},
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            SMDA returns valid data but it doesn't meet expected criteria,
+            or no results are found for a valid query.
+            """
+        ),
+        [
+            {"detail": "No fields found for identifiers: {identifiers}"},
+            {"detail": "No stratigraphic units found for column: {identifier}"},
+        ],
+    ),
+    **inline_add_response(
+        500,
+        dedent(
+            """
+            SMDA returns a malformed response that doesn't match
+            the expected structure.
+            """
+        ),
+        [
+            {"detail": "Malformed response from SMDA: no 'data' field present"},
+            {"detail": "Malformed response from SMDA: {error_details}"},
+        ],
+    ),
+    **inline_add_response(
+        503,
+        dedent(
+            """
+            An API call to SMDA times out or the service is unavailable.
+            """
+        ),
+        [
+            {"detail": "SMDA API request timed out. Please try again."},
+            {"detail": "SMDA error requesting {url}"},
+        ],
+    ),
+}
 
 
 def _add_response_headers(response: Response) -> Generator[None]:
@@ -52,6 +114,13 @@ router = APIRouter(
     ),
     responses={
         **GetSessionResponses,
+        **inline_add_response(
+            503,
+            "SMDA API is unreachable or returns an error",
+            [
+                {"detail": "SMDA error requesting {url}"},
+            ],
+        ),
     },
 )
 async def get_health(smda_service: SmdaServiceDep) -> Ok:
@@ -88,6 +157,21 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
     ),
     responses={
         **GetSessionResponses,
+        **inline_add_response(
+            500,
+            "SMDA returns a malformed response",
+            [
+                {"detail": "Malformed response from SMDA: no 'data' field present"},
+            ],
+        ),
+        **inline_add_response(
+            503,
+            "An API call to SMDA times out or fails",
+            [
+                {"detail": "SMDA API request timed out. Please try again."},
+                {"detail": "SMDA error requesting {url}"},
+            ],
+        ),
     },
 )
 async def post_field(
@@ -144,13 +228,7 @@ async def post_field(
     ),
     responses={
         **GetSessionResponses,
-        **inline_add_response(
-            503,
-            "Occurs when an API call to SMDA times out.",
-            [
-                {"detail": "SMDA API request timed out. Please try again."},
-            ],
-        ),
+        **SmdaUpstreamErrorResponses,
     },
 )
 async def post_masterdata(
@@ -213,13 +291,7 @@ async def post_masterdata(
     ),
     responses={
         **GetSessionResponses,
-        **inline_add_response(
-            503,
-            "Occurs when an API call to SMDA times out.",
-            [
-                {"detail": "SMDA API request timed out. Please try again."},
-            ],
-        ),
+        **SmdaUpstreamErrorResponses,
     },
 )
 async def post_strat_units(
