@@ -9,6 +9,7 @@ from fmu.settings import (
     get_fmu_directory,
 )
 from fmu.settings._init import init_fmu_directory
+from runrms.api import RmsApiProxy
 
 from fmu_settings_api.models import AccessToken, SessionResponse
 from fmu_settings_api.models.project import LockStatus
@@ -18,7 +19,9 @@ from fmu_settings_api.session import (
     Session,
     add_access_token_to_session as add_token_to_session_manager,
     add_fmu_project_to_session,
+    add_rms_project_to_session,
     remove_fmu_project_from_session,
+    remove_rms_project_from_session,
     try_acquire_project_lock,
 )
 
@@ -141,3 +144,11 @@ class SessionService:
             last_lock_release_error=project_session.lock_errors.release,
             last_lock_refresh_error=project_session.lock_errors.refresh,
         )
+
+    async def add_rms_session(self, root: RmsApiProxy, project: RmsApiProxy) -> None:
+        """Add an RMS session to the project session."""
+        await add_rms_project_to_session(self._session.id, root, project)
+
+    async def remove_rms_session(self) -> None:
+        """Removes an RMS session from the project session."""
+        await remove_rms_project_from_session(self._session.id)

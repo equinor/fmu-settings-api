@@ -14,6 +14,7 @@ from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
 from fmu_settings_api.session import (
     ProjectSession,
+    RmsSession,
     Session,
     SessionManager,
     SessionNotFoundError,
@@ -30,8 +31,14 @@ from fmu_settings_api.session import (
 
 
 @pytest.fixture
-def mock_rms_proxy() -> MagicMock:
-    """Returns a mock RMS API proxy."""
+def mock_rms_root() -> MagicMock:
+    """Returns a mock RMS API root proxy."""
+    return MagicMock(_shutdown=MagicMock())
+
+
+@pytest.fixture
+def mock_rms_project() -> MagicMock:
+    """Returns a mock RMS API Project proxy."""
     return MagicMock(close=MagicMock())
 
 
@@ -511,7 +518,8 @@ async def test_remove_fmu_project_from_session_with_regular_session(
 async def test_add_rms_project_to_session_success(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test adding an RMS project to a valid project session."""
     user_fmu_dir = init_user_fmu_directory()
@@ -524,18 +532,23 @@ async def test_add_rms_project_to_session_success(
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-        result_session = await add_rms_project_to_session(session_id, mock_rms_proxy)
+        result_session = await add_rms_project_to_session(
+            session_id, mock_rms_root, mock_rms_project
+        )
 
         original_session = await session_manager.get_session(session_id)
 
     assert result_session == original_session
-    assert result_session.rms_project == mock_rms_proxy
+    assert result_session.rms_session is not None
+    assert result_session.rms_session.root == mock_rms_root
+    assert result_session.rms_session.project == mock_rms_project
 
 
 async def test_add_rms_project_to_session_no_project_session(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test adding an RMS project when no FMU project is open in session."""
     user_fmu_dir = init_user_fmu_directory()
@@ -545,13 +558,14 @@ async def test_add_rms_project_to_session_no_project_session(
         patch("fmu_settings_api.session.session_manager", session_manager),
         pytest.raises(SessionNotFoundError, match="No FMU project directory open"),
     ):
-        await add_rms_project_to_session(session_id, mock_rms_proxy)
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
 
 async def test_add_rms_project_to_session_closes_existing(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test that adding a new RMS project closes the existing one."""
     user_fmu_dir = init_user_fmu_directory()
@@ -561,28 +575,37 @@ async def test_add_rms_project_to_session_closes_existing(
     project_path.mkdir()
     project_fmu_dir = init_fmu_directory(project_path)
 
-    mock_rms_proxy_existing = MagicMock(close=MagicMock())
+    mock_rms_root_existing = MagicMock(_shutdown=MagicMock())
+    mock_rms_project_existing = MagicMock(close=MagicMock())
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
 
         session = await session_manager.get_session(session_id)
         assert isinstance(session, ProjectSession)
-        session.rms_project = mock_rms_proxy_existing
+        session.rms_session = RmsSession(
+            mock_rms_root_existing, mock_rms_project_existing
+        )
 
-        result_session = await add_rms_project_to_session(session_id, mock_rms_proxy)
+        result_session = await add_rms_project_to_session(
+            session_id, mock_rms_root, mock_rms_project
+        )
 
         original_session = await session_manager.get_session(session_id)
 
-    mock_rms_proxy_existing.close.assert_called_once()
+    mock_rms_project_existing.close.assert_called_once()
+    mock_rms_root_existing._shutdown.assert_called_once()
     assert result_session == original_session
-    assert result_session.rms_project == mock_rms_proxy
+    assert result_session.rms_session is not None
+    assert result_session.rms_session.root == mock_rms_root
+    assert result_session.rms_session.project == mock_rms_project
 
 
 async def test_add_fmu_project_to_session_closes_existing_rms(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test that switching projects closes any existing RMS project."""
     user_fmu_dir = init_user_fmu_directory()
@@ -601,22 +624,24 @@ async def test_add_fmu_project_to_session_closes_existing_rms(
 
         session = await session_manager.get_session(session_id)
         assert isinstance(session, ProjectSession)
-        session.rms_project = mock_rms_proxy
+        session.rms_session = RmsSession(mock_rms_root, mock_rms_project)
 
         project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
 
         original_session = await session_manager.get_session(session_id)
 
-    mock_rms_proxy.close.assert_called_once()
+    mock_rms_project.close.assert_called_once()
+    mock_rms_root._shutdown.assert_called_once()
     assert project_session == original_session
     assert project_session.project_fmu_directory == project2_fmu_dir
-    assert project_session.rms_project is None
+    assert project_session.rms_session is None
 
 
 async def test_remove_rms_project_from_session_success(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test removing an RMS project from a session."""
     user_fmu_dir = init_user_fmu_directory()
@@ -628,16 +653,14 @@ async def test_remove_rms_project_from_session_success(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        await add_rms_project_to_session(session_id, mock_rms_proxy)
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         result_session = await remove_rms_project_from_session(session_id)
-
         original_session = await session_manager.get_session(session_id)
 
-    assert result_session.rms_project is None
+    assert result_session.rms_session is None
     assert isinstance(original_session, ProjectSession)
-    assert original_session.rms_project is None
+    assert original_session.rms_session is None
 
 
 async def test_remove_rms_project_from_session_no_project_session(
@@ -658,7 +681,8 @@ async def test_remove_rms_project_from_session_no_project_session(
 async def test_remove_rms_project_from_session_closes_project(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test that removing an RMS project calls close() on it."""
     user_fmu_dir = init_user_fmu_directory()
@@ -670,14 +694,13 @@ async def test_remove_rms_project_from_session_closes_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        await add_rms_project_to_session(session_id, mock_rms_proxy)
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         result_session = await remove_rms_project_from_session(session_id)
-
         original_session = await session_manager.get_session(session_id)
 
-    mock_rms_proxy.close.assert_called_once()
+    mock_rms_project.close.assert_called_once()
+    mock_rms_root._shutdown.assert_called_once()
     assert result_session == original_session
     assert result_session.id == session_id
 
@@ -685,7 +708,8 @@ async def test_remove_rms_project_from_session_closes_project(
 async def test_destroy_session_closes_rms_project(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test that destroying a session closes the RMS project."""
     user_fmu_dir = init_user_fmu_directory()
@@ -697,18 +721,19 @@ async def test_destroy_session_closes_rms_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        await add_rms_project_to_session(session_id, mock_rms_proxy)
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         await session_manager.destroy_session(session_id)
 
-    mock_rms_proxy.close.assert_called_once()
+    mock_rms_project.close.assert_called_once()
+    mock_rms_root._shutdown.assert_called_once()
 
 
 async def test_remove_fmu_project_from_session_closes_rms_project(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
-    mock_rms_proxy: MagicMock,
+    mock_rms_root: MagicMock,
+    mock_rms_project: MagicMock,
 ) -> None:
     """Test that closing the FMU project also closes the RMS project."""
     user_fmu_dir = init_user_fmu_directory()
@@ -720,9 +745,9 @@ async def test_remove_fmu_project_from_session_closes_rms_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        await add_rms_project_to_session(session_id, mock_rms_proxy)
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         await remove_fmu_project_from_session(session_id)
 
-    mock_rms_proxy.close.assert_called_once()
+    mock_rms_project.close.assert_called_once()
+    mock_rms_root._shutdown.assert_called_once()

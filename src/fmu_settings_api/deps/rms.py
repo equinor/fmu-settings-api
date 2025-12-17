@@ -38,14 +38,14 @@ async def get_opened_rms_project(
     project_session: ProjectSessionDep,
 ) -> RmsApiProxy:
     """Returns the opened RMS project from the session."""
-    if project_session.rms_project is None:
+    if project_session.rms_session is None:
         raise HTTPException(
             status_code=400,
             detail=(
                 "No RMS project is currently open. Please open an RMS project first."
             ),
         )
-    return project_session.rms_project
+    return project_session.rms_session.project
 
 
 RmsProjectDep = Annotated[RmsApiProxy, Depends(get_opened_rms_project)]
