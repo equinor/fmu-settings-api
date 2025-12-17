@@ -38,6 +38,37 @@ class LockErrors(BaseModel):
 
 
 @dataclass
+class RmsSession:
+    """Stores RMS-session references."""
+
+    root: RmsApiProxy
+    """The root RMS proxy that shutdown() can be called against."""
+    project: RmsApiProxy
+    """An opened RMS project that close() can be called against."""
+
+    def cleanup(self, session_id: str = "unknown") -> None:
+        """Closes the RMS project and shuts down the root proxy."""
+        try:
+            self.project.close()
+        except Exception as e:
+            logger.error(
+                "rms_project_close_failed",
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+        try:
+            self.root._shutdown()
+        except Exception as e:
+            logger.error(
+                "rms_proxy_shutdown_failed",
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+
+@dataclass
 class Session:
     """Represents session information when working on an FMU Directory."""
 
@@ -55,7 +86,7 @@ class ProjectSession(Session):
 
     project_fmu_directory: ProjectFMUDirectory
     lock_errors: LockErrors = field(default_factory=LockErrors)
-    rms_project: RmsApiProxy | None = None
+    rms_session: RmsSession | None = None
 
 
 class SessionManager:
@@ -97,26 +128,26 @@ class SessionManager:
     async def destroy_session(self: Self, session_id: str) -> None:
         """Destroys a session by its session id."""
         session = await self._retrieve_session(session_id)
-        if session is not None:
+        if session is None:
+            return
+
+        if isinstance(session, ProjectSession):
             try:
-                if isinstance(session, ProjectSession):
-                    try:
-                        session.project_fmu_directory._lock.release()
-                    except Exception as e:
-                        session.lock_errors.release = str(e)
-                    if session.rms_project is not None:
-                        try:
-                            session.rms_project.close()
-                        except Exception as e:
-                            logger.error(
-                                "rms_project_close_failed",
-                                session_id=session_id,
-                                error=str(e),
-                                error_type=type(e).__name__,
-                            )
-                        session.rms_project = None
-            finally:
-                del self.storage[session_id]
+                session.project_fmu_directory._lock.release()
+            except Exception as e:
+                session.lock_errors.release = str(e)
+                logger.error(
+                    "destroy_session_release_lock",
+                    session_id=session_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+            if session.rms_session is not None:
+                session.rms_session.cleanup(session_id)
+                session.rms_session = None
+
+        del self.storage[session_id]
 
     async def create_session(
         self: Self,
@@ -216,17 +247,10 @@ async def add_fmu_project_to_session(
             session.project_fmu_directory._lock.release()
         except Exception as e:
             lock_errors.release = str(e)
-        if session.rms_project is not None:
-            try:
-                session.rms_project.close()
-            except Exception as e:
-                logger.error(
-                    "rms_project_close_failed",
-                    session_id=session_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                )
-            session.rms_project = None
+
+        if session.rms_session is not None:
+            session.rms_session.cleanup(session_id)
+            session.rms_session = None
 
     try:
         project_fmu_directory._lock.acquire()
@@ -251,40 +275,6 @@ async def add_fmu_project_to_session(
     )
     await session_manager._store_session(session_id, project_session)
     return project_session
-
-
-async def add_rms_project_to_session(
-    session_id: str,
-    rms_api: RmsApiProxy,
-) -> ProjectSession:
-    """Adds an opened RMS project to the session.
-
-    Returns:
-        The updated ProjectSession
-
-    Raises:
-        SessionNotFoundError: If no valid session was found
-    """
-    session = await session_manager.get_session(session_id)
-
-    if not isinstance(session, ProjectSession):
-        raise SessionNotFoundError("No FMU project directory open")
-
-    if session.rms_project is not None:
-        try:
-            session.rms_project.close()
-        except Exception as e:
-            logger.error(
-                "rms_project_close_failed",
-                session_id=session_id,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-
-    session.rms_project = rms_api
-
-    await session_manager._store_session(session_id, session)
-    return session
 
 
 async def try_acquire_project_lock(session_id: str) -> ProjectSession:
@@ -362,29 +352,51 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
     except Exception as e:
         maybe_project_session.lock_errors.release = str(e)
 
-    if maybe_project_session.rms_project is not None:
-        try:
-            maybe_project_session.rms_project.close()
-        except Exception as e:
-            logger.error(
-                "rms_project_close_failed",
-                session_id=session_id,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-        maybe_project_session.rms_project = None
+    if maybe_project_session.rms_session is not None:
+        maybe_project_session.rms_session.cleanup(session_id)
+        maybe_project_session.rms_session = None
 
     project_session_dict = asdict(maybe_project_session)
     project_session_dict.pop("project_fmu_directory", None)
     project_session_dict.pop("lock_errors", None)
-    project_session_dict.pop("rms_project", None)
+    project_session_dict.pop("rms_session", None)
+
     session = Session(**project_session_dict)
     await session_manager._store_session(session_id, session)
     return session
 
 
-async def remove_rms_project_from_session(session_id: str) -> ProjectSession:
+async def add_rms_project_to_session(
+    session_id: str, root_proxy: RmsApiProxy, rms_project: RmsApiProxy
+) -> ProjectSession:
+    """Adds an opened RMS project to the session.
+
+    Returns:
+        The updated ProjectSession
+
+    Raises:
+        SessionNotFoundError: If no valid session was found
+    """
+    session = await session_manager.get_session(session_id)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    if session.rms_session is not None:
+        session.rms_session.cleanup(session_id)
+
+    session.rms_session = RmsSession(root=root_proxy, project=rms_project)
+    await session_manager._store_session(session_id, session)
+    return session
+
+
+async def remove_rms_project_from_session(
+    session_id: str, cleanup: bool = True
+) -> ProjectSession:
     """Removes (closes) an open RMS project from a project session.
+
+    If `cleanup` is False, the RMS worker and project will not be cleaned up. This is
+    useful when preserving an opened project to a new session.
 
     Returns:
         The updated ProjectSession with rms_project set to None
@@ -397,18 +409,10 @@ async def remove_rms_project_from_session(session_id: str) -> ProjectSession:
     if not isinstance(session, ProjectSession):
         raise SessionNotFoundError("No FMU project directory open")
 
-    if session.rms_project is not None:
-        try:
-            session.rms_project.close()
-        except Exception as e:
-            logger.error(
-                "rms_project_close_failed",
-                session_id=session_id,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
+    if session.rms_session is not None and cleanup:
+        session.rms_session.cleanup(session_id)
 
-    session.rms_project = None
+    session.rms_session = None
 
     await session_manager._store_session(session_id, session)
     return session

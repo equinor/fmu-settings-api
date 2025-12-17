@@ -1,7 +1,7 @@
 """Tests for the RMS routes."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
@@ -13,6 +13,7 @@ from fmu_settings_api.deps.rms import (
     get_rms_project_path,
     get_rms_service,
 )
+from fmu_settings_api.deps.session import get_session_service
 from fmu_settings_api.session import SessionNotFoundError
 
 ROUTE = "/api/v1/rms"
@@ -23,7 +24,7 @@ async def test_open_rms_project_success(
 ) -> None:
     """Test opening an RMS project successfully."""
     mock_service = MagicMock()
-    mock_service.open_rms_project.return_value = MagicMock()
+    mock_service.open_rms_project.return_value = (MagicMock(), MagicMock())
     mock_service.get_rms_version.return_value = "14.2.2"
     rms_path = Path("/path/to/rms/project")
 
@@ -214,19 +215,20 @@ async def test_open_rms_project_session_not_found(
     client_with_project_session: TestClient,
 ) -> None:
     """Test opening an RMS project when session is not found during add."""
-    mock_service = MagicMock()
-    mock_service.open_rms_project.return_value = MagicMock()
+    mock_rms_service = MagicMock()
+    mock_rms_service.open_rms_project.return_value = (MagicMock(), MagicMock())
     rms_path = Path("/path/to/rms/project")
 
-    app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+    mock_session_service = AsyncMock()
+    mock_session_service.add_rms_session = AsyncMock(
+        side_effect=SessionNotFoundError("Session not found")
+    )
 
-    with patch(
-        "fmu_settings_api.v1.routes.rms.add_rms_project_to_session",
-        new_callable=AsyncMock,
-        side_effect=SessionNotFoundError("Session not found"),
-    ):
-        response = client_with_project_session.post(f"{ROUTE}/")
+    app.dependency_overrides[get_rms_service] = lambda: mock_rms_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+    app.dependency_overrides[get_session_service] = lambda: mock_session_service
+
+    response = client_with_project_session.post(f"{ROUTE}/")
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["detail"] == "Session not found"
@@ -236,12 +238,13 @@ async def test_close_rms_project_session_not_found(
     client_with_project_session: TestClient,
 ) -> None:
     """Test closing an RMS project when session is not found."""
-    with patch(
-        "fmu_settings_api.v1.routes.rms.remove_rms_project_from_session",
-        new_callable=AsyncMock,
-        side_effect=SessionNotFoundError("Session not found"),
-    ):
-        response = client_with_project_session.delete(f"{ROUTE}/")
+    mock_session_service = MagicMock()
+    mock_session_service.remove_rms_session = AsyncMock(
+        side_effect=SessionNotFoundError("Session not found")
+    )
+    app.dependency_overrides[get_session_service] = lambda: mock_session_service
+
+    response = client_with_project_session.delete(f"{ROUTE}/")
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["detail"] == "Session not found"
@@ -251,12 +254,13 @@ async def test_close_rms_project_generic_error(
     client_with_project_session: TestClient,
 ) -> None:
     """Test closing an RMS project when a generic error occurs."""
-    with patch(
-        "fmu_settings_api.v1.routes.rms.remove_rms_project_from_session",
-        new_callable=AsyncMock,
-        side_effect=Exception("Unexpected error"),
-    ):
-        response = client_with_project_session.delete(f"{ROUTE}/")
+    mock_session_service = MagicMock()
+    mock_session_service.remove_rms_session = AsyncMock(
+        side_effect=Exception("Unexpected error")
+    )
+    app.dependency_overrides[get_session_service] = lambda: mock_session_service
+
+    response = client_with_project_session.delete(f"{ROUTE}/")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "An unexpected error occurred."

@@ -23,6 +23,7 @@ from fmu_settings_api.session import (
     add_rms_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
+    remove_rms_project_from_session,
     session_manager,
 )
 from fmu_settings_api.v1.responses import (
@@ -89,10 +90,16 @@ async def post_session(
             await add_fmu_project_to_session(
                 session_id, old_session.project_fmu_directory
             )
-            rms_project = old_session.rms_project
-            if rms_project is not None:
-                old_session.rms_project = None
-                await add_rms_project_to_session(session_id, rms_project)
+
+            rms_session = old_session.rms_session
+            if rms_session is not None:
+                # Transfer existing RMS session to new session
+                await add_rms_project_to_session(
+                    session_id, rms_session.root, rms_session.project
+                )
+                await remove_rms_project_from_session(
+                    fmu_settings_session, cleanup=False
+                )
 
         await destroy_fmu_session(fmu_settings_session)
     else:
