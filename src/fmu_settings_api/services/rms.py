@@ -29,7 +29,9 @@ class RmsService:
         rms_project_info = RmsProject.from_filepath(str(rms_project_path))
         return rms_project_info.master.version
 
-    def open_rms_project(self, rms_project_path: Path) -> RmsApiProxy:
+    def open_rms_project(
+        self, rms_project_path: Path
+    ) -> tuple[RmsApiProxy, RmsApiProxy]:
         """Open an RMS project at the specified path.
 
         The RMS version is automatically detected from the project's .master file.
@@ -43,7 +45,7 @@ class RmsService:
         version = self.get_rms_version(rms_project_path)
 
         rms_proxy = get_rmsapi(version=version)
-        return rms_proxy.Project.open(str(rms_project_path), readonly=True)
+        return rms_proxy, rms_proxy.Project.open(str(rms_project_path), readonly=True)
 
     def get_zones(self, rms_project: RmsApiProxy) -> list[RmsStratigraphicZone]:
         """Retrieve the zones from the RMS project.

@@ -43,11 +43,12 @@ def test_open_rms_project_success(rms_service: RmsService) -> None:
         ),
         patch("fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi),
     ):
-        opened_project = rms_service.open_rms_project(rms_project_path)
+        root, opened_project = rms_service.open_rms_project(rms_project_path)
 
         mock_rmsapi.Project.open.assert_called_once_with(
             str(rms_project_path), readonly=True
         )
+        assert root == mock_rmsapi
         assert opened_project == "opened_project"
 
 
