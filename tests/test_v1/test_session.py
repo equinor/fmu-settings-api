@@ -16,6 +16,7 @@ from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.session import (
     ProjectSession,
+    RmsSession,
     Session,
     SessionManager,
     SessionNotFoundError,
@@ -508,12 +509,13 @@ async def test_new_session_preserves_rms_project_from_old_session(
     session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
     assert session_id is not None
 
-    rms_proxy = MagicMock(close=MagicMock())
-    await add_rms_project_to_session(session_id, rms_proxy)
+    rms_root = MagicMock(_shutdown=MagicMock())
+    rms_project = MagicMock(close=MagicMock())
+    await add_rms_project_to_session(session_id, rms_root, rms_project)
 
     session = await session_manager.get_session(session_id)
     assert isinstance(session, ProjectSession)
-    assert session.rms_project is rms_proxy
+    assert session.rms_session == RmsSession(rms_root, rms_project)
 
     different_path = tmp_path_mocked_home / "different_project"
     different_path.mkdir()
@@ -528,12 +530,13 @@ async def test_new_session_preserves_rms_project_from_old_session(
 
     new_session = await session_manager.get_session(new_session_id)
     assert isinstance(new_session, ProjectSession)
-    assert new_session.rms_project is rms_proxy
+    assert new_session.rms_session == RmsSession(rms_root, rms_project)
 
     with pytest.raises(SessionNotFoundError):
         await session_manager.get_session(session_id)
 
-    rms_proxy.close.assert_not_called()
+    rms_root._shutdown.assert_not_called()
+    rms_project.close.assert_not_called()
 
 
 async def test_new_session_without_old_session_finds_nearest_project(
