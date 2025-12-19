@@ -14,6 +14,7 @@ from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import ProjectSmdaSessionDep, SmdaInterfaceDep
+from fmu_settings_api.deps.match import get_match_service
 from fmu_settings_api.deps.permissions import (
     check_write_permissions,
     refresh_project_lock_dep,
@@ -32,6 +33,7 @@ from fmu_settings_api.deps.session import (
 from fmu_settings_api.deps.smda import get_project_smda_interface
 from fmu_settings_api.deps.user_fmu import ensure_user_fmu_directory
 from fmu_settings_api.interfaces.smda_api import SmdaAPI
+from fmu_settings_api.services.match import MatchService
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.services.session import SessionService
 from fmu_settings_api.session import (
@@ -605,3 +607,10 @@ async def test_refresh_lock_dep_no_project_session(
 
     assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
     assert "No FMU project directory open" in str(exc_info.value.detail)
+
+
+async def test_get_match_service_returns_match_service() -> None:
+    """Tests that get_match_service returns a MatchService instance."""
+    match_service = await get_match_service()
+
+    assert isinstance(match_service, MatchService)

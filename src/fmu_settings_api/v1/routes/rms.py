@@ -1,5 +1,8 @@
 """Routes for interacting with RMS projects."""
 
+from textwrap import dedent
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -15,8 +18,35 @@ from fmu_settings_api.deps.rms import (
     RmsServiceDep,
 )
 from fmu_settings_api.models.common import Message
-from fmu_settings_api.session import SessionNotFoundError
-from fmu_settings_api.v1.responses import GetSessionResponses
+from fmu_settings_api.session import (
+    SessionNotFoundError,
+)
+from fmu_settings_api.v1.responses import (
+    GetSessionResponses,
+    Responses,
+    inline_add_response,
+)
+
+RmsResponses: Final[Responses] = {
+    **inline_add_response(
+        400,
+        dedent(
+            """
+            RMS project path is not configured in the project config file,
+            or no RMS project is currently open in the session.
+            """
+        ),
+        [
+            {"detail": "RMS project path is not set in the project config file."},
+            {
+                "detail": (
+                    "No RMS project is currently open. "
+                    "Please open an RMS project first."
+                )
+            },
+        ],
+    ),
+}
 
 router = APIRouter(prefix="/rms", tags=["rms"])
 
@@ -25,7 +55,16 @@ router = APIRouter(prefix="/rms", tags=["rms"])
     "/",
     response_model=Message,
     summary="Open an RMS project and store it in the session",
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **inline_add_response(
+            400,
+            "RMS project path is not configured in the project config file.",
+            [
+                {"detail": "RMS project path is not set in the project config file."},
+            ],
+        ),
+    },
 )
 async def post_rms_project(
     rms_service: RmsServiceDep,
@@ -73,7 +112,10 @@ async def delete_rms_project(session_service: SessionServiceDep) -> Message:
     "/zones",
     response_model=list[RmsStratigraphicZone],
     summary="Get the zones from the open RMS project",
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **RmsResponses,
+    },
 )
 async def get_zones(
     rms_service: RmsServiceDep,
@@ -91,7 +133,10 @@ async def get_zones(
     "/horizons",
     response_model=list[RmsHorizon],
     summary="Get all horizons from the open RMS project",
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **RmsResponses,
+    },
 )
 async def get_horizons(
     rms_service: RmsServiceDep,
@@ -109,7 +154,10 @@ async def get_horizons(
     "/wells",
     response_model=list[RmsWell],
     summary="Get all wells from the open RMS project",
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **RmsResponses,
+    },
 )
 async def get_wells(
     rms_service: RmsServiceDep,
@@ -127,7 +175,10 @@ async def get_wells(
     "/coordinate_system",
     response_model=RmsCoordinateSystem,
     summary="Get the project coordinate system from the open RMS project",
-    responses=GetSessionResponses,
+    responses={
+        **GetSessionResponses,
+        **RmsResponses,
+    },
 )
 async def get_coordinate_system(
     rms_service: RmsServiceDep,
