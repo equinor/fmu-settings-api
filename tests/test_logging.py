@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
 from unittest.mock import MagicMock, patch
 
 import structlog
@@ -23,7 +23,8 @@ def test_attach_fmu_settings_handler_with_iso_timestamp() -> None:
     """Test handler with ISO string timestamp."""
     log_manager = MagicMock()
     entry_class = EventInfo
-    processor = attach_fmu_settings_handler(log_manager, entry_class)
+    log_level: Final = "INFO"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level)
 
     event_dict = {
         "level": "info",
@@ -46,7 +47,8 @@ def test_attach_fmu_settings_handler_without_timestamp() -> None:
     """Test handler auto-generates correct timestamp when not provided."""
     log_manager = MagicMock()
     entry_class = EventInfo
-    processor = attach_fmu_settings_handler(log_manager, entry_class)
+    log_level: Final = "INFO"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level)
 
     before = datetime.now(UTC)
     event_dict = {"level": "warning", "event": "warning_event"}
@@ -67,7 +69,8 @@ def test_attach_fmu_settings_handler_with_datetime_timestamp() -> None:
     """Test handler accepts datetime timestamp."""
     log_manager = MagicMock()
     entry_class = EventInfo
-    processor = attach_fmu_settings_handler(log_manager, entry_class)
+    log_level: Final = "INFO"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level)
 
     now = datetime.now(UTC)
     event_dict = {"level": "error", "event": "error_event", "timestamp": now}
@@ -86,7 +89,8 @@ def test_attach_fmu_settings_handler_preserves_extra_fields() -> None:
     """Test handler preserves extra fields in log entry."""
     log_manager = MagicMock()
     entry_class = EventInfo
-    processor = attach_fmu_settings_handler(log_manager, entry_class)
+    log_level: Final = "DEBUG"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level)
 
     event_dict = {
         "level": "debug",
@@ -111,7 +115,8 @@ def test_attach_fmu_settings_handler_preserves_extra_fields() -> None:
 def test_attach_fmu_settings_handler_validation_error(capsys: Any) -> None:
     """Test handler gracefully handles validation errors."""
     log_manager = MagicMock()
-    processor = attach_fmu_settings_handler(log_manager, EventInfo)
+    log_level: Final = "DEBUG"
+    processor = attach_fmu_settings_handler(log_manager, EventInfo, log_level)
 
     event_dict = {
         "level": "info",
@@ -131,8 +136,9 @@ def test_attach_fmu_settings_handler_generic_exception(capsys: Any) -> None:
     """Test handler gracefully handles unexpected exceptions."""
     log_manager = MagicMock()
     log_manager.add_log_entry.side_effect = RuntimeError("Unexpected error")
+    log_level: Final = "INFO"
 
-    processor = attach_fmu_settings_handler(log_manager, EventInfo)
+    processor = attach_fmu_settings_handler(log_manager, EventInfo, log_level)
 
     event_dict = {"level": "info", "event": "test"}
 
@@ -146,7 +152,8 @@ def test_attach_fmu_settings_handler_generic_exception(capsys: Any) -> None:
 def test_attach_fmu_settings_handler_default_values() -> None:
     """Test handler uses default values for level and event."""
     log_manager = MagicMock()
-    processor = attach_fmu_settings_handler(log_manager, EventInfo)
+    log_level: Final = "INFO"
+    processor = attach_fmu_settings_handler(log_manager, EventInfo, log_level)
 
     event_dict: dict[str, Any] = {}
 
@@ -157,6 +164,70 @@ def test_attach_fmu_settings_handler_default_values() -> None:
     call_args = log_manager.add_log_entry.call_args[0][0]
     assert call_args.level == "INFO"
     assert call_args.event == "unknown"
+
+
+def test_attach_fmu_settings_handler_logs_on_severity() -> None:
+    """Tests that handler logs according to the configured log level severity."""
+    log_manager = MagicMock()
+    entry_class = EventInfo
+
+    now = datetime.now(UTC)
+    event_dict_debug = {"level": "debug", "event": "debug_event", "timestamp": now}
+    event_dict_info = {"level": "info", "event": "info_event", "timestamp": now}
+    event_dict_warning = {
+        "level": "warning",
+        "event": "warning_event",
+        "timestamp": now,
+    }
+    event_dict_error = {"level": "error", "event": "error_event", "timestamp": now}
+    event_dict_critical = {
+        "level": "critical",
+        "event": "critical_event",
+        "timestamp": now,
+    }
+
+    def process_event_and_assert_skipped_logging(
+        event_type: str, event_dict: dict[str, Any]
+    ) -> None:
+        log_manager.reset_mock()
+        processor(None, event_type, event_dict)
+        log_manager.add_log_entry.assert_not_called()
+
+    def process_event_and_assert_logging(
+        event_type: str, event_dict: dict[str, Any]
+    ) -> None:
+        log_manager.reset_mock()
+        processor(None, event_type, event_dict)
+        log_manager.add_log_entry.assert_called_once()
+
+    # Events with severity CRITICAL or higher should be logged
+    log_level_critical: Final = "CRITICAL"
+    processor = attach_fmu_settings_handler(
+        log_manager, entry_class, log_level_critical
+    )
+    process_event_and_assert_skipped_logging("debug", event_dict_debug)
+    process_event_and_assert_skipped_logging("info", event_dict_info)
+    process_event_and_assert_skipped_logging("warning", event_dict_warning)
+    process_event_and_assert_skipped_logging("error", event_dict_error)
+    process_event_and_assert_logging("critical", event_dict_critical)
+
+    # Events with severity WARNING or higher should be logged
+    log_level_warning: Final = "WARNING"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level_warning)
+    process_event_and_assert_skipped_logging("debug", event_dict_debug)
+    process_event_and_assert_skipped_logging("info", event_dict_info)
+    process_event_and_assert_logging("warning", event_dict_warning)
+    process_event_and_assert_logging("error", event_dict_error)
+    process_event_and_assert_logging("critical", event_dict_critical)
+
+    # Events with severity DEBUG or higher should be logged
+    log_level_debug: Final = "DEBUG"
+    processor = attach_fmu_settings_handler(log_manager, entry_class, log_level_debug)
+    process_event_and_assert_logging("debug", event_dict_debug)
+    process_event_and_assert_logging("info", event_dict_info)
+    process_event_and_assert_logging("warning", event_dict_warning)
+    process_event_and_assert_logging("error", event_dict_error)
+    process_event_and_assert_logging("critical", event_dict_critical)
 
 
 def test_setup_logging_configures_structlog() -> None:

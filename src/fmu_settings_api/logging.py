@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from pydantic import ValidationError
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 def attach_fmu_settings_handler(
     log_manager: Any,
     entry_class: type[Any],
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
 ) -> Callable[..., Any]:
     """Create a processor that forwards logs to fmu-settings LogManager."""
 
@@ -26,24 +27,29 @@ def attach_fmu_settings_handler(
         logger: Any, method_name: str, event_dict: dict[str, Any]
     ) -> dict[str, Any]:
         """Forward structured log to fmu-settings LogManager."""
-        try:
-            now_iso = datetime.now(UTC).isoformat()
-            log_entry_data = {
-                "level": event_dict.get("level", "info").upper(),
-                "event": event_dict.get("event", "unknown"),
-                "timestamp": event_dict.get("timestamp") or now_iso,
-                **{
-                    k: v
-                    for k, v in event_dict.items()
-                    if k not in ["level", "event", "timestamp"]
-                },
-            }
-            log_entry = entry_class.model_validate(log_entry_data)
-            log_manager.add_log_entry(log_entry)
-        except ValidationError as e:
-            print(f"Failed to add log entry: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected logging error: {e}", file=sys.stderr)
+        event_log_level = event_dict.get("level", "info").upper()
+        log_level_scores = logging.getLevelNamesMapping()
+        if log_level_scores.get(event_log_level, 0) >= log_level_scores.get(
+            log_level, 0
+        ):
+            try:
+                now_iso = datetime.now(UTC).isoformat()
+                log_entry_data = {
+                    "level": event_log_level,
+                    "event": event_dict.get("event", "unknown"),
+                    "timestamp": event_dict.get("timestamp") or now_iso,
+                    **{
+                        k: v
+                        for k, v in event_dict.items()
+                        if k not in ["level", "event", "timestamp"]
+                    },
+                }
+                log_entry = entry_class.model_validate(log_entry_data)
+                log_manager.add_log_entry(log_entry)
+            except ValidationError as e:
+                print(f"Failed to add log entry: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"Unexpected logging error: {e}", file=sys.stderr)
 
         return event_dict
 
@@ -66,13 +72,15 @@ def setup_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    processors: list[Callable[..., Any]] = [
+    processors: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
-        attach_fmu_settings_handler(fmu_log_manager, log_entry_class),
+        attach_fmu_settings_handler(
+            fmu_log_manager, log_entry_class, settings.log_level
+        ),
     ]
 
     if settings.log_format == "json" or settings.is_production:
