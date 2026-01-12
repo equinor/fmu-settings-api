@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.settings.models.project_config import RmsHorizon, RmsStratigraphicZone, RmsWell
+from runrms.exceptions import RmsProjectNotFoundError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.deps.rms import (
@@ -85,6 +86,25 @@ async def test_open_rms_project_service_error(
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+async def test_open_rms_project_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test opening an RMS project when the project directory does not exist."""
+    mock_service = MagicMock()
+    rms_path = Path("/nonexistent/path/to/project.rms14")
+    mock_service.open_rms_project.side_effect = RmsProjectNotFoundError(
+        f"The project: {rms_path} does not exist as a directory."
+    )
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": f"RMS project not found at path: {rms_path}"}
 
 
 async def test_close_rms_project_success(

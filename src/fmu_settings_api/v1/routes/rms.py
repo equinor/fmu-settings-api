@@ -10,6 +10,7 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
+from runrms.exceptions import RmsProjectNotFoundError
 
 from fmu_settings_api.deps import SessionServiceDep
 from fmu_settings_api.deps.rms import (
@@ -64,6 +65,13 @@ router = APIRouter(prefix="/rms", tags=["rms"])
                 {"detail": "RMS project path is not set in the project config file."},
             ],
         ),
+        **inline_add_response(
+            404,
+            "RMS project file does not exist at the configured path.",
+            [
+                {"detail": "RMS project not found at path: {rms_project_path}"},
+            ],
+        ),
     },
 )
 async def post_rms_project(
@@ -87,6 +95,11 @@ async def post_rms_project(
         )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
+    except RmsProjectNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"RMS project not found at path: {rms_project_path}",
+        ) from e
 
 
 @router.delete(
