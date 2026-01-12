@@ -25,9 +25,6 @@ class FMUProject(FMUDirPath):
     config: ProjectConfig
     """The configuration of an FMU project's .fmu directory."""
 
-    is_read_only: bool = Field(default=False)
-    """Whether the project is in read-only mode due to lock conflicts."""
-
 
 class GlobalConfigPath(BaseResponseModel):
     """A relative path to a global config file, relative to the project root."""

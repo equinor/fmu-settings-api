@@ -27,13 +27,10 @@ class ProjectService:
 
     def get_project_data(self) -> FMUProject:
         """Get the paths and configuration of the project FMU directory."""
-        is_read_only = not self._fmu_dir._lock.is_acquired()
-
         return FMUProject(
             path=self._fmu_dir.base_path,
             project_dir_name=self._fmu_dir.base_path.name,
             config=self._fmu_dir.config.load(),
-            is_read_only=is_read_only,
         )
 
     @property
