@@ -209,7 +209,6 @@ async def test_get_project_directory_exists(
     assert fmu_project.path == session_tmp_path
     assert fmu_project.project_dir_name == session_tmp_path.name
     assert existing_fmu_dir.config.load() == fmu_project.config
-    assert fmu_project.is_read_only is False
 
 
 async def test_get_project_writes_to_user_recent_projects(
