@@ -24,9 +24,10 @@ async def test_open_rms_project_success(
     client_with_project_session: TestClient,
 ) -> None:
     """Test opening an RMS project successfully."""
+    rms_version = "14.2.2"
     mock_service = MagicMock()
     mock_service.open_rms_project.return_value = (MagicMock(), MagicMock())
-    mock_service.get_rms_version.return_value = "14.2.2"
+    mock_service.get_rms_version.return_value = rms_version
     rms_path = Path("/path/to/rms/project")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
@@ -36,9 +37,9 @@ async def test_open_rms_project_success(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
-        "message": "RMS project opened successfully with RMS version 14.2.2"
+        "message": f"RMS project opened successfully with RMS version {rms_version}."
     }
-    mock_service.open_rms_project.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_called_once_with(rms_path, rms_version)
 
 
 async def test_open_rms_project_no_session() -> None:
@@ -105,6 +106,64 @@ async def test_open_rms_project_not_found(
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json() == {"detail": f"RMS project not found at path: {rms_path}"}
+
+
+async def test_open_rms_project_with_specified_version(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test opening an RMS project with a specified RMS version."""
+    default_rms_version = "14.2.2"
+    specified_rms_version = "15.1.0.0"
+
+    mock_service = MagicMock()
+    mock_service.open_rms_project.return_value = (MagicMock(), MagicMock())
+    mock_service.get_rms_version.return_value = default_rms_version
+
+    rms_path = Path("/path/to/rms/project")
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(
+        ROUTE, json={"version": specified_rms_version}
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": (
+            f"RMS project opened successfully with RMS version {specified_rms_version}."
+        )
+    }
+    mock_service.get_rms_version.assert_not_called()
+    mock_service.open_rms_project.assert_called_once_with(
+        rms_path, specified_rms_version
+    )
+
+
+async def test_open_rms_project_without_specified_version(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test opening an RMS project without a specified RMS version."""
+    default_rms_version = "14.2.2"
+
+    mock_service = MagicMock()
+    mock_service.open_rms_project.return_value = (MagicMock(), MagicMock())
+    mock_service.get_rms_version.return_value = "14.2.2"
+    rms_path = Path("/path/to/rms/project")
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": (
+            f"RMS project opened successfully with RMS version {default_rms_version}."
+        )
+    }
+    mock_service.get_rms_version.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_called_once_with(rms_path, default_rms_version)
 
 
 async def test_close_rms_project_success(

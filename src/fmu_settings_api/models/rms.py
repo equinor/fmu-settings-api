@@ -19,3 +19,10 @@ class RmsProjectPathsResult(BaseResponseModel):
 
     results: list[RmsProjectPath]
     """List of absolute paths to RMS projects within the FMU project."""
+
+
+class RmsVersion(BaseResponseModel):
+    """RMS version."""
+
+    version: str = Field(examples=["14.2.2", "15..1.0"])
+    """A version of RMS."""
