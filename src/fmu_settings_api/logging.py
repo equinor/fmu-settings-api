@@ -85,7 +85,6 @@ def setup_logging(
 
     if settings.log_format == "json" or settings.is_production:
         processors += [
-            structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ]
     else:
