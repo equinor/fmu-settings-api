@@ -85,11 +85,11 @@ def setup_logging(
 
     if settings.log_format == "json" or settings.is_production:
         processors += [
+            structlog.processors.ExceptionRenderer(),
             structlog.processors.JSONRenderer(),
         ]
     else:
         processors += [
-            structlog.processors.ExceptionRenderer(),
             structlog.dev.ConsoleRenderer(colors=True),
         ]
 
