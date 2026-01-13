@@ -10,7 +10,8 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
-from runrms.exceptions import RmsProjectNotFoundError
+from runrms.api.proxy import RemoteException
+from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 
 from fmu_settings_api.deps import SessionServiceDep
 from fmu_settings_api.deps.rms import (
@@ -19,6 +20,7 @@ from fmu_settings_api.deps.rms import (
     RmsServiceDep,
 )
 from fmu_settings_api.models.common import Message
+from fmu_settings_api.models.rms import RmsVersion
 from fmu_settings_api.session import (
     SessionNotFoundError,
 )
@@ -49,6 +51,43 @@ RmsResponses: Final[Responses] = {
     ),
 }
 
+FailedOpeningRmsProjectResponses: Final[Responses] = {
+    **inline_add_response(
+        400,
+        dedent("RMS project path is not configured in the project config file."),
+        [
+            {"detail": "RMS project path is not set in the project config file."},
+        ],
+    ),
+    **inline_add_response(
+        404,
+        dedent("RMS project does not exist at the configured path."),
+        [
+            {
+                "detail": (
+                    "RMS project does not exist at the "
+                    "configured path: {rms_project_path}."
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent("Failed to open RMS project {rms_project_path}."),
+        [
+            {"detail": "Could not open project using RMS version {version}."},
+            {"detail": "Unable to check out required license."},
+            {
+                "detail": (
+                    "Failed setting up RMS API proxy: The requested RMS version "
+                    "{version} is not supported. Try specifying another RMS version "
+                    "or upgrade the RMS project."
+                )
+            },
+        ],
+    ),
+}
+
 router = APIRouter(prefix="/rms", tags=["rms"])
 
 
@@ -56,50 +95,76 @@ router = APIRouter(prefix="/rms", tags=["rms"])
     "/",
     response_model=Message,
     summary="Open an RMS project and store it in the session",
+    description=dedent(
+        """
+        Open an RMS project and store it in the session.
+
+        The RMS project path must be configured in the project's .fmu config file.
+        Once opened, the project remains open in the session until explicitly closed
+        or the session expires. This allows for efficient repeated access without
+        reopening the project each time.
+
+        The endpoint takes an optional parameter, `rms_version`, as input. This can be
+        used to specify which version of RMS API that should be used when opening
+        the RMS project.
+        """
+    ),
     responses={
         **GetSessionResponses,
-        **inline_add_response(
-            400,
-            "RMS project path is not configured in the project config file.",
-            [
-                {"detail": "RMS project path is not set in the project config file."},
-            ],
-        ),
-        **inline_add_response(
-            404,
-            "RMS project file does not exist at the configured path.",
-            [
-                {"detail": "RMS project not found at path: {rms_project_path}"},
-            ],
-        ),
+        **FailedOpeningRmsProjectResponses,
     },
 )
 async def post_rms_project(
     rms_service: RmsServiceDep,
     session_service: SessionServiceDep,
     rms_project_path: RmsProjectPathDep,
+    rms_version: RmsVersion | None = None,
 ) -> Message:
-    """Open an RMS project and store it in the session.
-
-    The RMS project path must be configured in the project's .fmu config file.
-    Once opened, the project remains open in the session until explicitly closed
-    or the session expires. This allows for efficient repeated access without
-    reopening the project each time.
-    """
+    """Open an RMS project and store it in the session."""
     try:
-        root_proxy, project = rms_service.open_rms_project(rms_project_path)
-        rms_version = rms_service.get_rms_version(rms_project_path)
+        version = (
+            rms_version.version
+            if rms_version is not None
+            else rms_service.get_rms_version(rms_project_path)
+        )
+        root_proxy, project = rms_service.open_rms_project(rms_project_path, version)
         await session_service.add_rms_session(root_proxy, project)
         return Message(
-            message=f"RMS project opened successfully with RMS version {rms_version}"
+            message=f"RMS project opened successfully with RMS version {version}."
         )
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except RmsProjectNotFoundError as e:
         raise HTTPException(
             status_code=404,
-            detail=f"RMS project not found at path: {rms_project_path}",
+            detail=(
+                "RMS project does not exist at the "
+                f"configured path: {rms_project_path}."
+            ),
         ) from e
+    except RmsVersionError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Failed to open RMS project {rms_project_path}: "
+                f"Failed setting up RMS API proxy: The requested RMS version {version} "
+                "is not supported. Try specifying another RMS version "
+                "or upgrading the RMS project."
+            ),
+        ) from e
+    except RemoteException as e:
+        error_msg_base = f"Failed to open RMS project {rms_project_path}: "
+        if "File version" in str(e) and "is not supported" in str(e):
+            error_msg = error_msg_base + (
+                f"Could not open project using RMS version {version}: {str(e)}"
+            )
+        elif "Unable to check out required license." in str(e):
+            error_msg = error_msg_base + (
+                f"Unable to check out required license: {str(e)}"
+            )
+        else:
+            error_msg = error_msg_base + f"{str(e)}"
+        raise HTTPException(status_code=422, detail=error_msg) from e
 
 
 @router.delete(

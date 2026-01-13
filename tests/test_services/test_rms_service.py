@@ -26,13 +26,32 @@ def mock_rms_proxy() -> MagicMock:
     return MagicMock()
 
 
+def test_get_rms_version_from_project_master(rms_service: RmsService) -> None:
+    """Test that the RMS version is read from the project's .master file."""
+    rms_project_path = Path("/path/to/rms/project")
+    master_rms_version = "13.0.3"
+
+    mock_rms_project_info = MagicMock()
+    mock_rms_project_info.master.version = master_rms_version
+
+    with (
+        patch(
+            "fmu_settings_api.services.rms.RmsProject.from_filepath",
+            return_value=mock_rms_project_info,
+        ) as mock_from_filepath,
+    ):
+        rms_version = rms_service.get_rms_version(rms_project_path)
+
+    mock_from_filepath.assert_called_once_with(str(rms_project_path))
+    assert rms_version == master_rms_version
+
+
 def test_open_rms_project_success(rms_service: RmsService) -> None:
     """Test opening an RMS project successfully."""
     rms_project_path = Path("/path/to/rms/project")
+    rms_version = "14.2.2"
 
     mock_rms_project_info = MagicMock()
-    mock_rms_project_info.master.version = "14.2.2"
-
     mock_rmsapi = MagicMock()
     mock_rmsapi.Project.open.return_value = "opened_project"
 
@@ -43,37 +62,15 @@ def test_open_rms_project_success(rms_service: RmsService) -> None:
         ),
         patch("fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi),
     ):
-        root, opened_project = rms_service.open_rms_project(rms_project_path)
+        root, opened_project = rms_service.open_rms_project(
+            rms_project_path, rms_version
+        )
 
         mock_rmsapi.Project.open.assert_called_once_with(
             str(rms_project_path), readonly=True
         )
         assert root == mock_rmsapi
         assert opened_project == "opened_project"
-
-
-def test_open_rms_project_reads_version_from_master(rms_service: RmsService) -> None:
-    """Test that the RMS version is read from the project's .master file."""
-    rms_project_path = Path("/path/to/rms/project")
-
-    mock_rms_project_info = MagicMock()
-    mock_rms_project_info.master.version = "13.0.3"
-
-    mock_rmsapi = MagicMock()
-
-    with (
-        patch(
-            "fmu_settings_api.services.rms.RmsProject.from_filepath",
-            return_value=mock_rms_project_info,
-        ) as mock_from_filepath,
-        patch(
-            "fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi
-        ) as mock_get_rmsapi,
-    ):
-        rms_service.open_rms_project(rms_project_path)
-
-        mock_from_filepath.assert_called_once_with(str(rms_project_path))
-        mock_get_rmsapi.assert_called_once_with(version="13.0.3")
 
 
 def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
