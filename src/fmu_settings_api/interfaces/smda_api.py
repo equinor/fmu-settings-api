@@ -136,7 +136,7 @@ class SmdaAPI:
         crs_identifier: Sequence[str] | None = None,
         columns: Sequence[str] | None = None,
     ) -> httpx.Response:
-        """Searches for the stratigraphic column related to a field identifier."""
+        """Searches for coordinate systems in SMDA."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
 
         json: dict[str, Any] = {"_projection": _projection, "_items": 9999}
