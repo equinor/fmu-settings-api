@@ -67,7 +67,7 @@ async def test_smda_post_with_json(mock_httpx_post: MagicMock) -> None:
 
 
 async def test_smda_post_without_json(mock_httpx_post: MagicMock) -> None:
-    """Tests the POST method on the SMDA interface without."""
+    """Tests the POST method on the SMDA interface without json."""
     api = SmdaAPI("token", "key")
     res = await api.post(SmdaRoutes.HEALTH)
 
@@ -121,6 +121,57 @@ async def test_strat_units_with_columns(mock_httpx_post: MagicMock) -> None:
         json={
             "_projection": "identifier,uuid,strat_unit_type",
             "strat_column_identifier": "LITHO_DROGON",
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_api_coordinate_system(mock_httpx_post: MagicMock) -> None:
+    """Tests coordinate_system sends correct payload with identifier and columns."""
+    api = SmdaAPI("token", "key")
+
+    crs_identifier = ["EPSG:4326", "EPSG:25832"]
+    columns = ["identifier", "uuid", "name"]
+
+    res = await api.coordinate_system(
+        crs_identifier=crs_identifier,
+        columns=columns,
+    )
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.COORDINATE_SYSTEM_SEARCH}",
+        headers={
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
+        },
+        json={
+            "_projection": "identifier,uuid,name",
+            "_items": 9999,
+            "identifier": crs_identifier,
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_api_coordinate_system_without_identifier_columns(
+    mock_httpx_post: MagicMock,
+) -> None:
+    """Tests coordinate_system sends default payload without identifier and columns."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.coordinate_system()
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.COORDINATE_SYSTEM_SEARCH}",
+        headers={
+            HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
+            HttpHeader.AUTHORIZATION_KEY: "Bearer token",
+            HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
+        },
+        json={
+            "_projection": "identifier,uuid",
+            "_items": 9999,
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
