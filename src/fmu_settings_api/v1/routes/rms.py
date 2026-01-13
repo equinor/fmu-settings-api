@@ -10,9 +10,8 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
-from runrms.exceptions import RmsProjectNotFoundError
 from runrms.api.proxy import RemoteException
-from runrms.exceptions import RmsVersionError
+from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 
 from fmu_settings_api.deps import SessionServiceDep
 from fmu_settings_api.deps.rms import (
@@ -54,14 +53,39 @@ RmsResponses: Final[Responses] = {
 
 FailedOpeningRmsProjectResponses: Final[Responses] = {
     **inline_add_response(
-        422,
-        dedent("Failed opening RMS project."),
+        400,
+        dedent("RMS project path is not configured in the project config file."),
         [
-            {"detail": "Your project does not support this version of RMS."},
-            {"detail": "Unable to check out required license."},
-            {"detail": "Failed setting up RMS API proxy. The RMS version is invalid. "},
+            {"detail": "RMS project path is not set in the project config file."},
         ],
-    )
+    ),
+    **inline_add_response(
+        404,
+        dedent("RMS project does not exist at the configured path."),
+        [
+            {
+                "detail": (
+                    "RMS project does not exist at the "
+                    "configured path: {rms_project_path}."
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent("Failed to open RMS project {rms_project_path}."),
+        [
+            {"detail": "Could not open project using RMS version {version}."},
+            {"detail": "Unable to check out required license."},
+            {
+                "detail": (
+                    "Failed setting up RMS API proxy: The requested RMS version "
+                    "{version} is not supported. Try specifying another RMS version "
+                    "or upgrade the RMS project."
+                )
+            },
+        ],
+    ),
 }
 
 router = APIRouter(prefix="/rms", tags=["rms"])
@@ -88,27 +112,6 @@ router = APIRouter(prefix="/rms", tags=["rms"])
     responses={
         **GetSessionResponses,
         **FailedOpeningRmsProjectResponses,
-        **inline_add_response(
-            400,
-            "RMS project path is not configured in the project config file.",
-            [
-                {"detail": "RMS project path is not set in the project config file."},
-            ],
-        ),
-        **inline_add_response(
-            404,
-            "RMS project file does not exist at the configured path.",
-            [
-                {"detail": "RMS project not found at path: {rms_project_path}"},
-            ],
-        ),
-        **inline_add_response(
-            422,
-            "RMS project path is not configured in the project config file.",
-            [
-                {"detail": "RMS project path is not set in the project config file."},
-            ],
-        ),
     },
 )
 async def post_rms_project(
@@ -134,33 +137,34 @@ async def post_rms_project(
     except RmsProjectNotFoundError as e:
         raise HTTPException(
             status_code=404,
-            detail=f"RMS project not found at path: {rms_project_path}",
+            detail=(
+                "RMS project does not exist at the "
+                f"configured path: {rms_project_path}."
+            ),
         ) from e
-    except RemoteException as e:
-        if "File version" in str(e) and "is not supported" in str(e):
-            error_msg = (
-                f"Can't open RMS project at project path {rms_project_path} with "
-                f"RMS version {version}. Your project does not support this version "
-                f"of RMS: {str(e)}."
-                ""
-            )
-        elif "Unable to check out required license." in str(e):
-            error_msg = (
-                "Failed opening RMS project. Unable to check out"
-                f"required license: {str(e)}."
-            )
-        else:
-            error_msg = f"Failed opening RMS project: {str(e)}"
-        raise HTTPException(status_code=422, detail=error_msg) from e
     except RmsVersionError as e:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Failed setting up RMS API proxy:"
-                "The RMS version is invalid. Try specifying another RMS version "
-                "or update your project .master file."
+                f"Failed to open RMS project {rms_project_path}: "
+                f"Failed setting up RMS API proxy: The requested RMS version {version} "
+                "is not supported. Try specifying another RMS version "
+                "or upgrading the RMS project."
             ),
         ) from e
+    except RemoteException as e:
+        error_msg_base = f"Failed to open RMS project {rms_project_path}: "
+        if "File version" in str(e) and "is not supported" in str(e):
+            error_msg = error_msg_base + (
+                f"Could not open project using RMS version {version}: {str(e)}"
+            )
+        elif "Unable to check out required license." in str(e):
+            error_msg = error_msg_base + (
+                f"Unable to check out required license: {str(e)}"
+            )
+        else:
+            error_msg = error_msg_base + f"{str(e)}"
+        raise HTTPException(status_code=422, detail=error_msg) from e
 
 
 @router.delete(

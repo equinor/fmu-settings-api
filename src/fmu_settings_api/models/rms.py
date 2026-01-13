@@ -24,5 +24,5 @@ class RmsProjectPathsResult(BaseResponseModel):
 class RmsVersion(BaseResponseModel):
     """RMS version."""
 
-    version: str = Field(examples=["14.2.2", "15..1.0"])
+    version: str = Field(examples=["14.2.2", "15.0.1.0"])
     """A version of RMS."""
