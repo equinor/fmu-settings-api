@@ -175,3 +175,20 @@ async def test_smda_api_coordinate_system_without_identifier_columns(
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_field_search(mock_httpx_post: MagicMock) -> None:
+    """Tests field search sends correct payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.field(["FIELD_A"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.FIELDS_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "identifier": ["FIELD_A"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
