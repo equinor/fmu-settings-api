@@ -191,6 +191,9 @@ async def test_smda_strat_column_areas(mock_httpx_post: MagicMock) -> None:
             "_projection": "identifier,uuid",
             "strat_area_identifier": ["FIELD_A"],
             "strat_column_status": "official",
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
 
 
 async def test_smda_health_ok(mock_httpx_get: MagicMock) -> None:
