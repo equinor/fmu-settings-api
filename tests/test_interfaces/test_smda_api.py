@@ -186,3 +186,54 @@ async def test_smda_health_ok(mock_httpx_get: MagicMock) -> None:
     res = await api.health()
 
     assert res is True
+
+
+async def test_smda_field_search(mock_httpx_post: MagicMock) -> None:
+    """Tests field search sends correct payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.field(["FIELD_A"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.FIELDS_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "identifier": ["FIELD_A"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_country_search(mock_httpx_post: MagicMock) -> None:
+    """Tests country search sends correct payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.country(["NO"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.COUNTRIES_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "identifier": ["NO"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_discovery_search(mock_httpx_post: MagicMock) -> None:
+    """Tests discovery search sends correct payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.discovery(["FIELD_A"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.DISCOVERIES_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "field_identifier": ["FIELD_A"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
