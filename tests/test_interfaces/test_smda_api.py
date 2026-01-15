@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from fmu_settings_api.config import HttpHeader
@@ -175,6 +176,16 @@ async def test_smda_api_coordinate_system_without_identifier_columns(
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_health_ok(mock_httpx_get: MagicMock) -> None:
+    """Tests health returns True when status is OK."""
+    api = SmdaAPI("token", "key")
+    mock_httpx_get.return_value.status_code = httpx.codes.OK
+
+    res = await api.health()
+
+    assert res is True
 
 
 async def test_smda_field_search(mock_httpx_post: MagicMock) -> None:
