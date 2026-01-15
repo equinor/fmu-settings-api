@@ -12,13 +12,15 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import Access, Model, Smda
+from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings._fmu_dir import (
     ProjectFMUDirectory,
     UserFMUDirectory,
 )
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
+from fmu.settings.models.mappings import Mappings
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -2789,7 +2791,7 @@ async def test_get_cache_revision_returns_resource_content(
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
-    payload = {"answer": 42}
+    payload = fmu_dir.config.load().model_dump(mode="json")
     revision_path = fmu_dir.cache.store_revision(
         Path("config.json"), json.dumps(payload)
     )
@@ -2799,7 +2801,34 @@ async def test_get_cache_revision_returns_resource_content(
         f"{ROUTE}/cache/{revision_path.name}", params={"resource": "config.json"}
     )
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["content"] == payload
+    assert response.json()["data"] == payload
+
+
+async def test_get_cache_revision_returns_mappings_content(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test fetching a mappings cache revision returns parsed JSON."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = Mappings().model_dump(mode="json")
+    payload["wells"] = ["W1"]
+    revision_path = fmu_dir.cache.store_revision(
+        Path("mappings.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/{revision_path.name}", params={"resource": "mappings.json"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"] == payload
 
 
 async def test_get_cache_revision_resource_not_found(
@@ -2835,7 +2864,7 @@ async def test_get_cache_revision_invalid_resource_json(
         f"{ROUTE}/cache/{revision_path.name}", params={"resource": "config.json"}
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "Invalid JSON in cache revision" in response.json()["detail"]
+    assert "Invalid cached content for 'config.json'" in response.json()["detail"]
 
 
 async def test_get_cache_revision_resource_permission_error(
@@ -2908,6 +2937,39 @@ async def test_post_cache_restore_updates_resource(
         fmu_dir.config.load(force=True).cache_max_revisions
         == updated_config["cache_max_revisions"]
     )
+
+
+async def test_post_cache_restore_updates_mappings(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test restoring mappings cache revision updates the resource."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = Mappings().model_dump(mode="json")
+    payload["wells"] = ["W2"]
+
+    revision_path = fmu_dir.cache.store_revision(
+        Path("mappings.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/{revision_path.name}",
+        params={"resource": "mappings.json"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": f"Restored mappings.json from revision {revision_path.name}"
+    }
+    restored = json.loads(fmu_dir.read_text_file(Path("mappings.json")))
+    assert restored == payload
 
 
 async def test_post_cache_restore_resource_missing_file(

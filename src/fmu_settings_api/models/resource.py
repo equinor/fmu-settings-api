@@ -1,15 +1,8 @@
-"""Resource models for cache and logs."""
+"""Response models for resources in .fmu."""
 
-from enum import StrEnum
 from typing import Any
 
 from fmu_settings_api.models.common import BaseResponseModel
-
-
-class CacheResource(StrEnum):
-    """Available cacheable resources in the FMU project."""
-
-    config = "config.json"
 
 
 class CacheList(BaseResponseModel):
@@ -22,5 +15,5 @@ class CacheList(BaseResponseModel):
 class CacheContent(BaseResponseModel):
     """Content of a cache revision."""
 
-    content: dict[str, Any]
-    """Parsed JSON content from the cached file."""
+    data: dict[str, Any]
+    """Parsed JSON object for the cached resource."""

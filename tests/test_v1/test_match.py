@@ -7,7 +7,7 @@ from uuid import uuid4
 import httpx
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import CoordinateSystem
+from fmu.datamodels.common.masterdata import CoordinateSystem
 from fmu.settings.models.project_config import RmsCoordinateSystem, RmsStratigraphicZone
 
 from fmu_settings_api.__main__ import app

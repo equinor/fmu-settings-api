@@ -5,8 +5,9 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException
-from fmu.datamodels.fmu_results.fields import Access, Model, Smda
-from fmu.settings import ProjectFMUDirectory
+from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.fmu_results.fields import Model
+from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -28,11 +29,7 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
-from fmu_settings_api.models.resource import (
-    CacheContent,
-    CacheList,
-    CacheResource,
-)
+from fmu_settings_api.models.resource import CacheContent, CacheList
 from fmu_settings_api.models.rms import RmsProjectPath, RmsProjectPathsResult
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.session import SessionNotFoundError
@@ -175,9 +172,12 @@ CacheResponses: Final[Responses] = {
     ),
     **inline_add_response(
         422,
-        "Cache revision failed validation or parsing",
+        "Cache revision failed validation or not supported for the specified resource",
         [
-            {"detail": "Invalid JSON in cache revision: {error}"},
+            {
+                "detail": "Resource {relative_path} is not supported "
+                "for cache operations"
+            },
             {"detail": "Invalid cached content for {resource}: {error}"},
         ],
     ),
@@ -802,8 +802,6 @@ async def patch_rms_wells(
         Returns a list of revision filenames for the resource specified by the
         `resource` query parameter. The filenames are used with
         GET /cache/{revision_id}.
-
-        Currently supported resources: `config.json`.
         """
     ),
     responses={**GetSessionResponses, **ProjectResponses},
@@ -836,9 +834,8 @@ async def get_cache(
         (e.g., 20260112T143045.123456Z-a1b2c3d4.json).
 
         The `resource` query parameter selects which resource cache to read.
-        Currently supported resources: `config.json`.
 
-        Returns the parsed JSON content from the cached file.
+        Returns the parsed JSON content from the cached file in the `data` field.
         """
     ),
     responses={**GetSessionResponses, **ProjectResponses, **CacheResponses},
@@ -876,7 +873,6 @@ async def get_cache_revision(
         The current resource state is cached before overwriting (when present).
 
         The `resource` query parameter selects which resource to restore.
-        Currently supported resources: `config.json`.
 
         **Example flow:**
 
