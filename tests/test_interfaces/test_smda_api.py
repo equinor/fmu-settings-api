@@ -178,6 +178,24 @@ async def test_smda_api_coordinate_system_without_identifier_columns(
     res.raise_for_status.assert_called_once()  # type: ignore
 
 
+async def test_smda_strat_column_areas(mock_httpx_post: MagicMock) -> None:
+    """Tests strat_column_areas sends correct payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.strat_column_areas(["FIELD_A"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.STRAT_COLUMN_AREAS_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "strat_area_identifier": ["FIELD_A"],
+            "strat_column_status": "official",
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
 async def test_smda_health_ok(mock_httpx_get: MagicMock) -> None:
     """Tests health returns True when status is OK."""
     api = SmdaAPI("token", "key")
