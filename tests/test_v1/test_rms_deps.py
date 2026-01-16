@@ -11,6 +11,7 @@ from fmu_settings_api.deps.rms import (
     get_opened_rms_project,
     get_rms_project_path,
     get_rms_service,
+    get_rms_version,
 )
 from fmu_settings_api.services.rms import RmsService
 from fmu_settings_api.session import RmsSession
@@ -53,7 +54,9 @@ async def test_get_opened_rms_project_success() -> None:
     rms_root_mock = MagicMock(spec=RmsApiProxy)
     rms_project_mock = MagicMock(spec=RmsApiProxy)
     project_session_mock = MagicMock()
-    project_session_mock.rms_session = RmsSession(rms_root_mock, rms_project_mock)
+    project_session_mock.rms_session = RmsSession(
+        rms_root_mock, rms_project_mock, "14.2.2"
+    )
 
     result = await get_opened_rms_project(project_session_mock)
 
@@ -67,6 +70,35 @@ async def test_get_opened_rms_project_none_open() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         await get_opened_rms_project(project_session_mock)
+
+    assert exc_info.value.status_code == 400  # noqa: PLR2004
+    assert exc_info.value.detail == (
+        "No RMS project is currently open. Please open an RMS project first."
+    )
+
+
+async def test_get_rms_version_success() -> None:
+    """Test getting RMS version from session when RMS project is open."""
+    rms_root_mock = MagicMock(spec=RmsApiProxy)
+    rms_project_mock = MagicMock(spec=RmsApiProxy)
+    project_session_mock = MagicMock()
+    expected_version = "15.0.1.0"
+    project_session_mock.rms_session = RmsSession(
+        rms_root_mock, rms_project_mock, expected_version
+    )
+
+    result = await get_rms_version(project_session_mock)
+
+    assert result == expected_version
+
+
+async def test_get_rms_version_no_rms_project() -> None:
+    """Test that HTTPException is raised when no RMS project is open."""
+    project_session_mock = MagicMock()
+    project_session_mock.rms_session = None
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_rms_version(project_session_mock)
 
     assert exc_info.value.status_code == 400  # noqa: PLR2004
     assert exc_info.value.detail == (

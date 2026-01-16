@@ -85,7 +85,7 @@ def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     zone_2.horizon_below.name.get.return_value = "Base B"
     mock_rms_proxy.zones = [zone_1, zone_2]
 
-    zones = rms_service.get_zones(mock_rms_proxy)
+    zones = rms_service.get_zones(mock_rms_proxy, "14.2.2")
 
     assert isinstance(zones, list)
     assert len(zones) == 2  # noqa: PLR2004
@@ -95,12 +95,46 @@ def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     assert [z.base_horizon_name for z in zones] == ["Base A", "Base B"]
 
 
+def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
+    """Test retrieving the zones with RMS version 15 (with stratigraphic columns)."""
+    zone_1 = MagicMock()
+    zone_1.name.get.return_value = "Zone A"
+    zone_1.horizon_above.name.get.return_value = "Top A"
+    zone_1.horizon_below.name.get.return_value = "Base A"
+    zone_2 = MagicMock()
+    zone_2.name.get.return_value = "Zone B"
+    zone_2.horizon_above.name.get.return_value = "Top B"
+    zone_2.horizon_below.name.get.return_value = "Base B"
+
+    mock_rms_proxy.zones.columns.return_value = ["Column1"]
+    mock_rms_proxy.zones.column_zones.return_value = ["Zone A", "Zone B"]
+    mock_rms_proxy.zones.__getitem__ = MagicMock(
+        side_effect=lambda x: zone_1 if x == "Zone A" else zone_2
+    )
+
+    zones = rms_service.get_zones(mock_rms_proxy, "15.0.1")
+
+    assert isinstance(zones, list)
+    assert len(zones) == 2  # noqa: PLR2004
+    assert all(isinstance(z, RmsStratigraphicZone) for z in zones)
+    assert [z.name for z in zones] == ["Zone A", "Zone B"]
+    assert [z.top_horizon_name for z in zones] == ["Top A", "Top B"]
+    assert [z.base_horizon_name for z in zones] == ["Base A", "Base B"]
+    assert all(z.stratigraphic_column_name == ["Column1"] for z in zones)
+
+
 def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     """Test retrieving horizons."""
     horizon_1 = MagicMock()
     horizon_1.name.get.return_value = "H1"
+    horizon_1_type = MagicMock()
+    horizon_1_type.configure_mock(**{"__str__.return_value": "HorizonType.calculated"})
+    horizon_1.type.get.return_value = horizon_1_type
     horizon_2 = MagicMock()
     horizon_2.name.get.return_value = "H2"
+    horizon_2_type = MagicMock()
+    horizon_2_type.configure_mock(**{"__str__.return_value": "HorizonType.interpreted"})
+    horizon_2.type.get.return_value = horizon_2_type
     mock_rms_proxy.horizons = [horizon_1, horizon_2]
 
     horizons = rms_service.get_horizons(mock_rms_proxy)
@@ -109,6 +143,7 @@ def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> Non
     assert len(horizons) == 2  # noqa: PLR2004
     assert all(isinstance(h, RmsHorizon) for h in horizons)
     assert [h.name for h in horizons] == ["H1", "H2"]
+    assert [h.type for h in horizons] == ["calculated", "interpreted"]
 
 
 def test_get_wells(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
