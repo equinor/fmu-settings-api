@@ -127,14 +127,10 @@ def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> Non
     """Test retrieving horizons."""
     horizon_1 = MagicMock()
     horizon_1.name.get.return_value = "H1"
-    horizon_1_type = MagicMock()
-    horizon_1_type.configure_mock(**{"__str__.return_value": "HorizonType.calculated"})
-    horizon_1.type.get.return_value = horizon_1_type
+    horizon_1.type.name.get.return_value = "calculated"
     horizon_2 = MagicMock()
     horizon_2.name.get.return_value = "H2"
-    horizon_2_type = MagicMock()
-    horizon_2_type.configure_mock(**{"__str__.return_value": "HorizonType.interpreted"})
-    horizon_2.type.get.return_value = horizon_2_type
+    horizon_2.type.name.get.return_value = "interpreted"
     mock_rms_proxy.horizons = [horizon_1, horizon_2]
 
     horizons = rms_service.get_horizons(mock_rms_proxy)
