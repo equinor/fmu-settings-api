@@ -1,5 +1,6 @@
 """Service for managing RMS projects through the RMS API."""
 
+from contextlib import suppress
 from pathlib import Path
 
 from fmu.settings.models.project_config import (
@@ -10,6 +11,7 @@ from fmu.settings.models.project_config import (
 )
 from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
+from runrms.api.proxy import RemoteException
 from runrms.config._rms_project import RmsProject
 
 MIN_RMS_VERSION_FOR_STRAT_COLUMNS = 15
@@ -58,45 +60,28 @@ class RmsService:
         Returns:
             list[RmsStratigraphicZone]: List of zones in the project
         """
-        # RMS 15+ supports stratigraphic columns
+        zone_columns: dict[str, list[str]] = {}
         if int(rms_version.split(".")[0]) >= MIN_RMS_VERSION_FOR_STRAT_COLUMNS:
-            zones_dict: dict[tuple[str, str, str], list[str]] = {}
             for column_name in rms_project.zones.columns():
                 for zonename in rms_project.zones.column_zones(column_name):
-                    zone = rms_project.zones[zonename]
-                    if zone.horizon_above is None or zone.horizon_below is None:
-                        continue
+                    zone_columns.setdefault(zonename, []).append(column_name)
 
-                    zone_key = (
-                        zone.name.get(),
-                        zone.horizon_above.name.get(),
-                        zone.horizon_below.name.get(),
+        zones = []
+        for zone in rms_project.zones:
+            with suppress(RemoteException):
+                zone_name = zone.name.get()
+                zones.append(
+                    RmsStratigraphicZone(
+                        name=zone_name,
+                        top_horizon_name=zone.horizon_above.name.get(),
+                        base_horizon_name=zone.horizon_below.name.get(),
+                        stratigraphic_column_name=zone_columns.get(zone_name, [])
+                        if zone_columns
+                        else None,
                     )
-                    zones_dict.setdefault(zone_key, []).append(column_name)
-
-            return [
-                RmsStratigraphicZone(
-                    name=name,
-                    top_horizon_name=top_horizon,
-                    base_horizon_name=base_horizon,
-                    stratigraphic_column_name=column_names,
                 )
-                for (
-                    name,
-                    top_horizon,
-                    base_horizon,
-                ), column_names in zones_dict.items()
-            ]
-        # RMS 14 and earlier don't support stratigraphic columns
-        return [
-            RmsStratigraphicZone(
-                name=zone.name.get(),
-                top_horizon_name=zone.horizon_above.name.get(),
-                base_horizon_name=zone.horizon_below.name.get(),
-            )
-            for zone in rms_project.zones
-            if zone.horizon_above is not None and zone.horizon_below is not None
-        ]
+
+        return zones
 
     def get_horizons(self, rms_project: RmsApiProxy) -> list[RmsHorizon]:
         """Retrieve all horizons from the RMS project.

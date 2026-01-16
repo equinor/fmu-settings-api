@@ -111,6 +111,7 @@ def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> 
     mock_rms_proxy.zones.__getitem__ = MagicMock(
         side_effect=lambda x: zone_1 if x == "Zone A" else zone_2
     )
+    mock_rms_proxy.zones.__iter__ = MagicMock(return_value=iter([zone_1, zone_2]))
 
     zones = rms_service.get_zones(mock_rms_proxy, "15.0.1")
 
