@@ -51,7 +51,13 @@ class ResourceService:
 
         try:
             self._fmu_dir.restore_from_cache(resource_path, revision_id)
-        except (FileNotFoundError, ValueError):
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(
+                "cache_restore_failed",
+                resource=resource.value,
+                revision_id=revision_id,
+                error=str(e),
+            )
             raise
 
         logger.info(
