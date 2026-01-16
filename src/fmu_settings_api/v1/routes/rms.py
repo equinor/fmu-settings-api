@@ -18,6 +18,7 @@ from fmu_settings_api.deps.rms import (
     RmsProjectDep,
     RmsProjectPathDep,
     RmsServiceDep,
+    RmsVersionDep,
 )
 from fmu_settings_api.models.common import Message
 from fmu_settings_api.models.rms import RmsVersion
@@ -128,7 +129,7 @@ async def post_rms_project(
             else rms_service.get_rms_version(rms_project_path)
         )
         root_proxy, project = rms_service.open_rms_project(rms_project_path, version)
-        await session_service.add_rms_session(root_proxy, project)
+        await session_service.add_rms_session(root_proxy, project, version)
         return Message(
             message=f"RMS project opened successfully with RMS version {version}."
         )
@@ -198,13 +199,14 @@ async def delete_rms_project(session_service: SessionServiceDep) -> Message:
 async def get_zones(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
+    session_rms_version: RmsVersionDep,
 ) -> list[RmsStratigraphicZone]:
     """Retrieve the zones from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
-    return rms_service.get_zones(opened_rms_project)
+    return rms_service.get_zones(opened_rms_project, session_rms_version)
 
 
 @router.get(

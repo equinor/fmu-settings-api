@@ -45,6 +45,8 @@ class RmsSession:
     """The root RMS proxy that shutdown() can be called against."""
     project: RmsApiProxy
     """An opened RMS project that close() can be called against."""
+    version: str
+    """The RMS version used to open the project."""
 
     def cleanup(self, session_id: str = "unknown") -> None:
         """Closes the RMS project and shuts down the root proxy."""
@@ -367,7 +369,7 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
 
 
 async def add_rms_project_to_session(
-    session_id: str, root_proxy: RmsApiProxy, rms_project: RmsApiProxy
+    session_id: str, root_proxy: RmsApiProxy, rms_project: RmsApiProxy, rms_version: str
 ) -> ProjectSession:
     """Adds an opened RMS project to the session.
 
@@ -385,7 +387,9 @@ async def add_rms_project_to_session(
     if session.rms_session is not None:
         session.rms_session.cleanup(session_id)
 
-    session.rms_session = RmsSession(root=root_proxy, project=rms_project)
+    session.rms_session = RmsSession(
+        root=root_proxy, project=rms_project, version=rms_version
+    )
     await session_manager._store_session(session_id, session)
     return session
 

@@ -57,7 +57,7 @@ def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> N
     zone = RmsStratigraphicZone(
         name="Zone1", top_horizon_name="TopZone1", base_horizon_name="BaseZone1"
     )
-    horizon = RmsHorizon(name="TopReservoir")
+    horizon = RmsHorizon(name="TopReservoir", type="calculated")
     well = RmsWell(name="Well-1")
 
     fmu_dir.set_config_value(
@@ -219,7 +219,11 @@ def test_update_rms_horizons_success(fmu_dir: ProjectFMUDirectory) -> None:
     service = ProjectService(fmu_dir)
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
 
-    horizons = [RmsHorizon(name="H1"), RmsHorizon(name="H2"), RmsHorizon(name="H3")]
+    horizons = [
+        RmsHorizon(name="H1", type="calculated"),
+        RmsHorizon(name="H2", type="interpreted"),
+        RmsHorizon(name="H3", type="calculated"),
+    ]
     result = service.update_rms_horizons(horizons)
 
     assert result is True
@@ -233,7 +237,7 @@ def test_update_rms_horizons_success(fmu_dir: ProjectFMUDirectory) -> None:
 def test_update_rms_horizons_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
     """Test that updating horizons requires RMS config to be set."""
     service = ProjectService(fmu_dir)
-    horizons = [RmsHorizon(name="H1")]
+    horizons = [RmsHorizon(name="H1", type="calculated")]
 
     with pytest.raises(ValueError) as exc_info:
         service.update_rms_horizons(horizons)
@@ -276,7 +280,7 @@ def test_update_rms_fields_preserves_other_fields(fmu_dir: ProjectFMUDirectory) 
     coord_system = RmsCoordinateSystem(name="westeros")
     service.update_rms_coordinate_system(coord_system)
 
-    horizons = [RmsHorizon(name="H1")]
+    horizons = [RmsHorizon(name="H1", type="calculated")]
     service.update_rms_horizons(horizons)
 
     saved_config = fmu_dir.config.load().rms

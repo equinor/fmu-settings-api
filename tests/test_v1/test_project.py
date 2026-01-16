@@ -2611,10 +2611,11 @@ async def test_patch_rms_horizons_requires_rms_config(
     """Test 422 returns when RMS config is not set."""
     response = client_with_project_session.patch(
         f"{ROUTE}/rms/horizons",
-        json=[{"name": "Horizon 1"}],
+        json=[{"name": "Horizon 1", "type": "calculated"}],
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "RMS project path must be set" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "RMS project path must be set" in str(detail)
 
 
 async def test_patch_rms_horizons_success(
@@ -2637,7 +2638,11 @@ async def test_patch_rms_horizons_success(
             json={"path": str(rms_path)},
         )
 
-    horizons_data = [{"name": "H1"}, {"name": "H2"}, {"name": "H3"}]
+    horizons_data = [
+        {"name": "H1", "type": "calculated"},
+        {"name": "H2", "type": "interpreted"},
+        {"name": "H3", "type": "calculated"},
+    ]
     response = client_with_project_session.patch(
         f"{ROUTE}/rms/horizons",
         json=horizons_data,
