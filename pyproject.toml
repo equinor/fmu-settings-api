@@ -30,7 +30,7 @@ dynamic = ["version"]
 dependencies = [
     "fastapi",
     "fmu-datamodels",
-    "fmu-settings @ git+https://github.com/equinor/fmu-settings.git",
+    "fmu-settings>=0.17.0",
     "httpx",
     "pydantic",
     "pyyaml",
@@ -53,6 +53,7 @@ dev = [
     "types-PyYAML",
     "types-requests",
     "watchfiles",
+    "fmu-settings-cli",
 ]
 
 [project.urls]

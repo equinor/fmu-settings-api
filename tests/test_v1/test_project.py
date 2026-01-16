@@ -12,13 +12,15 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import Access, Model, Smda
+from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings._fmu_dir import (
     ProjectFMUDirectory,
     UserFMUDirectory,
 )
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
+from fmu.settings.models.mappings import Mappings
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -2712,3 +2714,368 @@ async def test_patch_rms_wells_success(
     assert get_fmu_project.config.rms.wells is not None
     assert len(get_fmu_project.config.rms.wells) == 2  # noqa: PLR2004
     assert [w.name for w in get_fmu_project.config.rms.wells] == ["W1", "W2"]
+
+
+# GET project/cache #
+
+
+async def test_get_cache_returns_resource_revisions(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test cache list returns stored revision names."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = {"example": True}
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert revision_path.name in response.json()["revisions"]
+
+
+async def test_get_cache_resource_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when cache directory lacks permissions."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps({"example": True})
+    )
+    assert revision_path is not None
+
+    with no_permissions(revision_path.parent):
+        response = client_with_project_session.get(
+            f"{ROUTE}/cache", params={"resource": "config.json"}
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }
+
+
+# GET project/cache/{revision_id} #
+
+
+async def test_get_cache_revision_returns_resource_content(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test fetching a cache revision returns parsed JSON."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = fmu_dir.config.load().model_dump(mode="json")
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/{revision_path.name}", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"] == payload
+
+
+async def test_get_cache_revision_returns_mappings_content(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test fetching a mappings cache revision returns parsed JSON."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = Mappings().model_dump(mode="json")
+    payload["wells"] = ["W1"]
+    revision_path = fmu_dir.cache.store_revision(
+        Path("mappings.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/{revision_path.name}", params={"resource": "mappings.json"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"] == payload
+
+
+async def test_get_cache_revision_resource_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns for missing cache revision."""
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/missing.json", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": ("Cache revision 'missing.json' not found for resource 'config.json'")
+    }
+
+
+async def test_get_cache_revision_invalid_resource_json(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 422 returns for invalid JSON in cache revision."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(Path("config.json"), "not json")
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/{revision_path.name}", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid cached content for 'config.json'" in response.json()["detail"]
+
+
+async def test_get_cache_revision_resource_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 403 returns when cache revision is not readable."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps({"example": True})
+    )
+    assert revision_path is not None
+
+    original_mode = revision_path.stat().st_mode
+    revision_path.chmod(0)  # remove all permissions
+    try:
+        response = client_with_project_session.get(
+            f"{ROUTE}/cache/{revision_path.name}", params={"resource": "config.json"}
+        )
+    finally:
+        revision_path.chmod(original_mode)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }
+
+
+# POST project/cache/restore/{revision_id} #
+
+
+async def test_post_cache_restore_updates_resource(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test restoring cache revision updates the resource."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    current_config = fmu_dir.config.load()
+    updated_config = current_config.model_dump(mode="json")
+    updated_config["cache_max_revisions"] = current_config.cache_max_revisions + 1
+
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(updated_config)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/{revision_path.name}",
+        params={"resource": "config.json"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": f"Restored config.json from revision {revision_path.name}"
+    }
+    assert (
+        fmu_dir.config.load(force=True).cache_max_revisions
+        == updated_config["cache_max_revisions"]
+    )
+
+
+async def test_post_cache_restore_updates_mappings(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test restoring mappings cache revision updates the resource."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    payload = Mappings().model_dump(mode="json")
+    payload["wells"] = ["W2"]
+
+    revision_path = fmu_dir.cache.store_revision(
+        Path("mappings.json"), json.dumps(payload)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/{revision_path.name}",
+        params={"resource": "mappings.json"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": f"Restored mappings.json from revision {revision_path.name}"
+    }
+    restored = json.loads(fmu_dir.read_text_file(Path("mappings.json")))
+    assert restored == payload
+
+
+async def test_post_cache_restore_resource_missing_file(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test restore succeeds when the current resource file is missing."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    current_config = fmu_dir.config.load()
+    updated_config = current_config.model_dump(mode="json")
+    updated_config["cache_max_revisions"] = current_config.cache_max_revisions + 2
+
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(updated_config)
+    )
+    assert revision_path is not None
+
+    fmu_dir.config.path.unlink()
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/{revision_path.name}",
+        params={"resource": "config.json"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        fmu_dir.config.load(force=True).cache_max_revisions
+        == updated_config["cache_max_revisions"]
+    )
+
+
+async def test_post_cache_restore_resource_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns for missing cache revision on restore."""
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/missing.json",
+        params={"resource": "config.json"},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": ("Cache revision 'missing.json' not found for resource 'config.json'")
+    }
+
+
+async def test_post_cache_restore_invalid_resource_content(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 422 returns for invalid cached content."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps({"cache_max_revisions": 1})
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.post(
+        f"{ROUTE}/cache/restore/{revision_path.name}",
+        params={"resource": "config.json"},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid cached content" in response.json()["detail"]
+
+
+async def test_post_cache_restore_resource_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when restore cannot write the resource."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    current_config = fmu_dir.config.load()
+    updated_config = current_config.model_dump(mode="json")
+    updated_config["cache_max_revisions"] = current_config.cache_max_revisions + 1
+
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(updated_config)
+    )
+    assert revision_path is not None
+
+    with no_permissions(fmu_dir.config.path):
+        response = client_with_project_session.post(
+            f"{ROUTE}/cache/restore/{revision_path.name}",
+            params={"resource": "config.json"},
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }

@@ -3,7 +3,7 @@
 from typing import Literal
 from uuid import UUID
 
-from fmu.datamodels.fmu_results.fields import (
+from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
     DiscoveryItem,

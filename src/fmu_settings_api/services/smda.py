@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Sequence
 
-from fmu.datamodels.fmu_results.fields import (
+from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
     DiscoveryItem,

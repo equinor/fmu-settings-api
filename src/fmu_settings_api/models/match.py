@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fmu.datamodels.fmu_results.fields import CoordinateSystem
+from fmu.datamodels.common.masterdata import CoordinateSystem
 from fmu.settings.models.project_config import RmsCoordinateSystem, RmsStratigraphicZone
 from pydantic import Field
 
