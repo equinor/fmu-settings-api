@@ -1191,7 +1191,7 @@ wheels = [
 
 [[package]]
 name = "runrms"
-version = "0.7.1"
+version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
@@ -1199,9 +1199,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "pyzmq" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/72/28/69634b79e2fd18d3ae39f328c82251bbf30ef239cb3621ab4e8e61ec91dc/runrms-0.7.1.tar.gz", hash = "sha256:3408e9d14656d792407ebc9f6628c47dc48ffded3349739298816f7f0bb92a15", size = 904599, upload-time = "2025-12-17T08:35:08.961Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/90/44aba55efde219a88a6e013617759601dd00524e3a3bc0822dd492c1b04b/runrms-0.7.2.tar.gz", hash = "sha256:ae5c431255708b392b6a1ca9b21f907da71aec20f3478d662d9e7bfcc72fccfc", size = 923996, upload-time = "2026-01-16T12:17:03.174Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c4/c6/8c53d728d5193dea0be236838fcdb12efd42eb0a8f72d916b2cb9004aeca/runrms-0.7.1-py3-none-any.whl", hash = "sha256:45effe210e03b9ad3cc4b659533cf9701a0350308bbc035426ac4e96772affb1", size = 50103, upload-time = "2025-12-17T08:35:07.498Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/1c/02f89fffcb5736dcb1d6ed520726180638180dac0e8efbe3b2b7fc019ef6/runrms-0.7.2-py3-none-any.whl", hash = "sha256:925d103ba0f77704bdf89559e9b1fd2f60067ea65b405dd1c793c498328744ae", size = 50111, upload-time = "2026-01-16T12:17:01.547Z" },
 ]
 
 [[package]]
