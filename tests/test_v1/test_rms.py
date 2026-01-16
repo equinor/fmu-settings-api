@@ -319,6 +319,7 @@ async def test_get_zones_success(
             base_horizon_name="BottomHorizon",
         ),
     ]
+    mock_service.get_rms_version.return_value = "14.2.2"
     mock_service.get_zones.return_value = expected_column
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
@@ -510,6 +511,7 @@ async def test_get_zones_service_error(
 ) -> None:
     """Test getting zones when service raises an error."""
     mock_service = MagicMock()
+    mock_service.get_rms_version.return_value = "14.2.2"
     mock_service.get_zones.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service

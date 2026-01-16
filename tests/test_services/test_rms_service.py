@@ -85,7 +85,7 @@ def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     mock_rms_proxy.zones = [zone_1, zone_2]
     mock_rms_proxy.__version__ = "1.11.0"
 
-    zones = rms_service.get_zones(mock_rms_proxy)
+    zones = rms_service.get_zones(mock_rms_proxy, "14.2.2")
 
     assert isinstance(zones, list)
     assert len(zones) == 2  # noqa: PLR2004

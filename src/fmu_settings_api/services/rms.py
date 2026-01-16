@@ -50,11 +50,14 @@ class RmsService:
         rms_proxy = executor.run()
         return executor, rms_proxy.Project.open(str(rms_project_path), readonly=True)
 
-    def get_zones(self, rms_project: RmsApiProxy) -> list[RmsStratigraphicZone]:
+    def get_zones(
+        self, rms_project: RmsApiProxy, rms_version: str
+    ) -> list[RmsStratigraphicZone]:
         """Retrieve the zones from the RMS project.
 
         Args:
             rms_project: The opened RMS project proxy
+            rms_version: RMS Version to use (e.g. "14.2.2" or "15.0.1.0")
 
         Returns:
             list[RmsStratigraphicZone]: List of zones in the project
