@@ -12,6 +12,8 @@ from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
 from runrms.config._rms_project import RmsProject
 
+MIN_RMS_VERSION_FOR_STRAT_COLUMNS = 15
+
 
 class RmsService:
     """Service for handling RMS projects."""
@@ -57,7 +59,7 @@ class RmsService:
             list[RmsStratigraphicZone]: List of zones in the project
         """
         # RMS 15+ supports stratigraphic columns
-        if rms_version.startswith("15."):
+        if int(rms_version.split(".")[0]) >= MIN_RMS_VERSION_FOR_STRAT_COLUMNS:
             zones_dict: dict[tuple[str, str, str], list[str]] = {}
             for column_name in rms_project.zones.columns():
                 for zonename in rms_project.zones.column_zones(column_name):
@@ -105,17 +107,13 @@ class RmsService:
         Returns:
             list[RmsHorizon]: List of horizons in the project
         """
-        horizons = []
-        for horizon in rms_project.horizons:
-            horizon_type = horizon.type.get()
-            type_str = str(horizon_type).split(".")[-1]
-            horizons.append(
-                RmsHorizon(
-                    name=horizon.name.get(),
-                    type=type_str,  # type: ignore[arg-type]
-                )
+        return [
+            RmsHorizon(
+                name=horizon.name.get(),
+                type=horizon.type.name.get(),
             )
-        return horizons
+            for horizon in rms_project.horizons
+        ]
 
     def get_wells(self, rms_project: RmsApiProxy) -> list[RmsWell]:
         """Retrieve all wells from the RMS project.
