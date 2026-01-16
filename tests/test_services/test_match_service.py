@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fmu.datamodels.fmu_results.fields import CoordinateSystem
+from fmu.datamodels.common.masterdata import CoordinateSystem
 from fmu.settings.models.project_config import RmsCoordinateSystem, RmsStratigraphicZone
 from httpx import HTTPStatusError, Request, Response
 

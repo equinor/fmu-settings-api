@@ -5,8 +5,9 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException
-from fmu.datamodels.fmu_results.fields import Access, Model, Smda
-from fmu.settings import ProjectFMUDirectory
+from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.fmu_results.fields import Model
+from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -21,12 +22,14 @@ from fmu_settings_api.deps import (
     ProjectSessionServiceDep,
     ProjectSessionServiceNoExtendDep,
     RefreshLockDep,
+    ResourceServiceDep,
     SessionServiceDep,
     WritePermissionDep,
 )
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
+from fmu_settings_api.models.resource import CacheContent, CacheList
 from fmu_settings_api.models.rms import RmsProjectPath, RmsProjectPathsResult
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.session import SessionNotFoundError
@@ -60,6 +63,7 @@ ProjectResponses: Final[Responses] = {
             {"detail": "No .fmu directory found from {path}"},
             {"detail": "No .fmu directory found at {path}"},
             {"detail": "Path {path} does not exist"},
+            {"detail": "Project .fmu directory not found. It may have been deleted."},
         ],
     ),
 }
@@ -155,6 +159,26 @@ RmsConfigNotSetResponses: Final[Responses] = {
                 "detail": "RMS project path must be set before updating RMS fields. "
                 "Use PATCH /project/rms first."
             },
+        ],
+    ),
+}
+
+
+CacheResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        "Cache revision not found for the specified resource",
+        [{"detail": "Cache revision {revision_id} not found for resource {resource}"}],
+    ),
+    **inline_add_response(
+        422,
+        "Cache revision failed validation or not supported for the specified resource",
+        [
+            {
+                "detail": "Resource {relative_path} is not supported "
+                "for cache operations"
+            },
+            {"detail": "Invalid cached content for {resource}: {error}"},
         ],
     ),
 }
@@ -767,6 +791,125 @@ async def patch_rms_wells(
         return Message(message=f"Saved RMS wells to {project_service.fmu_dir_path}")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.get(
+    "/cache",
+    response_model=CacheList,
+    summary="List cache revisions",
+    description=dedent(
+        """
+        Returns a list of revision filenames for the resource specified by the
+        `resource` query parameter. The filenames are used with
+        GET /cache/{revision_id}.
+        """
+    ),
+    responses={**GetSessionResponses, **ProjectResponses},
+)
+async def get_cache(
+    resource_service: ResourceServiceDep,
+    resource: CacheResource,
+) -> CacheList:
+    """List all cache revisions for a specific resource."""
+    try:
+        return resource_service.list_cache_revisions(resource)
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.get(
+    "/cache/{revision_id}",
+    response_model=CacheContent,
+    summary="Get cache revision content",
+    description=dedent(
+        """
+        Retrieve the content of a specific cache revision.
+
+        The revision_id should be a filename from the list returned by GET /cache
+        (e.g., 20260112T143045.123456Z-a1b2c3d4.json).
+
+        The `resource` query parameter selects which resource cache to read.
+
+        Returns the parsed JSON content from the cached file in the `data` field.
+        """
+    ),
+    responses={**GetSessionResponses, **ProjectResponses, **CacheResponses},
+)
+async def get_cache_revision(
+    resource_service: ResourceServiceDep,
+    revision_id: str,
+    resource: CacheResource,
+) -> CacheContent:
+    """Get the content of a specific cache revision."""
+    try:
+        return resource_service.get_cache_content(resource, revision_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.post(
+    "/cache/restore/{revision_id}",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Restore a resource from a cache revision",
+    description=dedent(
+        """
+        Restore a resource from a cache revision (overwrites current resource).
+
+        The current resource state is cached before overwriting (when present).
+
+        The `resource` query parameter selects which resource to restore.
+
+        **Example flow:**
+
+        1. Current resource is in state A
+        2. Call restore with a revision from state B
+        3. Your current state A is cached (when present)
+        4. Resource is now in state B
+        5. To undo: restore from the newly created cache entry (your state A backup)
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **CacheResponses,
+        **LockConflictResponses,
+    },
+)
+async def post_cache_restore(
+    resource_service: ResourceServiceDep,
+    revision_id: str,
+    resource: CacheResource,
+) -> Message:
+    """Restore a resource from a cache revision."""
+    try:
+        resource_service.restore_from_cache(resource, revision_id)
+        return Message(message=f"Restored {resource.value} from revision {revision_id}")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
 
 
 def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:

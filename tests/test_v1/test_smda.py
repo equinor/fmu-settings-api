@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.datamodels.fmu_results.fields import (
+from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
     DiscoveryItem,

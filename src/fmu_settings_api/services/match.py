@@ -3,7 +3,7 @@
 import re
 from typing import TYPE_CHECKING, Literal
 
-from fmu.datamodels.fmu_results.fields import CoordinateSystem
+from fmu.datamodels.common.masterdata import CoordinateSystem
 from fmu.settings.models.project_config import RmsCoordinateSystem, RmsStratigraphicZone
 from rapidfuzz import fuzz
 
