@@ -124,6 +124,45 @@ def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> 
     assert all(z.stratigraphic_column_name == ["Column1"] for z in zones)
 
 
+def test_get_zones_rms15_multiple_columns(
+    rms_service: RmsService, mock_rms_proxy: MagicMock
+) -> None:
+    """Test retrieving zones where a zone exists in multiple stratigraphic columns."""
+    zone_1 = MagicMock()
+    zone_1.name.get.return_value = "Zone A"
+    zone_1.horizon_above.name.get.return_value = "Top A"
+    zone_1.horizon_below.name.get.return_value = "Base A"
+    zone_2 = MagicMock()
+    zone_2.name.get.return_value = "Zone B"
+    zone_2.horizon_above.name.get.return_value = "Top B"
+    zone_2.horizon_below.name.get.return_value = "Base B"
+
+    mock_rms_proxy.zones.columns.return_value = ["Column1", "Column2"]
+
+    def mock_column_zones(column_name: str) -> list[str]:
+        if column_name == "Column1":
+            return ["Zone A"]
+        return ["Zone A", "Zone B"]
+
+    mock_rms_proxy.zones.column_zones.side_effect = mock_column_zones
+    mock_rms_proxy.zones.__getitem__ = MagicMock(
+        side_effect=lambda x: zone_1 if x == "Zone A" else zone_2
+    )
+    mock_rms_proxy.zones.__iter__ = MagicMock(return_value=iter([zone_1, zone_2]))
+
+    zones = rms_service.get_zones(mock_rms_proxy, "15.0.1")
+
+    assert isinstance(zones, list)
+    assert len(zones) == 2  # noqa: PLR2004
+    assert all(isinstance(z, RmsStratigraphicZone) for z in zones)
+
+    zone_a = next(z for z in zones if z.name == "Zone A")
+    assert zone_a.stratigraphic_column_name == ["Column1", "Column2"]
+
+    zone_b = next(z for z in zones if z.name == "Zone B")
+    assert zone_b.stratigraphic_column_name == ["Column2"]
+
+
 def test_get_horizons(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     """Test retrieving horizons."""
     horizon_1 = MagicMock()
