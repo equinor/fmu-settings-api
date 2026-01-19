@@ -267,14 +267,14 @@ wheels = [
 
 [[package]]
 name = "fmu-datamodels"
-version = "0.17.0"
+version = "0.17.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/15/1e/d98f838f46b03db09fec925ce98ac712bf8e307457a858747aad3b118b64/fmu_datamodels-0.17.0.tar.gz", hash = "sha256:3ed3c64a50fd264814f57b506aec3f1ed336b260eb71af0894c0e45916ec0d7d", size = 340387, upload-time = "2026-01-14T12:49:27.814Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/87/6ae14a0675bcf22090f6d3924f8b8767677877d36a34df35973803a9860a/fmu_datamodels-0.17.3.tar.gz", hash = "sha256:a8c988c25b7075a33fb8d648774a4e4b5611e82e773eb7c1cf02bac78b6fc200", size = 359928, upload-time = "2026-01-16T13:29:07.515Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/b9/7dcd1862144aa511370f54991e57389fc69f64ac8770affbc1c794b3bbea/fmu_datamodels-0.17.0-py3-none-any.whl", hash = "sha256:61cb5f3b01198934efead58b869c7fc0b2c9ebe414802523750821adfab14267", size = 45088, upload-time = "2026-01-14T12:49:26.145Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/c9/89b9af651295b818bb9f3ca5c9401ebc271c12db7a6958c765273147ee48/fmu_datamodels-0.17.3-py3-none-any.whl", hash = "sha256:3ff349dbaf8f6024cc7ea47206e8593c3b97e4f53abc944eec49785dccdff2ec", size = 47129, upload-time = "2026-01-16T13:29:05.777Z" },
 ]
 
 [[package]]
