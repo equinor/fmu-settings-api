@@ -1,6 +1,5 @@
 """Service for managing RMS projects through the RMS API."""
 
-from contextlib import suppress
 from pathlib import Path
 
 from fmu.settings.models.project_config import (
@@ -11,7 +10,6 @@ from fmu.settings.models.project_config import (
 )
 from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
-from runrms.api.proxy import RemoteException
 from runrms.config._rms_project import RmsProject
 
 MIN_RMS_VERSION_FOR_STRAT_COLUMNS = 15
@@ -68,7 +66,10 @@ class RmsService:
 
         zones = []
         for zone in rms_project.zones:
-            with suppress(RemoteException):
+            if (
+                zone.horizon_above.get() is not None
+                and zone.horizon_below.get() is not None
+            ):
                 zone_name = zone.name.get()
                 zones.append(
                     RmsStratigraphicZone(
