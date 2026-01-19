@@ -31,18 +31,18 @@ def test_get_rms_version_from_project_master(rms_service: RmsService) -> None:
     rms_project_path = Path("/path/to/rms/project")
     master_rms_version = "13.0.3"
 
-    mock_rms_project_info = MagicMock()
-    mock_rms_project_info.master.version = master_rms_version
+    mock_rms_config = MagicMock()
+    mock_rms_config.version = master_rms_version
 
     with (
         patch(
-            "fmu_settings_api.services.rms.RmsProject.from_filepath",
-            return_value=mock_rms_project_info,
-        ) as mock_from_filepath,
+            "fmu_settings_api.services.rms.RmsConfig",
+            return_value=mock_rms_config,
+        ) as mock_rms_config_class,
     ):
         rms_version = rms_service.get_rms_version(rms_project_path)
 
-    mock_from_filepath.assert_called_once_with(str(rms_project_path))
+    mock_rms_config_class.assert_called_once_with(project=str(rms_project_path))
     assert rms_version == master_rms_version
 
 
@@ -51,17 +51,10 @@ def test_open_rms_project_success(rms_service: RmsService) -> None:
     rms_project_path = Path("/path/to/rms/project")
     rms_version = "14.2.2"
 
-    mock_rms_project_info = MagicMock()
     mock_rmsapi = MagicMock()
     mock_rmsapi.Project.open.return_value = "opened_project"
 
-    with (
-        patch(
-            "fmu_settings_api.services.rms.RmsProject.from_filepath",
-            return_value=mock_rms_project_info,
-        ),
-        patch("fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi),
-    ):
+    with patch("fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi):
         root, opened_project = rms_service.open_rms_project(
             rms_project_path, rms_version
         )

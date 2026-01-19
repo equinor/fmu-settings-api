@@ -2297,12 +2297,12 @@ async def test_patch_rms_success(
     get_fmu_project = FMUProject.model_validate(get_response.json())
     assert get_fmu_project.config.rms is None
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         response = client_with_project_session.patch(
             f"{ROUTE}/rms",
@@ -2332,12 +2332,12 @@ async def test_patch_rms_updates_existing(
     rms_path2 = session_tmp_path / "rms/model/project2.rms14.2.2"
     rms_path2.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         response = client_with_project_session.patch(
             f"{ROUTE}/rms",
@@ -2436,13 +2436,13 @@ async def test_patch_rms_general_exception(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with (
         patch(
-            "fmu_settings_api.services.rms.RmsProject.from_filepath",
-            return_value=mock_rms_project_info,
+            "fmu_settings_api.services.rms.RmsConfig",
+            return_value=mock_rms_config,
         ),
         patch.object(
             session.project_fmu_directory,
@@ -2493,12 +2493,12 @@ async def test_patch_rms_coordinate_system_success(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         client_with_project_session.patch(
             f"{ROUTE}/rms",
@@ -2558,12 +2558,12 @@ async def test_patch_rms_zones_success(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         client_with_project_session.patch(
             f"{ROUTE}/rms",
@@ -2626,12 +2626,12 @@ async def test_patch_rms_horizons_success(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         client_with_project_session.patch(
             f"{ROUTE}/rms",
@@ -2693,12 +2693,12 @@ async def test_patch_rms_wells_success(
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
-    mock_rms_project_info = Mock()
-    mock_rms_project_info.master.version = "14.2.2"
+    mock_rms_config = Mock()
+    mock_rms_config.version = "14.2.2"
 
     with patch(
-        "fmu_settings_api.services.rms.RmsProject.from_filepath",
-        return_value=mock_rms_project_info,
+        "fmu_settings_api.services.rms.RmsConfig",
+        return_value=mock_rms_config,
     ):
         client_with_project_session.patch(
             f"{ROUTE}/rms",

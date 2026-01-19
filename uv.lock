@@ -267,14 +267,14 @@ wheels = [
 
 [[package]]
 name = "fmu-datamodels"
-version = "0.17.2"
+version = "0.17.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/97/1d/9d3a3e933eb57146f8f074bae3b6747d6ae785656aa1611f2d10cff98c5c/fmu_datamodels-0.17.2.tar.gz", hash = "sha256:e512ff8538fb22ae871b86bfb35b5a2feb7c733ce217ca7afcc3b4f676a2f31b", size = 359988, upload-time = "2026-01-16T08:45:40.785Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/87/6ae14a0675bcf22090f6d3924f8b8767677877d36a34df35973803a9860a/fmu_datamodels-0.17.3.tar.gz", hash = "sha256:a8c988c25b7075a33fb8d648774a4e4b5611e82e773eb7c1cf02bac78b6fc200", size = 359928, upload-time = "2026-01-16T13:29:07.515Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/57/d0/496c4a6d0f3c80dde6f687f1f5e2dc6dd53d5560ce53a5a74ada1cafa15b/fmu_datamodels-0.17.2-py3-none-any.whl", hash = "sha256:9d45271ddac2d674c49e7f4df33eae16af2109ad9c142aa3caf4823bd26ca8a4", size = 47161, upload-time = "2026-01-16T08:45:39.444Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/c9/89b9af651295b818bb9f3ca5c9401ebc271c12db7a6958c765273147ee48/fmu_datamodels-0.17.3-py3-none-any.whl", hash = "sha256:3ff349dbaf8f6024cc7ea47206e8593c3b97e4f53abc944eec49785dccdff2ec", size = 47129, upload-time = "2026-01-16T13:29:05.777Z" },
 ]
 
 [[package]]
@@ -344,7 +344,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
     { name = "ruff", marker = "extra == 'dev'" },
-    { name = "runrms", specifier = ">=0.6.1" },
+    { name = "runrms", specifier = ">=0.7.3" },
     { name = "structlog" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "types-requests", marker = "extra == 'dev'" },
@@ -1191,7 +1191,7 @@ wheels = [
 
 [[package]]
 name = "runrms"
-version = "0.7.2"
+version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
@@ -1199,9 +1199,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "pyzmq" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/90/44aba55efde219a88a6e013617759601dd00524e3a3bc0822dd492c1b04b/runrms-0.7.2.tar.gz", hash = "sha256:ae5c431255708b392b6a1ca9b21f907da71aec20f3478d662d9e7bfcc72fccfc", size = 923996, upload-time = "2026-01-16T12:17:03.174Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/56/3ca7736deb93e2e176573a0f9f6e85768029d1eaac822a678bd88451be67/runrms-0.7.3.tar.gz", hash = "sha256:d9500935deb36833741c00c591893d373d9ab1f92bb24855645418b1786423d7", size = 923967, upload-time = "2026-01-19T08:43:33.11Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/1c/02f89fffcb5736dcb1d6ed520726180638180dac0e8efbe3b2b7fc019ef6/runrms-0.7.2-py3-none-any.whl", hash = "sha256:925d103ba0f77704bdf89559e9b1fd2f60067ea65b405dd1c793c498328744ae", size = 50111, upload-time = "2026-01-16T12:17:01.547Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/9a/a7793fe914542abee3751c813af85d6b526d43ae3a12c002ba269534b313/runrms-0.7.3-py3-none-any.whl", hash = "sha256:c716353978c33fe44c85758aba53b25dc2be332d06ef90b4710e36fccd68411d", size = 50108, upload-time = "2026-01-19T08:43:31.376Z" },
 ]
 
 [[package]]

@@ -10,7 +10,7 @@ from fmu.settings.models.project_config import (
 )
 from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
-from runrms.config._rms_project import RmsProject
+from runrms.config._rms_config import RmsConfig
 
 MIN_RMS_VERSION_FOR_STRAT_COLUMNS = 15
 
@@ -28,8 +28,8 @@ class RmsService:
         Returns:
             str: The RMS version string (e.g., "14.2.2")
         """
-        rms_project_info = RmsProject.from_filepath(str(rms_project_path))
-        return rms_project_info.master.version
+        rms_config = RmsConfig(project=str(rms_project_path))
+        return rms_config.version
 
     def open_rms_project(
         self, rms_project_path: Path, rms_version: str
