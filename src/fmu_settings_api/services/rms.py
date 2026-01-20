@@ -8,9 +8,12 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
+from packaging.version import Version
 from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
-from runrms.config._rms_project import RmsProject
+from runrms.config._rms_config import RmsConfig
+
+MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = Version("1.12")
 
 
 class RmsService:
@@ -26,8 +29,8 @@ class RmsService:
         Returns:
             str: The RMS version string (e.g., "14.2.2")
         """
-        rms_project_info = RmsProject.from_filepath(str(rms_project_path))
-        return rms_project_info.master.version
+        rms_config = RmsConfig(project=str(rms_project_path))
+        return rms_config.version
 
     def open_rms_project(
         self, rms_project_path: Path, rms_version: str
@@ -53,14 +56,32 @@ class RmsService:
         Returns:
             list[RmsStratigraphicZone]: List of zones in the project
         """
-        return [
-            RmsStratigraphicZone(
-                name=zone.name.get(),
-                top_horizon_name=zone.horizon_above.name.get(),
-                base_horizon_name=zone.horizon_below.name.get(),
-            )
-            for zone in rms_project.zones
-        ]
+        zone_columns: dict[str, list[str]] = {}
+        api_version = Version(rms_project.__version__)
+        if api_version >= MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS:
+            for column_name in rms_project.zones.columns():
+                for zonename in rms_project.zones.column_zones(column_name):
+                    zone_columns.setdefault(zonename, []).append(column_name)
+
+        zones = []
+        for zone in rms_project.zones:
+            if (
+                zone.horizon_above.get() is not None
+                and zone.horizon_below.get() is not None
+            ):
+                zone_name = zone.name.get()
+                zones.append(
+                    RmsStratigraphicZone(
+                        name=zone_name,
+                        top_horizon_name=zone.horizon_above.name.get(),
+                        base_horizon_name=zone.horizon_below.name.get(),
+                        stratigraphic_column_name=zone_columns.get(zone_name, [])
+                        if zone_columns
+                        else None,
+                    )
+                )
+
+        return zones
 
     def get_horizons(self, rms_project: RmsApiProxy) -> list[RmsHorizon]:
         """Retrieve all horizons from the RMS project.
@@ -71,7 +92,13 @@ class RmsService:
         Returns:
             list[RmsHorizon]: List of horizons in the project
         """
-        return [RmsHorizon(name=horizon.name.get()) for horizon in rms_project.horizons]
+        return [
+            RmsHorizon(
+                name=horizon.name.get(),
+                type=horizon.type.name.get(),
+            )
+            for horizon in rms_project.horizons
+        ]
 
     def get_wells(self, rms_project: RmsApiProxy) -> list[RmsWell]:
         """Retrieve all wells from the RMS project.

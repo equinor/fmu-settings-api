@@ -95,7 +95,9 @@ async def post_session(
             if rms_session is not None:
                 # Transfer existing RMS session to new session
                 await add_rms_project_to_session(
-                    session_id, rms_session.root, rms_session.project
+                    session_id,
+                    rms_session.root,
+                    rms_session.project,
                 )
                 await remove_rms_project_from_session(
                     fmu_settings_session, cleanup=False

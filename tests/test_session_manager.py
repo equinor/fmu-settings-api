@@ -655,8 +655,8 @@ async def test_remove_rms_project_from_session_success(
         await add_fmu_project_to_session(session_id, project_fmu_dir)
         await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
-        result_session = await remove_rms_project_from_session(session_id)
-        original_session = await session_manager.get_session(session_id)
+    result_session = await remove_rms_project_from_session(session_id)
+    original_session = await session_manager.get_session(session_id)
 
     assert result_session.rms_session is None
     assert isinstance(original_session, ProjectSession)

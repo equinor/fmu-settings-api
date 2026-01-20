@@ -32,10 +32,11 @@ dependencies = [
     "fmu-datamodels",
     "fmu-settings>=0.16.1",
     "httpx",
+    "packaging",
     "pydantic",
     "pyyaml",
     "rapidfuzz>=3.0.0",
-    "runrms>=0.6.1",
+    "runrms>=0.7.3",
     "structlog",
     "uvicorn",
 ]

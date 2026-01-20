@@ -323,11 +323,51 @@ async def test_get_zones_success(
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
+    app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == [zone.model_dump() for zone in expected_column]
+    mock_service.get_zones.assert_called_once_with(mock_rms_project)
+
+
+async def test_get_zones_with_strat_columns(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test getting zones with stratigraphic columns."""
+    mock_service = MagicMock()
+    mock_rms_project = MagicMock()
+    expected_zones = [
+        RmsStratigraphicZone(
+            name="Zone1",
+            top_horizon_name="TopHorizon",
+            base_horizon_name="BaseHorizon",
+            stratigraphic_column_name=["Column1"],
+        ),
+        RmsStratigraphicZone(
+            name="Zone2",
+            top_horizon_name="BaseHorizon",
+            base_horizon_name="BottomHorizon",
+            stratigraphic_column_name=["Column1"],
+        ),
+        RmsStratigraphicZone(
+            name="Zone3",
+            top_horizon_name="BottomHorizon",
+            base_horizon_name="DeepHorizon",
+            stratigraphic_column_name=["Column1"],
+        ),
+    ]
+    mock_service.get_zones.return_value = expected_zones
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
+    app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
+
+    response = client_with_project_session.get(f"{ROUTE}/zones")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == [zone.model_dump() for zone in expected_zones]
     mock_service.get_zones.assert_called_once_with(mock_rms_project)
 
 
@@ -349,9 +389,9 @@ async def test_get_horizons_success(
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
     expected_horizons = [
-        RmsHorizon(name="TopHorizon"),
-        RmsHorizon(name="BaseHorizon"),
-        RmsHorizon(name="BottomHorizon"),
+        RmsHorizon(name="TopHorizon", type="calculated"),
+        RmsHorizon(name="BaseHorizon", type="interpreted"),
+        RmsHorizon(name="BottomHorizon", type="calculated"),
     ]
     mock_service.get_horizons.return_value = expected_horizons
 
@@ -474,6 +514,7 @@ async def test_get_zones_service_error(
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+    app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
