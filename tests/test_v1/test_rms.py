@@ -14,7 +14,6 @@ from fmu_settings_api.deps.rms import (
     get_opened_rms_project,
     get_rms_project_path,
     get_rms_service,
-    get_rms_version,
 )
 from fmu_settings_api.deps.session import get_session_service
 from fmu_settings_api.session import SessionNotFoundError
@@ -320,30 +319,25 @@ async def test_get_zones_success(
             base_horizon_name="BottomHorizon",
         ),
     ]
-    mock_service.get_rms_version.return_value = "14.2.2"
     mock_service.get_zones.return_value = expected_column
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
     app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
-    app.dependency_overrides[get_rms_version] = lambda: "14.2.2"
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == [zone.model_dump() for zone in expected_column]
-    mock_service.get_zones.assert_called_once_with(mock_rms_project, "14.2.2")
+    mock_service.get_zones.assert_called_once_with(mock_rms_project)
 
 
-async def test_get_zones_with_specified_rms_version(
+async def test_get_zones_with_strat_columns(
     client_with_project_session: TestClient,
 ) -> None:
-    """Test getting zones with RMS version 15.0.1.0 from session."""
+    """Test getting zones with stratigraphic columns."""
     mock_service = MagicMock()
     mock_rms_project = MagicMock()
-    specified_rms_version = "15.0.1.0"
-
-    # Zone in RMS version 15.0.1.0 has stratigraphic_column_name
     expected_zones = [
         RmsStratigraphicZone(
             name="Zone1",
@@ -369,15 +363,12 @@ async def test_get_zones_with_specified_rms_version(
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: mock_rms_project
     app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
-    app.dependency_overrides[get_rms_version] = lambda: specified_rms_version
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == [zone.model_dump() for zone in expected_zones]
-    mock_service.get_zones.assert_called_once_with(
-        mock_rms_project, specified_rms_version
-    )
+    mock_service.get_zones.assert_called_once_with(mock_rms_project)
 
 
 async def test_get_zones_no_project_open(
@@ -519,13 +510,11 @@ async def test_get_zones_service_error(
 ) -> None:
     """Test getting zones when service raises an error."""
     mock_service = MagicMock()
-    mock_service.get_rms_version.return_value = "14.2.2"
     mock_service.get_zones.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
     app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
-    app.dependency_overrides[get_rms_version] = lambda: "14.2.2"
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
 

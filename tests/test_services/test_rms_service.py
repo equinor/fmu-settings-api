@@ -77,8 +77,9 @@ def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
     zone_2.horizon_above.name.get.return_value = "Top B"
     zone_2.horizon_below.name.get.return_value = "Base B"
     mock_rms_proxy.zones = [zone_1, zone_2]
+    mock_rms_proxy.__version__ = "1.11.0"
 
-    zones = rms_service.get_zones(mock_rms_proxy, "14.2.2")
+    zones = rms_service.get_zones(mock_rms_proxy)
 
     assert isinstance(zones, list)
     assert len(zones) == 2  # noqa: PLR2004
@@ -89,7 +90,7 @@ def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
 
 
 def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:
-    """Test retrieving the zones with RMS version 15 (with stratigraphic columns)."""
+    """Test retrieving zones when the RMS API supports stratigraphic columns."""
     zone_1 = MagicMock()
     zone_1.name.get.return_value = "Zone A"
     zone_1.horizon_above.name.get.return_value = "Top A"
@@ -99,6 +100,7 @@ def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> 
     zone_2.horizon_above.name.get.return_value = "Top B"
     zone_2.horizon_below.name.get.return_value = "Base B"
 
+    mock_rms_proxy.__version__ = "1.12.0"
     mock_rms_proxy.zones.columns.return_value = ["Column1"]
     mock_rms_proxy.zones.column_zones.return_value = ["Zone A", "Zone B"]
     mock_rms_proxy.zones.__getitem__ = MagicMock(
@@ -106,7 +108,7 @@ def test_get_zones_rms15(rms_service: RmsService, mock_rms_proxy: MagicMock) -> 
     )
     mock_rms_proxy.zones.__iter__ = MagicMock(return_value=iter([zone_1, zone_2]))
 
-    zones = rms_service.get_zones(mock_rms_proxy, "15.0.1")
+    zones = rms_service.get_zones(mock_rms_proxy)
 
     assert isinstance(zones, list)
     assert len(zones) == 2  # noqa: PLR2004
@@ -130,6 +132,7 @@ def test_get_zones_rms15_multiple_columns(
     zone_2.horizon_above.name.get.return_value = "Top B"
     zone_2.horizon_below.name.get.return_value = "Base B"
 
+    mock_rms_proxy.__version__ = "1.12.0"
     mock_rms_proxy.zones.columns.return_value = ["Column1", "Column2"]
 
     def mock_column_zones(column_name: str) -> list[str]:
@@ -143,7 +146,7 @@ def test_get_zones_rms15_multiple_columns(
     )
     mock_rms_proxy.zones.__iter__ = MagicMock(return_value=iter([zone_1, zone_2]))
 
-    zones = rms_service.get_zones(mock_rms_proxy, "15.0.1")
+    zones = rms_service.get_zones(mock_rms_proxy)
 
     assert isinstance(zones, list)
     assert len(zones) == 2  # noqa: PLR2004

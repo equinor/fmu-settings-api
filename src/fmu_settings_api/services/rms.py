@@ -12,7 +12,7 @@ from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
 from runrms.config._rms_config import RmsConfig
 
-MIN_RMS_VERSION_FOR_STRAT_COLUMNS = 15
+MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = (1, 12)
 
 
 class RmsService:
@@ -46,20 +46,19 @@ class RmsService:
         rms_proxy = get_rmsapi(version=rms_version)
         return rms_proxy, rms_proxy.Project.open(str(rms_project_path), readonly=True)
 
-    def get_zones(
-        self, rms_project: RmsApiProxy, rms_version: str
-    ) -> list[RmsStratigraphicZone]:
+    def get_zones(self, rms_project: RmsApiProxy) -> list[RmsStratigraphicZone]:
         """Retrieve the zones from the RMS project.
 
         Args:
             rms_project: The opened RMS project proxy
-            rms_version: RMS Version to use (e.g. "14.2.2" or "15.0.1.0")
 
         Returns:
             list[RmsStratigraphicZone]: List of zones in the project
         """
         zone_columns: dict[str, list[str]] = {}
-        if int(rms_version.split(".")[0]) >= MIN_RMS_VERSION_FOR_STRAT_COLUMNS:
+        rms_api_version = str(getattr(rms_project, "__version__", "0"))
+        major_minor = tuple(int(part) for part in rms_api_version.split(".")[:2])
+        if major_minor >= MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS:
             for column_name in rms_project.zones.columns():
                 for zonename in rms_project.zones.column_zones(column_name):
                     zone_columns.setdefault(zonename, []).append(column_name)
