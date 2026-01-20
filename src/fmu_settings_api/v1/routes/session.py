@@ -96,7 +96,7 @@ async def post_session(
                 # Transfer existing RMS session to new session
                 await add_rms_project_to_session(
                     session_id,
-                    rms_session.root,
+                    rms_session.executor,
                     rms_session.project,
                 )
                 await remove_rms_project_from_session(
