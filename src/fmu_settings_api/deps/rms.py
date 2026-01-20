@@ -49,20 +49,3 @@ async def get_opened_rms_project(
 
 
 RmsProjectDep = Annotated[RmsApiProxy, Depends(get_opened_rms_project)]
-
-
-async def get_rms_version(
-    project_session: ProjectSessionDep,
-) -> str:
-    """Returns the RMS version from the session."""
-    if project_session.rms_session is None:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "No RMS project is currently open. Please open an RMS project first."
-            ),
-        )
-    return project_session.rms_session.version
-
-
-RmsVersionDep = Annotated[str, Depends(get_rms_version)]

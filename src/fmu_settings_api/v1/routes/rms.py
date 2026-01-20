@@ -18,7 +18,6 @@ from fmu_settings_api.deps.rms import (
     RmsProjectDep,
     RmsProjectPathDep,
     RmsServiceDep,
-    RmsVersionDep,
 )
 from fmu_settings_api.models.common import Message
 from fmu_settings_api.models.rms import RmsVersion
@@ -199,14 +198,13 @@ async def delete_rms_project(session_service: SessionServiceDep) -> Message:
 async def get_zones(
     rms_service: RmsServiceDep,
     opened_rms_project: RmsProjectDep,
-    session_rms_version: RmsVersionDep,
 ) -> list[RmsStratigraphicZone]:
     """Retrieve the zones from the currently open RMS project.
 
     This endpoint requires an RMS project to be open in the session.
     Use the POST / endpoint first to open an RMS project.
     """
-    return rms_service.get_zones(opened_rms_project, session_rms_version)
+    return rms_service.get_zones(opened_rms_project)
 
 
 @router.get(
