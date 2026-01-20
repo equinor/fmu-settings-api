@@ -46,8 +46,6 @@ class RmsSession:
     """The RMS API executor controlling the worker lifetime."""
     project: RmsApiProxy
     """An opened RMS project that close() can be called against."""
-    version: str
-    """The RMS version used to open the project."""
 
     def cleanup(self, session_id: str = "unknown") -> None:
         """Closes the RMS project and shuts down the executor."""
