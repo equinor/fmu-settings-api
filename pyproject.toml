@@ -32,6 +32,7 @@ dependencies = [
     "fmu-datamodels",
     "fmu-settings>=0.16.1",
     "httpx",
+    "packaging",
     "pydantic",
     "pyyaml",
     "rapidfuzz>=3.0.0",

@@ -8,11 +8,12 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
+from packaging.version import Version
 from runrms import get_rmsapi
 from runrms.api import RmsApiProxy
 from runrms.config._rms_config import RmsConfig
 
-MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = (1, 12)
+MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = Version("1.12")
 
 
 class RmsService:
@@ -56,9 +57,8 @@ class RmsService:
             list[RmsStratigraphicZone]: List of zones in the project
         """
         zone_columns: dict[str, list[str]] = {}
-        rms_api_version = str(getattr(rms_project, "__version__", "0"))
-        major_minor = tuple(int(part) for part in rms_api_version.split(".")[:2])
-        if major_minor >= MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS:
+        api_version = Version(rms_project.__version__)
+        if api_version >= MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS:
             for column_name in rms_project.zones.columns():
                 for zonename in rms_project.zones.column_zones(column_name):
                     zone_columns.setdefault(zonename, []).append(column_name)
