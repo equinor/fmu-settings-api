@@ -53,16 +53,22 @@ def test_open_rms_project_success(rms_service: RmsService) -> None:
 
     mock_rmsapi = MagicMock()
     mock_rmsapi.Project.open.return_value = "opened_project"
+    mock_executor = MagicMock()
+    mock_executor.run.return_value = mock_rmsapi
 
-    with patch("fmu_settings_api.services.rms.get_rmsapi", return_value=mock_rmsapi):
-        root, opened_project = rms_service.open_rms_project(
+    with patch(
+        "fmu_settings_api.services.rms.get_executor",
+        return_value=mock_executor,
+    ):
+        executor, opened_project = rms_service.open_rms_project(
             rms_project_path, rms_version
         )
 
+        mock_executor.run.assert_called_once()
         mock_rmsapi.Project.open.assert_called_once_with(
             str(rms_project_path), readonly=True
         )
-        assert root == mock_rmsapi
+        assert executor == mock_executor
         assert opened_project == "opened_project"
 
 
