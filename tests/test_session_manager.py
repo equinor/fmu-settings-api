@@ -533,7 +533,7 @@ async def test_add_rms_project_to_session_success(
         await add_fmu_project_to_session(session_id, project_fmu_dir)
 
         result_session = await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
+            session_id, mock_rms_root, mock_rms_project
         )
 
         original_session = await session_manager.get_session(session_id)
@@ -558,9 +558,7 @@ async def test_add_rms_project_to_session_no_project_session(
         patch("fmu_settings_api.session.session_manager", session_manager),
         pytest.raises(SessionNotFoundError, match="No FMU project directory open"),
     ):
-        await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
-        )
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
 
 async def test_add_rms_project_to_session_closes_existing(
@@ -586,11 +584,11 @@ async def test_add_rms_project_to_session_closes_existing(
         session = await session_manager.get_session(session_id)
         assert isinstance(session, ProjectSession)
         session.rms_session = RmsSession(
-            mock_rms_root_existing, mock_rms_project_existing, "14.2.2"
+            mock_rms_root_existing, mock_rms_project_existing
         )
 
         result_session = await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
+            session_id, mock_rms_root, mock_rms_project
         )
 
         original_session = await session_manager.get_session(session_id)
@@ -626,7 +624,7 @@ async def test_add_fmu_project_to_session_closes_existing_rms(
 
         session = await session_manager.get_session(session_id)
         assert isinstance(session, ProjectSession)
-        session.rms_session = RmsSession(mock_rms_root, mock_rms_project, "14.2.2")
+        session.rms_session = RmsSession(mock_rms_root, mock_rms_project)
 
         project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
 
@@ -655,9 +653,7 @@ async def test_remove_rms_project_from_session_success(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-        await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
-        )
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
     result_session = await remove_rms_project_from_session(session_id)
     original_session = await session_manager.get_session(session_id)
@@ -698,9 +694,7 @@ async def test_remove_rms_project_from_session_closes_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-        await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
-        )
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         result_session = await remove_rms_project_from_session(session_id)
         original_session = await session_manager.get_session(session_id)
@@ -727,9 +721,7 @@ async def test_destroy_session_closes_rms_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-        await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
-        )
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         await session_manager.destroy_session(session_id)
 
@@ -753,9 +745,7 @@ async def test_remove_fmu_project_from_session_closes_rms_project(
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
-        await add_rms_project_to_session(
-            session_id, mock_rms_root, mock_rms_project, "14.2.2"
-        )
+        await add_rms_project_to_session(session_id, mock_rms_root, mock_rms_project)
 
         await remove_fmu_project_from_session(session_id)
 

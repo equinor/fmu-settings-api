@@ -145,11 +145,9 @@ class SessionService:
             last_lock_refresh_error=project_session.lock_errors.refresh,
         )
 
-    async def add_rms_session(
-        self, root: RmsApiProxy, project: RmsApiProxy, rms_version: str
-    ) -> None:
+    async def add_rms_session(self, root: RmsApiProxy, project: RmsApiProxy) -> None:
         """Add an RMS session to the project session."""
-        await add_rms_project_to_session(self._session.id, root, project, rms_version)
+        await add_rms_project_to_session(self._session.id, root, project)
 
     async def remove_rms_session(self) -> None:
         """Removes an RMS session from the project session."""

@@ -128,7 +128,7 @@ async def post_rms_project(
             else rms_service.get_rms_version(rms_project_path)
         )
         root_proxy, project = rms_service.open_rms_project(rms_project_path, version)
-        await session_service.add_rms_session(root_proxy, project, version)
+        await session_service.add_rms_session(root_proxy, project)
         return Message(
             message=f"RMS project opened successfully with RMS version {version}."
         )

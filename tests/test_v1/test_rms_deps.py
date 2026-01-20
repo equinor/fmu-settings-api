@@ -53,9 +53,7 @@ async def test_get_opened_rms_project_success() -> None:
     rms_root_mock = MagicMock(spec=RmsApiProxy)
     rms_project_mock = MagicMock(spec=RmsApiProxy)
     project_session_mock = MagicMock()
-    project_session_mock.rms_session = RmsSession(
-        rms_root_mock, rms_project_mock, "14.2.2"
-    )
+    project_session_mock.rms_session = RmsSession(rms_root_mock, rms_project_mock)
 
     result = await get_opened_rms_project(project_session_mock)
 

@@ -511,11 +511,11 @@ async def test_new_session_preserves_rms_project_from_old_session(
 
     rms_root = MagicMock(_shutdown=MagicMock())
     rms_project = MagicMock(close=MagicMock())
-    await add_rms_project_to_session(session_id, rms_root, rms_project, "14.2.2")
+    await add_rms_project_to_session(session_id, rms_root, rms_project)
 
     session = await session_manager.get_session(session_id)
     assert isinstance(session, ProjectSession)
-    assert session.rms_session == RmsSession(rms_root, rms_project, "14.2.2")
+    assert session.rms_session == RmsSession(rms_root, rms_project)
 
     different_path = tmp_path_mocked_home / "different_project"
     different_path.mkdir()
@@ -530,7 +530,7 @@ async def test_new_session_preserves_rms_project_from_old_session(
 
     new_session = await session_manager.get_session(new_session_id)
     assert isinstance(new_session, ProjectSession)
-    assert new_session.rms_session == RmsSession(rms_root, rms_project, "14.2.2")
+    assert new_session.rms_session == RmsSession(rms_root, rms_project)
 
     with pytest.raises(SessionNotFoundError):
         await session_manager.get_session(session_id)
