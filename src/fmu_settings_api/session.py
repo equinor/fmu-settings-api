@@ -9,6 +9,7 @@ from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
 from pydantic import BaseModel, SecretStr
 from runrms.api import RmsApiProxy
+from runrms.executor import ApiExecutor
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.logging import get_logger
@@ -41,13 +42,13 @@ class LockErrors(BaseModel):
 class RmsSession:
     """Stores RMS-session references."""
 
-    root: RmsApiProxy
-    """The root RMS proxy that shutdown() can be called against."""
+    executor: ApiExecutor
+    """The RMS API executor controlling the worker lifetime."""
     project: RmsApiProxy
     """An opened RMS project that close() can be called against."""
 
     def cleanup(self, session_id: str = "unknown") -> None:
-        """Closes the RMS project and shuts down the root proxy."""
+        """Closes the RMS project and shuts down the executor."""
         try:
             self.project.close()
         except Exception as e:
@@ -58,10 +59,10 @@ class RmsSession:
                 error_type=type(e).__name__,
             )
         try:
-            self.root._shutdown()
+            self.executor.shutdown()
         except Exception as e:
             logger.error(
-                "rms_proxy_shutdown_failed",
+                "rms_executor_shutdown_failed",
                 session_id=session_id,
                 error=str(e),
                 error_type=type(e).__name__,
@@ -367,7 +368,7 @@ async def remove_fmu_project_from_session(session_id: str) -> Session:
 
 
 async def add_rms_project_to_session(
-    session_id: str, root_proxy: RmsApiProxy, rms_project: RmsApiProxy
+    session_id: str, executor: ApiExecutor, rms_project: RmsApiProxy
 ) -> ProjectSession:
     """Adds an opened RMS project to the session.
 
@@ -385,7 +386,7 @@ async def add_rms_project_to_session(
     if session.rms_session is not None:
         session.rms_session.cleanup(session_id)
 
-    session.rms_session = RmsSession(root=root_proxy, project=rms_project)
+    session.rms_session = RmsSession(executor=executor, project=rms_project)
     await session_manager._store_session(session_id, session)
     return session
 
@@ -399,7 +400,7 @@ async def remove_rms_project_from_session(
     useful when preserving an opened project to a new session.
 
     Returns:
-        The updated ProjectSession with rms_project set to None
+        The updated ProjectSession with rms_session set to None
 
     Raises:
         SessionNotFoundError: If no valid session was found

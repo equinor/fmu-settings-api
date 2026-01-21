@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 from runrms.api import RmsApiProxy
+from runrms.executor import ApiExecutor
 
 from fmu_settings_api.deps.rms import (
     get_opened_rms_project,
@@ -50,10 +51,10 @@ async def test_get_rms_project_path_not_configured() -> None:
 
 async def test_get_opened_rms_project_success() -> None:
     """Test getting opened RMS project when one is open."""
-    rms_root_mock = MagicMock(spec=RmsApiProxy)
+    rms_executor_mock = MagicMock(spec=ApiExecutor)
     rms_project_mock = MagicMock(spec=RmsApiProxy)
     project_session_mock = MagicMock()
-    project_session_mock.rms_session = RmsSession(rms_root_mock, rms_project_mock)
+    project_session_mock.rms_session = RmsSession(rms_executor_mock, rms_project_mock)
 
     result = await get_opened_rms_project(project_session_mock)
 

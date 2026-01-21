@@ -9,9 +9,10 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 from packaging.version import Version
-from runrms import get_rmsapi
+from runrms import get_executor
 from runrms.api import RmsApiProxy
 from runrms.config._rms_config import RmsConfig
+from runrms.executor import ApiExecutor
 
 MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = Version("1.12")
 
@@ -34,7 +35,7 @@ class RmsService:
 
     def open_rms_project(
         self, rms_project_path: Path, rms_version: str
-    ) -> tuple[RmsApiProxy, RmsApiProxy]:
+    ) -> tuple[ApiExecutor, RmsApiProxy]:
         """Open an RMS project at the specified Path with the specified RMS version.
 
         Args:
@@ -42,10 +43,12 @@ class RmsService:
             rms_version: RMS Version to use (e.g. "14.2.2" or "15.0.1.0")
 
         Returns:
-            RmsApiProxy: The opened RMS project proxy
+            tuple[ApiExecutor, RmsApiProxy]: The executor and the opened RMS project
+            proxy
         """
-        rms_proxy = get_rmsapi(version=rms_version)
-        return rms_proxy, rms_proxy.Project.open(str(rms_project_path), readonly=True)
+        executor = get_executor(version=rms_version)
+        rms_proxy = executor.run()
+        return executor, rms_proxy.Project.open(str(rms_project_path), readonly=True)
 
     def get_zones(self, rms_project: RmsApiProxy) -> list[RmsStratigraphicZone]:
         """Retrieve the zones from the RMS project.
