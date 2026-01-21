@@ -5,9 +5,10 @@ from textwrap import dedent
 from typing import Final
 
 from fastapi import APIRouter, HTTPException
-from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.fmu_results.fields import Model
-from fmu.settings import CacheResource, ProjectFMUDirectory
+from fmu.datamodels.common.access import Access
+from fmu.datamodels.common.masterdata import Smda
+from fmu.settings import ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,

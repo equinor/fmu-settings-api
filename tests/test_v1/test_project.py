@@ -12,8 +12,9 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.fmu_results.fields import Model
+from fmu.datamodels.common.access import Access
+from fmu.datamodels.common.masterdata import Smda
 from fmu.settings._fmu_dir import (
     ProjectFMUDirectory,
     UserFMUDirectory,
