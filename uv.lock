@@ -331,7 +331,7 @@ dev = [
 requires-dist = [
     { name = "fastapi" },
     { name = "fmu-datamodels" },
-    { name = "fmu-settings", specifier = ">=0.16.1" },
+    { name = "fmu-settings", specifier = ">=0.18.0" },
     { name = "fmu-settings-cli", marker = "extra == 'dev'" },
     { name = "httpx" },
     { name = "mypy", marker = "extra == 'dev'" },

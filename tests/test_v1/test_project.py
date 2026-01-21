@@ -6,13 +6,19 @@ import shutil
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.context.mappings import (
+    DataSystem,
+    RelationType,
+    StratigraphyIdentifierMapping,
+    StratigraphyMappings,
+)
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings._fmu_dir import (
     ProjectFMUDirectory,
@@ -21,6 +27,7 @@ from fmu.settings._fmu_dir import (
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
 from fmu.settings.models.mappings import Mappings
+from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -37,6 +44,49 @@ from fmu_settings_api.v1.routes.project import _create_opened_project_response
 client = TestClient(app)
 
 ROUTE = "/api/v1/project"
+
+
+def _make_stratigraphy_mapping(
+    source_id: str,
+    target_id: str,
+    relation_type: RelationType,
+    source_system: DataSystem = DataSystem.rms,
+    target_system: DataSystem = DataSystem.smda,
+) -> StratigraphyIdentifierMapping:
+    return StratigraphyIdentifierMapping(
+        source_system=source_system,
+        target_system=target_system,
+        relation_type=relation_type,
+        source_id=source_id,
+        target_id=target_id,
+    )
+
+
+def _make_stratigraphy_mappings() -> StratigraphyMappings:
+    return StratigraphyMappings(
+        root=[
+            _make_stratigraphy_mapping(
+                "TopVolantis",
+                "VOLANTIS GP. Top",
+                RelationType.primary,
+            ),
+            _make_stratigraphy_mapping(
+                "TopVOLANTIS",
+                "VOLANTIS GP. Top",
+                RelationType.alias,
+            ),
+            _make_stratigraphy_mapping(
+                "VOLANTIS GP. Top",
+                "VOLANTIS GP. Top",
+                RelationType.equivalent,
+            ),
+            _make_stratigraphy_mapping(
+                "TopViking",
+                "VIKING GP. Top",
+                RelationType.primary,
+            ),
+        ]
+    )
 
 
 # GET project/ #
@@ -1444,6 +1494,25 @@ async def test_create_opened_project_response_permission_error() -> None:
         assert "Permission denied accessing .fmu" in str(e.detail)
 
 
+async def test_create_opened_project_response_value_error() -> None:
+    """Test the _create_opened_project_response function with ValueError."""
+    mock_fmu_dir = Mock()
+    mock_fmu_dir.path = Path("/tmp/project")
+
+    with patch(
+        "fmu_settings_api.v1.routes.project.ProjectService.get_project_data",
+        side_effect=ValueError("Corrupt project"),
+    ):
+        try:
+            _create_opened_project_response(mock_fmu_dir)
+            raise AssertionError("Expected HTTPException")
+        except HTTPException as e:
+            assert e.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+            assert e.detail == (
+                f"Corrupt project found at {mock_fmu_dir.path}: Corrupt project"
+            )
+
+
 async def test_get_lock_status(
     client_with_session: TestClient,
     session_tmp_path: Path,
@@ -2733,6 +2802,355 @@ async def test_patch_rms_wells_success(
     assert get_fmu_project.config.rms.wells is not None
     assert len(get_fmu_project.config.rms.wells) == 2  # noqa: PLR2004
     assert [w.name for w in get_fmu_project.config.rms.wells] == ["W1", "W2"]
+
+
+# GET project/mappings/stratigraphy #
+
+
+async def test_get_mappings_stratigraphy_returns_raw(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test returning raw stratigraphy mappings."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    stratigraphy_mappings = _make_stratigraphy_mappings()
+    fmu_dir.mappings.update_stratigraphy_mappings(stratigraphy_mappings)
+
+    response = client_with_project_session.get(f"{ROUTE}/mappings/stratigraphy")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == stratigraphy_mappings.model_dump(mode="json")
+
+
+async def test_get_mappings_stratigraphy_returns_grouped(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test returning grouped stratigraphy mappings."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    stratigraphy_mappings = _make_stratigraphy_mappings()
+    fmu_dir.mappings.update_stratigraphy_mappings(stratigraphy_mappings)
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/mappings/stratigraphy", params={"grouped": "true"}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    response_data = response.json()
+    assert len(response_data) == 2  # noqa: PLR2004
+
+    expected_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for mapping in stratigraphy_mappings:
+        mapping_dict = mapping.model_dump(mode="json")
+        key = (
+            mapping_dict["target_id"],
+            mapping_dict["target_system"],
+            mapping_dict["source_system"],
+        )
+        expected_groups.setdefault(key, []).append(mapping_dict)
+
+    for group in response_data:
+        key = (
+            group["target_id"],
+            group["target_system"],
+            group["source_system"],
+        )
+        assert key in expected_groups
+        assert sorted(group["mappings"], key=lambda item: item["source_id"]) == sorted(
+            expected_groups[key],
+            key=lambda item: item["source_id"],
+        )
+
+
+async def test_get_mappings_stratigraphy_returns_simple_view(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test returning flattened grouped mappings for GUI display."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    stratigraphy_mappings = _make_stratigraphy_mappings()
+    fmu_dir.mappings.update_stratigraphy_mappings(stratigraphy_mappings)
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/mappings/stratigraphy",
+        params={"grouped": "true", "simple": "true"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    response_data = sorted(
+        response.json(), key=lambda item: cast("str", item["official_name"])
+    )
+    expected_data = sorted(
+        [
+            {
+                "official_name": "VOLANTIS GP. Top",
+                "target_system": "smda",
+                "source_system": "rms",
+                "primary_source": "TopVolantis",
+                "aliases": ["TopVOLANTIS"],
+                "equivalents": ["VOLANTIS GP. Top"],
+            },
+            {
+                "official_name": "VIKING GP. Top",
+                "target_system": "smda",
+                "source_system": "rms",
+                "primary_source": "TopViking",
+                "aliases": [],
+                "equivalents": [],
+            },
+        ],
+        key=lambda item: cast("str", item["official_name"]),
+    )
+    assert response_data == expected_data
+
+
+async def test_get_mappings_stratigraphy_simple_requires_grouped(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test that simple view requires grouped=true."""
+    response = client_with_project_session.get(
+        f"{ROUTE}/mappings/stratigraphy", params={"simple": "true"}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Simple view requires grouped=true."}
+
+
+async def test_get_mappings_stratigraphy_grouped_validation_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 422 returns when grouped mappings are invalid."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    stratigraphy_mappings = StratigraphyMappings(
+        root=[
+            _make_stratigraphy_mapping(
+                "TopVolantis",
+                "VOLANTIS GP. Top",
+                RelationType.primary,
+            ),
+            _make_stratigraphy_mapping(
+                "TopVolantis_2",
+                "VOLANTIS GP. Top",
+                RelationType.primary,
+            ),
+        ]
+    )
+    fmu_dir.mappings.update_stratigraphy_mappings(stratigraphy_mappings)
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/mappings/stratigraphy", params={"grouped": "true"}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Mappings cannot be grouped" in response.json()["detail"]
+    assert (
+        "MappingGroup must contain at most one primary mapping"
+        in response.json()["detail"]
+    )
+
+
+async def test_get_mappings_stratigraphy_file_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns when mappings file is missing."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.list_stratigraphy_mappings",
+        side_effect=FileNotFoundError("Missing mappings file"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/mappings/stratigraphy")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Missing mappings file"}
+
+
+async def test_get_mappings_stratigraphy_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 403 returns when permissions prevent reading mappings."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    fmu_dir = session.project_fmu_directory
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.list_stratigraphy_mappings",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/mappings/stratigraphy")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }
+
+
+async def test_get_mappings_stratigraphy_validation_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when mappings fail validation."""
+    try:
+        StratigraphyIdentifierMapping(
+            source_system=DataSystem.rms,
+            target_system=DataSystem.smda,
+            relation_type=RelationType.primary,
+            source_id="",
+            target_id="VOLANTIS GP. Top",
+        )
+        raise AssertionError("Expected ValidationError")
+    except ValidationError as exc:
+        validation_error = exc
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.list_stratigraphy_mappings",
+        side_effect=validation_error,
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/mappings/stratigraphy")
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (
+        "The existing mappings resource contains invalid content."
+        in response.json()["detail"]
+    )
+
+
+async def test_get_mappings_stratigraphy_value_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when mappings JSON is invalid."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.list_stratigraphy_mappings",
+        side_effect=ValueError("Bad JSON"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/mappings/stratigraphy")
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": (
+            "The mappings resource file contains invalid JSON "
+            "and cannot be parsed. Error: Bad JSON"
+        )
+    }
+
+
+# PUT project/mappings/stratigraphy #
+
+
+async def test_put_mappings_stratigraphy_success(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test saving stratigraphy mappings via PUT."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    stratigraphy_mappings = _make_stratigraphy_mappings()
+    payload = stratigraphy_mappings.model_dump(mode="json")
+
+    response = client_with_project_session.put(
+        f"{ROUTE}/mappings/stratigraphy", json=payload
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == payload
+    assert session.project_fmu_directory.mappings.stratigraphy_mappings == (
+        stratigraphy_mappings
+    )
+
+
+async def test_put_mappings_stratigraphy_permission_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 403 returns when permissions prevent writing mappings."""
+    payload = _make_stratigraphy_mappings().model_dump(mode="json")
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.update_stratigraphy_mappings",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_project_session.put(
+            f"{ROUTE}/mappings/stratigraphy", json=payload
+        )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": "Permission denied while trying to update the stratigraphy mappings."
+    }
+
+
+async def test_put_mappings_stratigraphy_validation_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when provided mappings are invalid."""
+    payload = _make_stratigraphy_mappings().model_dump(mode="json")
+    try:
+        StratigraphyIdentifierMapping(
+            source_system=DataSystem.rms,
+            target_system=DataSystem.smda,
+            relation_type=RelationType.primary,
+            source_id="",
+            target_id="VOLANTIS GP. Top",
+        )
+        raise AssertionError("Expected ValidationError")
+    except ValidationError as exc:
+        validation_error = exc
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.update_stratigraphy_mappings",
+        side_effect=validation_error,
+    ):
+        response = client_with_project_session.put(
+            f"{ROUTE}/mappings/stratigraphy", json=payload
+        )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (
+        "The stratigraphy mappings object to store is invalid."
+        in response.json()["detail"]
+    )
+
+
+async def test_put_mappings_stratigraphy_value_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when mappings JSON cannot be parsed."""
+    payload = _make_stratigraphy_mappings().model_dump(mode="json")
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.update_stratigraphy_mappings",
+        side_effect=ValueError("Bad JSON"),
+    ):
+        response = client_with_project_session.put(
+            f"{ROUTE}/mappings/stratigraphy", json=payload
+        )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": (
+            "The mappings resource file contains invalid JSON "
+            "and cannot be parsed. Error: Bad JSON"
+        )
+    }
 
 
 # GET project/cache #

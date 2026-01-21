@@ -2,13 +2,15 @@
 
 from pathlib import Path
 from textwrap import dedent
-from typing import Final
+from typing import Any, Final
 
 from fastapi import APIRouter, HTTPException
 from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.context.mappings import StratigraphyMappings
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
     RmsWell,
@@ -24,6 +26,7 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     WritePermissionDep,
 )
+from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
@@ -180,6 +183,35 @@ RmsStratigraphicFrameworkResponses: Final[Responses] = {
                     "request: {horizon_names}"
                 )
             },
+        ],
+    ),
+}
+
+
+MappingsResponses: Final[Responses] = {
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            Mappings resource contains invalid content, corrupted JSON,
+            cannot be grouped, or has an invalid view request.
+            """
+        ),
+        [
+            {
+                "detail": (
+                    "The existing mappings resource contains invalid content. "
+                    "Validation errors: {errors}"
+                )
+            },
+            {
+                "detail": (
+                    "The mappings resource file contains invalid JSON "
+                    "and cannot be parsed. Error: {error}"
+                )
+            },
+            {"detail": "Mappings cannot be grouped: {error}"},
+            {"detail": "Simple view requires grouped=true."},
         ],
     ),
 }
@@ -906,6 +938,132 @@ async def post_cache_restore(
             status_code=403,
             detail=(
                 f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.get(
+    "/mappings/stratigraphy",
+    response_model=StratigraphyMappings | list[MappingGroup] | list[dict[str, Any]],
+    summary="Returns the stratigraphy mappings from the .fmu directory.",
+    description=dedent(
+        """
+        Retrieves the complete stratigraphy mappings resource from the project's
+        .fmu directory. This includes all configured stratigraphic unit mappings.
+
+        Set grouped=true to return mappings grouped by target and source system.
+        Set simple=true with grouped=true to return a flattened grouped view for GUI
+        display.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **MappingsResponses,
+    },
+)
+async def get_mappings_stratigraphy(
+    mappings_service: MappingsServiceDep,
+    grouped: bool = False,
+    simple: bool = False,
+) -> StratigraphyMappings | list[MappingGroup] | list[dict[str, Any]]:
+    """Returns the stratigraphy mappings from the .fmu directory."""
+    if simple and not grouped:
+        raise HTTPException(
+            status_code=422, detail="Simple view requires grouped=true."
+        )
+
+    try:
+        stratigraphy_mappings = mappings_service.list_stratigraphy_mappings()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {mappings_service.fmu_dir_path}"
+            ),
+        ) from e
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The existing mappings resource contains invalid content. "
+                f"Validation errors: {e.errors}"
+            ),
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The mappings resource file contains invalid JSON "
+                f"and cannot be parsed. Error: {str(e)}"
+            ),
+        ) from e
+
+    if not grouped:
+        return stratigraphy_mappings
+
+    try:
+        grouped_mappings = mappings_service.group_stratigraphy_mappings(
+            stratigraphy_mappings
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Mappings cannot be grouped: {str(e)}",
+        ) from e
+
+    if simple:
+        return [group.to_display_dict() for group in grouped_mappings]
+
+    return grouped_mappings
+
+
+@router.put(
+    "/mappings/stratigraphy",
+    response_model=StratigraphyMappings,
+    summary="Saves stratigraphy mappings to the project .fmu directory",
+    description=dedent(
+        """
+        Replaces the complete stratigraphy mappings resource in the project's
+        .fmu directory. This operation requires the full StratigraphyMappings
+        object and will overwrite the existing mappings entirely.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **MappingsResponses,
+    },
+)
+async def put_mappings_stratigraphy(
+    mappings_service: MappingsServiceDep, stratigraphy_mappings: StratigraphyMappings
+) -> StratigraphyMappings:
+    """Saves stratigraphy mappings to the project .fmu directory."""
+    try:
+        return mappings_service.update_stratigraphy_mappings(stratigraphy_mappings)
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Permission denied while trying to update the stratigraphy mappings."
+            ),
+        ) from e
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The stratigraphy mappings object to store is invalid."
+                f"Validation errors: {e.errors}"
+            ),
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The mappings resource file contains invalid JSON "
+                f"and cannot be parsed. Error: {str(e)}"
             ),
         ) from e
 
