@@ -41,7 +41,7 @@ class RmsStratigraphicFramework(BaseResponseModel):
     @model_validator(mode="after")
     def validate_zone_horizons(self) -> "RmsStratigraphicFramework":
         """Ensure zones reference horizons provided in the same request."""
-        horizon_names = {horizon.name for horizon in self.horizons if horizon.name}
+        horizon_names = {horizon.name for horizon in self.horizons}
 
         referenced_horizons = {
             horizon_name
