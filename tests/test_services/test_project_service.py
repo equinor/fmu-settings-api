@@ -175,8 +175,10 @@ def test_update_rms_coordinate_system_requires_rms_config(
     assert "RMS project path must be set" in str(exc_info.value)
 
 
-def test_update_rms_zones_success(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test saving RMS zones to config."""
+def test_update_rms_stratigraphic_framework_success(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test saving RMS zones and horizons to config."""
     service = ProjectService(fmu_dir)
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
 
@@ -188,59 +190,47 @@ def test_update_rms_zones_success(fmu_dir: ProjectFMUDirectory) -> None:
             name="Zone B", top_horizon_name="Top B", base_horizon_name="Base B"
         ),
     ]
-    result = service.update_rms_zones(zones)
+    horizons = [
+        RmsHorizon(name="Top A", type="calculated"),
+        RmsHorizon(name="Base A", type="calculated"),
+        RmsHorizon(name="Top B", type="interpreted"),
+        RmsHorizon(name="Base B", type="interpreted"),
+    ]
+    result = service.update_rms_stratigraphic_framework(zones, horizons)
 
     assert result is True
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.zones is not None
+    assert saved_config.horizons is not None
     assert len(saved_config.zones) == 2  # noqa: PLR2004
-    assert saved_config.zones[0].name == "Zone A"
-    assert saved_config.zones[1].name == "Zone B"
+    assert len(saved_config.horizons) == 4  # noqa: PLR2004
+    assert [zone.name for zone in saved_config.zones] == ["Zone A", "Zone B"]
+    assert [horizon.name for horizon in saved_config.horizons] == [
+        "Top A",
+        "Base A",
+        "Top B",
+        "Base B",
+    ]
 
 
-def test_update_rms_zones_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test that updating zones requires RMS config to be set."""
+def test_update_rms_stratigraphic_framework_requires_rms_config(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test that updating stratigraphic framework requires RMS config to be set."""
     service = ProjectService(fmu_dir)
     zones = [
         RmsStratigraphicZone(
             name="Zone A", top_horizon_name="Top", base_horizon_name="Base"
         )
     ]
-
-    with pytest.raises(ValueError) as exc_info:
-        service.update_rms_zones(zones)
-
-    assert "RMS project path must be set" in str(exc_info.value)
-
-
-def test_update_rms_horizons_success(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test saving RMS horizons to config."""
-    service = ProjectService(fmu_dir)
-    fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
-
     horizons = [
-        RmsHorizon(name="H1", type="calculated"),
-        RmsHorizon(name="H2", type="interpreted"),
-        RmsHorizon(name="H3", type="calculated"),
+        RmsHorizon(name="Top", type="calculated"),
+        RmsHorizon(name="Base", type="calculated"),
     ]
-    result = service.update_rms_horizons(horizons)
-
-    assert result is True
-    saved_config = fmu_dir.config.load().rms
-    assert saved_config is not None
-    assert saved_config.horizons is not None
-    assert len(saved_config.horizons) == 3  # noqa: PLR2004
-    assert [h.name for h in saved_config.horizons] == ["H1", "H2", "H3"]
-
-
-def test_update_rms_horizons_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test that updating horizons requires RMS config to be set."""
-    service = ProjectService(fmu_dir)
-    horizons = [RmsHorizon(name="H1", type="calculated")]
 
     with pytest.raises(ValueError) as exc_info:
-        service.update_rms_horizons(horizons)
+        service.update_rms_stratigraphic_framework(zones, horizons)
 
     assert "RMS project path must be set" in str(exc_info.value)
 
@@ -280,14 +270,24 @@ def test_update_rms_fields_preserves_other_fields(fmu_dir: ProjectFMUDirectory) 
     coord_system = RmsCoordinateSystem(name="westeros")
     service.update_rms_coordinate_system(coord_system)
 
-    horizons = [RmsHorizon(name="H1", type="calculated")]
-    service.update_rms_horizons(horizons)
+    zones = [
+        RmsStratigraphicZone(
+            name="Zone A", top_horizon_name="Top A", base_horizon_name="Base A"
+        )
+    ]
+    horizons = [
+        RmsHorizon(name="Top A", type="calculated"),
+        RmsHorizon(name="Base A", type="calculated"),
+    ]
+    service.update_rms_stratigraphic_framework(zones, horizons)
 
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.coordinate_system is not None
     assert saved_config.coordinate_system.name == "westeros"
     assert saved_config.horizons is not None
-    assert saved_config.horizons[0].name == "H1"
+    assert [h.name for h in saved_config.horizons] == ["Top A", "Base A"]
+    assert saved_config.zones is not None
+    assert saved_config.zones[0].name == "Zone A"
     assert str(saved_config.path) == "/some/path"
     assert saved_config.version == "14.2.2"

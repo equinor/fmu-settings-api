@@ -136,19 +136,18 @@ class ProjectService:
         )
         return True
 
-    def update_rms_zones(self, zones: list[RmsStratigraphicZone]) -> bool:
-        """Save RMS zones to the project FMU directory."""
+    def update_rms_stratigraphic_framework(
+        self,
+        zones: list[RmsStratigraphicZone],
+        horizons: list[RmsHorizon],
+    ) -> bool:
+        """Save RMS zones and horizons to the project FMU directory."""
         self._ensure_rms_config_exists()
-        self._fmu_dir.set_config_value(
-            "rms.zones", [zone.model_dump() for zone in zones]
-        )
-        return True
-
-    def update_rms_horizons(self, horizons: list[RmsHorizon]) -> bool:
-        """Save RMS horizons to the project FMU directory."""
-        self._ensure_rms_config_exists()
-        self._fmu_dir.set_config_value(
-            "rms.horizons", [horizon.model_dump() for horizon in horizons]
+        self._fmu_dir.update_config(
+            {
+                "rms.zones": [zone.model_dump() for zone in zones],
+                "rms.horizons": [horizon.model_dump() for horizon in horizons],
+            }
         )
         return True
 

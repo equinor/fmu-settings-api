@@ -11,8 +11,6 @@ from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
-    RmsHorizon,
-    RmsStratigraphicZone,
     RmsWell,
 )
 from pydantic import ValidationError
@@ -30,7 +28,11 @@ from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
 from fmu_settings_api.models.resource import CacheContent, CacheList
-from fmu_settings_api.models.rms import RmsProjectPath, RmsProjectPathsResult
+from fmu_settings_api.models.rms import (
+    RmsProjectPath,
+    RmsProjectPathsResult,
+    RmsStratigraphicFramework,
+)
 from fmu_settings_api.services.project import ProjectService
 from fmu_settings_api.session import SessionNotFoundError
 from fmu_settings_api.v1.responses import (
@@ -158,6 +160,25 @@ RmsConfigNotSetResponses: Final[Responses] = {
             {
                 "detail": "RMS project path must be set before updating RMS fields. "
                 "Use PATCH /project/rms first."
+            },
+        ],
+    ),
+}
+
+RmsStratigraphicFrameworkResponses: Final[Responses] = {
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            The RMS stratigraphic framework did not validate.
+            """
+        ),
+        [
+            {
+                "detail": (
+                    "Validation error: RMS zones reference horizons not present in "
+                    "request: {horizon_names}"
+                )
             },
         ],
     ),
@@ -701,15 +722,16 @@ async def patch_rms_coordinate_system(
 
 
 @router.patch(
-    "/rms/zones",
+    "/rms/stratigraphic_framework",
     response_model=Message,
     dependencies=[WritePermissionDep, RefreshLockDep],
-    summary="Saves the RMS stratigraphic zones in the project .fmu directory",
+    summary="Saves the RMS stratigraphic framework in the project .fmu directory",
     description=dedent(
         """
-        Saves the RMS stratigraphic zones to the project .fmu directory.
-        Requires that the RMS project path has been set first via PATCH /project/rms.
-        If existing zones are present, they will be replaced.
+        Saves the RMS stratigraphic framework (zones and horizons) to the project
+        .fmu directory. Requires that the RMS project path has been set first via
+        PATCH /project/rms. If existing zones or horizons are present, they will
+        be replaced.
         """
     ),
     responses={
@@ -717,47 +739,23 @@ async def patch_rms_coordinate_system(
         **ProjectResponses,
         **LockConflictResponses,
         **RmsConfigNotSetResponses,
+        **RmsStratigraphicFrameworkResponses,
     },
 )
-async def patch_rms_zones(
+async def patch_rms_stratigraphic_framework(
     project_service: ProjectServiceDep,
-    zones: list[RmsStratigraphicZone],
+    stratigraphic_framework: RmsStratigraphicFramework,
 ) -> Message:
-    """Saves the RMS stratigraphic zones in the project .fmu directory."""
+    """Saves the RMS stratigraphic framework in the project .fmu directory."""
     try:
-        project_service.update_rms_zones(zones)
-        return Message(message=f"Saved RMS zones to {project_service.fmu_dir_path}")
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-
-
-@router.patch(
-    "/rms/horizons",
-    response_model=Message,
-    dependencies=[WritePermissionDep, RefreshLockDep],
-    summary="Saves the RMS horizons in the project .fmu directory",
-    description=dedent(
-        """
-        Saves the RMS horizons to the project .fmu directory.
-        Requires that the RMS project path has been set first via PATCH /project/rms.
-        If existing horizons are present, they will be replaced.
-        """
-    ),
-    responses={
-        **GetSessionResponses,
-        **ProjectResponses,
-        **LockConflictResponses,
-        **RmsConfigNotSetResponses,
-    },
-)
-async def patch_rms_horizons(
-    project_service: ProjectServiceDep,
-    horizons: list[RmsHorizon],
-) -> Message:
-    """Saves the RMS horizons in the project .fmu directory."""
-    try:
-        project_service.update_rms_horizons(horizons)
-        return Message(message=f"Saved RMS horizons to {project_service.fmu_dir_path}")
+        project_service.update_rms_stratigraphic_framework(
+            stratigraphic_framework.zones, stratigraphic_framework.horizons
+        )
+        return Message(
+            message=(
+                f"Saved RMS stratigraphic framework to {project_service.fmu_dir_path}"
+            )
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 

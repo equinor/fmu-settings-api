@@ -2519,42 +2519,62 @@ async def test_patch_rms_coordinate_system_success(
     assert get_fmu_project.config.rms.coordinate_system.name == "westeros"
 
 
-# PATCH project/rms/zones #
+# PATCH project/rms/stratigraphic_framework #
 
 
-async def test_patch_rms_zones_requires_project_session(
+async def test_patch_rms_stratigraphic_framework_requires_project_session(
     client_with_session: TestClient,
 ) -> None:
-    """Test saving RMS zones requires an active project session."""
+    """Test saving RMS stratigraphic framework requires an active session."""
     response = client_with_session.patch(
-        f"{ROUTE}/rms/zones",
-        json=[
-            {"name": "Zone A", "top_horizon_name": "Top", "base_horizon_name": "Base"}
-        ],
+        f"{ROUTE}/rms/stratigraphic_framework",
+        json={
+            "zones": [
+                {
+                    "name": "Zone A",
+                    "top_horizon_name": "Top A",
+                    "base_horizon_name": "Base A",
+                }
+            ],
+            "horizons": [
+                {"name": "Top A", "type": "calculated"},
+                {"name": "Base A", "type": "calculated"},
+            ],
+        },
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["detail"] == "No FMU project directory open"
 
 
-async def test_patch_rms_zones_requires_rms_config(
+async def test_patch_rms_stratigraphic_framework_requires_rms_config(
     client_with_project_session: TestClient,
 ) -> None:
     """Test 422 returns when RMS config is not set."""
     response = client_with_project_session.patch(
-        f"{ROUTE}/rms/zones",
-        json=[
-            {"name": "Zone A", "top_horizon_name": "Top", "base_horizon_name": "Base"}
-        ],
+        f"{ROUTE}/rms/stratigraphic_framework",
+        json={
+            "zones": [
+                {
+                    "name": "Zone A",
+                    "top_horizon_name": "Top A",
+                    "base_horizon_name": "Base A",
+                }
+            ],
+            "horizons": [
+                {"name": "Top A", "type": "calculated"},
+                {"name": "Base A", "type": "calculated"},
+            ],
+        },
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "RMS project path must be set" in response.json()["detail"]
 
 
-async def test_patch_rms_zones_success(
+async def test_patch_rms_stratigraphic_framework_success(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
-    """Test saving RMS zones to project .fmu config."""
+    """Test saving RMS stratigraphic framework to project .fmu config."""
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
@@ -2570,59 +2590,53 @@ async def test_patch_rms_zones_success(
             json={"path": str(rms_path)},
         )
 
-    zones_data = [
-        {"name": "Zone A", "top_horizon_name": "Top A", "base_horizon_name": "Base A"},
-        {"name": "Zone B", "top_horizon_name": "Top B", "base_horizon_name": "Base B"},
-    ]
     response = client_with_project_session.patch(
-        f"{ROUTE}/rms/zones",
-        json=zones_data,
+        f"{ROUTE}/rms/stratigraphic_framework",
+        json={
+            "zones": [
+                {
+                    "name": "Zone A",
+                    "top_horizon_name": "Top A",
+                    "base_horizon_name": "Base A",
+                },
+                {
+                    "name": "Zone B",
+                    "top_horizon_name": "Top B",
+                    "base_horizon_name": "Base B",
+                },
+            ],
+            "horizons": [
+                {"name": "Top A", "type": "calculated"},
+                {"name": "Base A", "type": "calculated"},
+                {"name": "Top B", "type": "interpreted"},
+                {"name": "Base B", "type": "interpreted"},
+            ],
+        },
     )
     assert response.status_code == status.HTTP_200_OK
-    assert "zones" in response.json()["message"]
+    assert "stratigraphic framework" in response.json()["message"]
 
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
     assert get_fmu_project.config.rms is not None
     assert get_fmu_project.config.rms.zones is not None
+    assert get_fmu_project.config.rms.horizons is not None
     assert len(get_fmu_project.config.rms.zones) == 2  # noqa: PLR2004
-    assert get_fmu_project.config.rms.zones[0].name == "Zone A"
-    assert get_fmu_project.config.rms.zones[1].name == "Zone B"
+    assert len(get_fmu_project.config.rms.horizons) == 4  # noqa: PLR2004
+    assert [z.name for z in get_fmu_project.config.rms.zones] == ["Zone A", "Zone B"]
+    assert [h.name for h in get_fmu_project.config.rms.horizons] == [
+        "Top A",
+        "Base A",
+        "Top B",
+        "Base B",
+    ]
 
 
-# PATCH project/rms/horizons #
-
-
-async def test_patch_rms_horizons_requires_project_session(
-    client_with_session: TestClient,
-) -> None:
-    """Test saving RMS horizons requires an active project session."""
-    response = client_with_session.patch(
-        f"{ROUTE}/rms/horizons",
-        json=[{"name": "Horizon 1"}],
-    )
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    assert response.json()["detail"] == "No FMU project directory open"
-
-
-async def test_patch_rms_horizons_requires_rms_config(
-    client_with_project_session: TestClient,
-) -> None:
-    """Test 422 returns when RMS config is not set."""
-    response = client_with_project_session.patch(
-        f"{ROUTE}/rms/horizons",
-        json=[{"name": "Horizon 1", "type": "calculated"}],
-    )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    detail = response.json()["detail"]
-    assert "RMS project path must be set" in str(detail)
-
-
-async def test_patch_rms_horizons_success(
+async def test_patch_rms_stratigraphic_framework_rejects_unknown_horizons(
     client_with_project_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
-    """Test saving RMS horizons to project .fmu config."""
+    """Test invalid horizon references return 422."""
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
     rms_path.mkdir(parents=True)
 
@@ -2638,24 +2652,24 @@ async def test_patch_rms_horizons_success(
             json={"path": str(rms_path)},
         )
 
-    horizons_data = [
-        {"name": "H1", "type": "calculated"},
-        {"name": "H2", "type": "interpreted"},
-        {"name": "H3", "type": "calculated"},
-    ]
     response = client_with_project_session.patch(
-        f"{ROUTE}/rms/horizons",
-        json=horizons_data,
+        f"{ROUTE}/rms/stratigraphic_framework",
+        json={
+            "zones": [
+                {
+                    "name": "Zone A",
+                    "top_horizon_name": "Top A",
+                    "base_horizon_name": "Base A",
+                }
+            ],
+            "horizons": [{"name": "Top A", "type": "calculated"}],
+        },
     )
-    assert response.status_code == status.HTTP_200_OK
-    assert "horizons" in response.json()["message"]
-
-    get_response = client_with_project_session.get(ROUTE)
-    get_fmu_project = FMUProject.model_validate(get_response.json())
-    assert get_fmu_project.config.rms is not None
-    assert get_fmu_project.config.rms.horizons is not None
-    assert len(get_fmu_project.config.rms.horizons) == 3  # noqa: PLR2004
-    assert [h.name for h in get_fmu_project.config.rms.horizons] == ["H1", "H2", "H3"]
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert any(
+        "RMS zones reference horizons not present in request" in error.get("msg", "")
+        for error in response.json().get("detail", [])
+    )
 
 
 # PATCH project/rms/wells #
