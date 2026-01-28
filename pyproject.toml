@@ -30,7 +30,7 @@ dynamic = ["version"]
 dependencies = [
     "fastapi",
     "fmu-datamodels",
-    "fmu-settings>=0.16.1",
+    "fmu-settings>=0.18.0",
     "httpx",
     "packaging",
     "pydantic",
