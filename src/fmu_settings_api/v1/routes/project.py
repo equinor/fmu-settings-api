@@ -6,9 +6,15 @@ from typing import Final
 
 from fastapi import APIRouter, HTTPException
 from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.context.mappings import (
+    AnyIdentifierMapping,
+    DataSystem,
+    MappingType,
+)
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
     RmsWell,
@@ -24,6 +30,7 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     WritePermissionDep,
 )
+from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
@@ -180,6 +187,62 @@ RmsStratigraphicFrameworkResponses: Final[Responses] = {
                     "request: {horizon_names}"
                 )
             },
+        ],
+    ),
+}
+
+
+MappingsResponses: Final[Responses] = {
+    **inline_add_response(
+        400,
+        "Invalid mapping data or unsupported mapping type",
+        [
+            {"detail": "Mapping type '{mapping_type}' is not yet supported"},
+            {
+                "detail": (
+                    "Mapping type mismatch: expected '{expected}' but found '{actual}'"
+                )
+            },
+            {
+                "detail": (
+                    "Source system mismatch: expected '{expected}' but found '{actual}'"
+                )
+            },
+            {
+                "detail": (
+                    "Target system mismatch: expected '{expected}' but found '{actual}'"
+                )
+            },
+            {
+                "detail": (
+                    "Duplicate mapping found: source_id='{source_id}', "
+                    "source_uuid='{source_uuid}', target_id='{target_id}', "
+                    "target_uuid='{target_uuid}', relation_type='{relation_type}'"
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        404,
+        "Mappings resource file not found",
+        [{"detail": "No mappings file found at {path}"}],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            Mappings resource contains invalid content or corrupted JSON.
+            """
+        ),
+        [
+            {"detail": "Invalid mappings in existing file: {error_message}"},
+            {
+                "detail": (
+                    "The mappings resource file contains invalid JSON "
+                    "and cannot be parsed. Error: {error}"
+                )
+            },
+            {"detail": "Invalid mappings: {error_message}"},
         ],
     ),
 }
@@ -908,6 +971,125 @@ async def post_cache_restore(
                 f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
             ),
         ) from e
+
+
+@router.get(
+    "/mappings/{mapping_type}/{source_system}/{target_system}",
+    response_model=list[MappingGroup],
+    summary="Returns mappings for a specific mapping type and system combination.",
+    description=dedent(
+        """
+        Retrieves mappings for the specified mapping_type, source_system, and
+        target_system from the project's .fmu directory.
+
+        Mappings are returned grouped by target context (target_id/target_uuid).
+
+        Example: GET /project/mappings/stratigraphy/rms/smda returns all
+        stratigraphy mappings from RMS to SMDA.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **MappingsResponses,
+    },
+)
+async def get_mappings(
+    mappings_service: MappingsServiceDep,
+    mapping_type: MappingType,
+    source_system: DataSystem,
+    target_system: DataSystem,
+) -> list[MappingGroup]:
+    """Returns mappings for specific mapping type and system combination."""
+    try:
+        return mappings_service.get_mappings_by_systems(
+            mapping_type, source_system, target_system
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {mappings_service.fmu_dir_path}"
+            ),
+        ) from e
+    except ValidationError as e:
+        errors = [error.get("msg", str(error)) for error in e.errors()]
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid mappings in existing file: {'; '.join(errors)}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.put(
+    "/mappings/{mapping_type}/{source_system}/{target_system}",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Updates mappings for a specific mapping type and system combination",
+    description=dedent(
+        """
+        Replaces mappings for the specified mapping_type, source_system, and
+        target_system in the project's .fmu directory.
+
+        This operation only affects mappings for the specified system combination.
+        Mappings for other source/target combinations are preserved.
+
+        The request body should contain a list of mapping objects.
+        The mappings will be validated for:
+        - Correct mapping_type, source_system, and target_system matching URL parameters
+        - No duplicate mappings (same source_id, source_uuid, target_id, target_uuid,
+        and relation_type)
+        - Valid group structure (at most one primary per target, all mappings share
+        the same target context)
+        - Valid data according to the mapping schema
+
+        Example: PUT /project/mappings/stratigraphy/rms/smda updates only the
+        stratigraphy mappings from RMS to SMDA, leaving other mappings unchanged.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **MappingsResponses,
+        **LockConflictResponses,
+    },
+)
+async def put_mappings(
+    mappings_service: MappingsServiceDep,
+    mapping_type: MappingType,
+    source_system: DataSystem,
+    target_system: DataSystem,
+    mappings: list[AnyIdentifierMapping],
+) -> Message:
+    """Updates mappings for specific mapping type and system combination."""
+    try:
+        mappings_service.update_mappings_by_systems(
+            mapping_type, source_system, target_system, mappings
+        )
+        return Message(
+            message=(
+                f"Saved {mapping_type.value} mappings from {source_system.value} to "
+                f"{target_system.value} to {mappings_service.fmu_dir_path}"
+            )
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied while trying to update the mappings.",
+        ) from e
+    except ValidationError as e:
+        errors = [error.get("msg", str(error)) for error in e.errors()]
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid mappings: {'; '.join(errors)}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
