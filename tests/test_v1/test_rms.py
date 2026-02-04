@@ -278,7 +278,7 @@ async def test_open_rms_project_unexpected_service_error(
     mock_service.open_rms_project.side_effect = Exception("RMS service error.")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_rms_project_path] = lambda: Path()
+    app.dependency_overrides[get_rms_project_path] = lambda: Path()  # noqa: PLW0108
 
     response = client_with_project_session.post(f"{ROUTE}/")
 
@@ -513,7 +513,9 @@ async def test_get_zones_service_error(
     mock_service.get_zones.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = (
+        lambda: MagicMock()  # noqa: PLW0108
+    )
     app.dependency_overrides[get_rms_project_path] = lambda: Path("/path/to/rms")
 
     response = client_with_project_session.get(f"{ROUTE}/zones")
@@ -530,7 +532,9 @@ async def test_get_horizons_service_error(
     mock_service.get_horizons.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = (
+        lambda: MagicMock()  # noqa: PLW0108
+    )
 
     response = client_with_project_session.get(f"{ROUTE}/horizons")
 
@@ -546,7 +550,9 @@ async def test_get_wells_service_error(
     mock_service.get_wells.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = (
+        lambda: MagicMock()  # noqa: PLW0108
+    )
 
     response = client_with_project_session.get(f"{ROUTE}/wells")
 
@@ -592,7 +598,9 @@ async def test_get_coordinate_system_service_error(
     mock_service.get_coordinate_system.side_effect = Exception("Service error")
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
-    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = (
+        lambda: MagicMock()  # noqa: PLW0108
+    )
 
     response = client_with_project_session.get(f"{ROUTE}/coordinate_system")
 

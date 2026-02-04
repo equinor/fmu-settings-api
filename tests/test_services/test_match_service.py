@@ -253,17 +253,18 @@ class TestMatchStratigraphyFromConfigToSmda:
         create_stratigraphic_unit: Callable[..., StratigraphicUnit],
     ) -> None:
         """Test successful matching from config to SMDA."""
+        config = {
+            "rms.zones": [
+                {
+                    "name": "Viking GP",
+                    "top_horizon_name": "Top",
+                    "base_horizon_name": "Base",
+                }
+            ],
+            "masterdata.smda.stratigraphic_column.identifier": "NSO_SP_1984",
+        }
         mock_project_session.project_fmu_directory.get_config_value.side_effect = (
-            lambda key, default: {
-                "rms.zones": [
-                    {
-                        "name": "Viking GP",
-                        "top_horizon_name": "Top",
-                        "base_horizon_name": "Base",
-                    }
-                ],
-                "masterdata.smda.stratigraphic_column.identifier": "NSO_SP_1984",
-            }.get(key, default)
+            config.get
         )
 
         smda_units = [create_stratigraphic_unit("Viking Group")]
@@ -301,16 +302,17 @@ class TestMatchStratigraphyFromConfigToSmda:
         mock_smda_service: AsyncMock,
     ) -> None:
         """Test ValueError when stratigraphic column identifier is missing."""
+        config = {
+            "rms.zones": [
+                {
+                    "name": "Viking GP",
+                    "top_horizon_name": "Top",
+                    "base_horizon_name": "Base",
+                }
+            ],
+        }
         mock_project_session.project_fmu_directory.get_config_value.side_effect = (
-            lambda key, default: {
-                "rms.zones": [
-                    {
-                        "name": "Viking GP",
-                        "top_horizon_name": "Top",
-                        "base_horizon_name": "Base",
-                    }
-                ],
-            }.get(key, default)
+            config.get
         )
 
         with pytest.raises(
@@ -344,17 +346,18 @@ class TestMatchStratigraphyFromConfigToSmda:
         error_instance: Exception,
     ) -> None:
         """Test that errors from SMDA service are propagated."""
+        config = {
+            "rms.zones": [
+                {
+                    "name": "Viking GP",
+                    "top_horizon_name": "Top",
+                    "base_horizon_name": "Base",
+                }
+            ],
+            "masterdata.smda.stratigraphic_column.identifier": "NSO_SP_1984",
+        }
         mock_project_session.project_fmu_directory.get_config_value.side_effect = (
-            lambda key, default: {
-                "rms.zones": [
-                    {
-                        "name": "Viking GP",
-                        "top_horizon_name": "Top",
-                        "base_horizon_name": "Base",
-                    }
-                ],
-                "masterdata.smda.stratigraphic_column.identifier": "NSO_SP_1984",
-            }.get(key, default)
+            config.get
         )
 
         mock_smda_service.get_stratigraphic_units.side_effect = error_instance
@@ -372,18 +375,19 @@ class TestMatchCoordinateSystemFromConfig:
         self, match_service: MatchService, mock_project_session: MagicMock
     ) -> None:
         """Test successful coordinate system matching from config."""
+        config = {
+            "rms.coordinate_system": {
+                "name": "ED50 UTM31",
+                "projection": "utm",
+                "datum": "ED50",
+            },
+            "masterdata.smda.coordinate_system": {
+                "identifier": "ED50 UTM31",
+                "uuid": str(uuid4()),
+            },
+        }
         mock_project_session.project_fmu_directory.get_config_value.side_effect = (
-            lambda key, default: {
-                "rms.coordinate_system": {
-                    "name": "ED50 UTM31",
-                    "projection": "utm",
-                    "datum": "ED50",
-                },
-                "masterdata.smda.coordinate_system": {
-                    "identifier": "ED50 UTM31",
-                    "uuid": str(uuid4()),
-                },
-            }.get(key, default)
+            config.get
         )
 
         match = match_service.match_coordinate_system_from_config_to_smda(
@@ -413,14 +417,15 @@ class TestMatchCoordinateSystemFromConfig:
         self, match_service: MatchService, mock_project_session: MagicMock
     ) -> None:
         """Test ValueError when smda.coordinate_system is missing."""
+        config = {
+            "rms.coordinate_system": {
+                "name": "ED50 UTM31",
+                "projection": "utm",
+                "datum": "ED50",
+            },
+        }
         mock_project_session.project_fmu_directory.get_config_value.side_effect = (
-            lambda key, default: {
-                "rms.coordinate_system": {
-                    "name": "ED50 UTM31",
-                    "projection": "utm",
-                    "datum": "ED50",
-                },
-            }.get(key, default)
+            config.get
         )
 
         with pytest.raises(
