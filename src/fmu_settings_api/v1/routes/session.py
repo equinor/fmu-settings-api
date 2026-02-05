@@ -107,6 +107,7 @@ async def post_session(
     else:
         with contextlib.suppress(FileNotFoundError, LockError):
             path = Path.cwd()
+            # Ensure it will only add project .fmu to session, not user .fmu
             project_fmu_path = ProjectFMUDirectory.find_fmu_directory(path)
             if project_fmu_path and project_fmu_path != user_fmu_dir.path:
                 project_fmu_dir = ProjectFMUDirectory(project_fmu_path.parent)
