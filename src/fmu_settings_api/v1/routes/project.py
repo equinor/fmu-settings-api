@@ -930,6 +930,41 @@ async def get_cache_revision(
         ) from e
 
 
+@router.get(
+    "/cache/diff/{revision_id}",
+    response_model=list[dict[str, object]],
+    summary="Get diff between current resource and cache revision",
+    description=dedent(
+        """
+        Compare a resource file in the current project with a cached revision.
+
+        The `resource` query parameter selects which resource to diff.
+        The response is a list of changes keyed by `field_path`.
+        """
+    ),
+    responses={**GetSessionResponses, **ProjectResponses, **CacheResponses},
+)
+async def get_cache_diff(
+    resource_service: ResourceServiceDep,
+    revision_id: str,
+    resource: CacheResource,
+) -> list[dict[str, object]]:
+    """Get the diff between the current resource and a cache revision."""
+    try:
+        return resource_service.get_cache_diff(resource, revision_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
 @router.post(
     "/cache/restore/{revision_id}",
     response_model=Message,
