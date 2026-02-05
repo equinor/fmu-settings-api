@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
-from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
@@ -128,7 +127,7 @@ def user_fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
 
 
 @pytest.fixture
-def tmp_path_mocked_home(tmp_path: Path, monkeypatch: MonkeyPatch) -> Generator[Path]:
+def tmp_path_mocked_home(tmp_path: Path) -> Generator[Path]:
     """Mocks Path.home() for routes that depend on UserFMUDirectory.
 
     This mocks the user .fmu into tmp_path/home/.fmu.
@@ -139,7 +138,6 @@ def tmp_path_mocked_home(tmp_path: Path, monkeypatch: MonkeyPatch) -> Generator[
     mocked_user_home = tmp_path / "home"
     mocked_user_home.mkdir()
     with patch("pathlib.Path.home", return_value=mocked_user_home):
-        monkeypatch.chdir(tmp_path)
         yield tmp_path
 
 
