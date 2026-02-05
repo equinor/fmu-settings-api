@@ -132,15 +132,11 @@ class MappingsService:
         Validates that:
         - All mappings match the specified mapping_type, source_system,
           and target_system
-        - No duplicate mappings (same source_id, source_uuid, target_id,
-          target_uuid, and relation_type)
-        - Mappings form valid groups (at most one primary per target, all
-          mappings share the same target context)
+        - New mappings form a valid MappingGroup
 
         Raises:
             ValueError: If validation fails or mapping type is unsupported
         """
-        seen: set[tuple[str, UUID | None, str, UUID | None, str]] = set()
         for mapping in new_mappings:
             if mapping.mapping_type != mapping_type:
                 raise ValueError(
@@ -158,23 +154,7 @@ class MappingsService:
                     f"found '{mapping.target_system}'"
                 )
 
-            key = (
-                mapping.source_id,
-                mapping.source_uuid,
-                mapping.target_id,
-                mapping.target_uuid,
-                mapping.relation_type.value,
-            )
-            if key in seen:
-                raise ValueError(
-                    f"Duplicate mapping found: source_id='{mapping.source_id}', "
-                    f"source_uuid='{mapping.source_uuid}', "
-                    f"target_id='{mapping.target_id}', "
-                    f"target_uuid='{mapping.target_uuid}', "
-                    f"relation_type='{mapping.relation_type.value}'"
-                )
-            seen.add(key)
-
+        # Validate that new_mappings form a valid MappingsGroup
         self.build_mapping_groups(new_mappings)
 
         if mapping_type == MappingType.stratigraphy:
