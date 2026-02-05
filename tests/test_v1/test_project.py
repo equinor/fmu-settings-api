@@ -3163,40 +3163,6 @@ async def test_put_mappings_stratigraphy_file_not_found(
     assert response.json() == {"detail": "Mappings file not found"}
 
 
-async def test_put_mappings_stratigraphy_duplicate_mappings(
-    client_with_project_session: TestClient,
-    session_manager: SessionManager,
-) -> None:
-    """Test 400 returns when request contains duplicate mappings."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
-    )
-    assert session_id is not None
-    session = await session_manager.get_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
-
-    duplicate_mapping = _make_stratigraphy_mapping(
-        "TopVolantis",
-        "VOLANTIS GP. Top",
-        RelationType.primary,
-        source_system=DataSystem.rms,
-        target_system=DataSystem.smda,
-    )
-    payload = [
-        duplicate_mapping.model_dump(mode="json"),
-        duplicate_mapping.model_dump(mode="json"),
-    ]
-
-    response = client_with_project_session.put(
-        f"{ROUTE}/mappings/stratigraphy/rms/smda", json=payload
-    )
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "duplicate mapping" in response.json()["detail"].lower()
-
-
 async def test_put_mappings_stratigraphy_validation_error(
     client_with_project_session: TestClient,
 ) -> None:
