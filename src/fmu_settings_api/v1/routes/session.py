@@ -6,7 +6,7 @@ from textwrap import dedent
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, HTTPException, Response
-from fmu.settings import ProjectFMUDirectory
+from fmu.settings import find_nearest_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 
 from fmu_settings_api.config import settings
@@ -107,11 +107,8 @@ async def post_session(
     else:
         with contextlib.suppress(FileNotFoundError, LockError):
             path = Path.cwd()
-            # Ensure it will only add project .fmu to session, not user .fmu
-            project_fmu_path = ProjectFMUDirectory.find_fmu_directory(path)
-            if project_fmu_path and project_fmu_path != user_fmu_dir.path:
-                project_fmu_dir = ProjectFMUDirectory(project_fmu_path.parent)
-                await add_fmu_project_to_session(session_id, project_fmu_dir)
+            project_fmu_dir = find_nearest_fmu_directory(path)
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     session = await session_manager.get_session(session_id)
     return SessionResponse(
