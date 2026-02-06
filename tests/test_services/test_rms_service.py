@@ -10,6 +10,7 @@ from fmu.settings.models.project_config import (
     RmsStratigraphicZone,
     RmsWell,
 )
+from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 
 from fmu_settings_api.services.rms import RmsService
 
@@ -44,6 +45,57 @@ def test_get_rms_version_from_project_master(rms_service: RmsService) -> None:
 
     mock_rms_config_class.assert_called_once_with(project=str(rms_project_path))
     assert rms_version == master_rms_version
+
+
+def test_get_rms_version_project_not_found(rms_service: RmsService) -> None:
+    """Test get_rms_version raises FileNotFoundError when project dir doesn't exist."""
+    rms_project_path = Path("/path/to/rms/project")
+
+    with (
+        patch(
+            "fmu_settings_api.services.rms.RmsConfig",
+            side_effect=RmsProjectNotFoundError("Project directory not found"),
+        ),
+        pytest.raises(FileNotFoundError) as exc_info,
+    ):
+        rms_service.get_rms_version(rms_project_path)
+
+    assert "RMS project not found at" in str(exc_info.value)
+    assert str(rms_project_path) in str(exc_info.value)
+
+
+def test_get_rms_version_master_file_not_found(rms_service: RmsService) -> None:
+    """Test get_rms_version raises FileNotFoundError when .master file doesn't exist."""
+    rms_project_path = Path("/path/to/rms/project")
+
+    with (
+        patch(
+            "fmu_settings_api.services.rms.RmsConfig",
+            side_effect=FileNotFoundError(".master file not found"),
+        ),
+        pytest.raises(FileNotFoundError) as exc_info,
+    ):
+        rms_service.get_rms_version(rms_project_path)
+
+    assert "RMS project .master file not found at" in str(exc_info.value)
+    assert str(rms_project_path) in str(exc_info.value)
+
+
+def test_get_rms_version_unsupported_version(rms_service: RmsService) -> None:
+    """Test get_rms_version raises RmsVersionError when version is not supported."""
+    rms_project_path = Path("/path/to/rms/project")
+
+    with (
+        patch(
+            "fmu_settings_api.services.rms.RmsConfig",
+            side_effect=RmsVersionError("RMS version '14.2.3' is not supported"),
+        ),
+        pytest.raises(RmsVersionError) as exc_info,
+    ):
+        rms_service.get_rms_version(rms_project_path)
+
+    assert "RMS version error for project at" in str(exc_info.value)
+    assert str(rms_project_path) in str(exc_info.value)
 
 
 def test_open_rms_project_success(rms_service: RmsService) -> None:

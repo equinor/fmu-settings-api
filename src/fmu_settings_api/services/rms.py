@@ -12,6 +12,7 @@ from packaging.version import Version
 from runrms import get_executor
 from runrms.api import RmsApiProxy
 from runrms.config._rms_config import RmsConfig
+from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 from runrms.executor import ApiExecutor
 
 MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = Version("1.12")
@@ -29,8 +30,25 @@ class RmsService:
 
         Returns:
             str: The RMS version string (e.g., "14.2.2")
+
+        Raises:
+            FileNotFoundError: If the RMS project or .master file is not found
+            RmsVersionError: If the RMS version is not supported
         """
-        rms_config = RmsConfig(project=str(rms_project_path))
+        try:
+            rms_config = RmsConfig(project=str(rms_project_path))
+        except RmsProjectNotFoundError as e:
+            raise FileNotFoundError(
+                f"RMS project not found at '{rms_project_path}': {str(e)}"
+            ) from e
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"RMS project .master file not found at '{rms_project_path}': {str(e)}"
+            ) from e
+        except RmsVersionError as e:
+            raise RmsVersionError(
+                f"RMS version error for project at '{rms_project_path}': {str(e)}"
+            ) from e
         return rms_config.version
 
     def open_rms_project(

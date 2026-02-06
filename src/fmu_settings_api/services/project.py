@@ -100,13 +100,13 @@ class ProjectService:
         return self._fmu_dir.find_rms_projects()
 
     def update_rms(self, rms_project_path: Path) -> str:
-        """Save the RMS project path and version in the project FMU directory."""
-        try:
-            rms_version = RmsService.get_rms_version(rms_project_path)
-        except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"RMS project path {rms_project_path} does not exist."
-            ) from e
+        """Save the RMS project path and version in the project FMU directory.
+
+        Raises:
+            FileNotFoundError: If the RMS project or .master file does not exist
+            RmsVersionError: If the RMS version is not supported
+        """
+        rms_version = RmsService.get_rms_version(rms_project_path)
 
         self._fmu_dir.update_config(
             {
