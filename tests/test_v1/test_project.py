@@ -29,6 +29,7 @@ from fmu.settings._init import init_fmu_directory
 from fmu.settings.models.mappings import Mappings
 from pydantic import ValidationError
 from pytest import MonkeyPatch
+from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
@@ -2478,7 +2479,7 @@ async def test_patch_rms_path_not_found(
     rms_path = session_tmp_path / "missing_project.rms14.2.2"
 
     with patch(
-        "fmu_settings_api.services.project.RmsService.get_rms_version",
+        "fmu_settings_api.services.rms.RmsService.get_rms_version",
         side_effect=FileNotFoundError("master file not found"),
     ):
         response = client_with_project_session.patch(
@@ -2486,7 +2487,31 @@ async def test_patch_rms_path_not_found(
             json={"path": str(rms_path)},
         )
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json() == {"detail": f"RMS project path {rms_path} does not exist."}
+    assert response.json() == {"detail": "master file not found"}
+
+
+async def test_patch_rms_unsupported_version(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test 400 returns when RMS version is not supported."""
+    rms_path = session_tmp_path / "project.rms14.2.3"
+
+    with patch(
+        "fmu_settings_api.services.rms.RmsService.get_rms_version",
+        side_effect=RmsVersionError(
+            f"RMS version error for project at '{rms_path}': "
+            "RMS version '14.2.3' configured in the RMS project is not supported."
+        ),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/rms",
+            json={"path": str(rms_path)},
+        )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "RMS version error for project at" in response.json()["detail"]
+    assert "14.2.3" in response.json()["detail"]
+    assert "not supported" in response.json()["detail"]
 
 
 async def test_patch_rms_general_exception(

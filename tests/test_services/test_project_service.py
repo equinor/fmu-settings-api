@@ -120,7 +120,7 @@ def test_update_rms_missing_project_path_raises_file_not_found(
     ):
         service.update_rms(rms_project_path)
 
-    assert "does not exist" in str(exc_info.value)
+    assert "not found" in str(exc_info.value)
     assert fmu_dir.config.load().rms is None
 
 
