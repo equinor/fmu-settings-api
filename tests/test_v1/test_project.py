@@ -3419,6 +3419,166 @@ async def test_get_cache_revision_resource_permission_error(
     }
 
 
+# GET project/cache/diff/{revision_id} #
+
+
+async def test_get_cache_diff_returns_resource_diff(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test cache diff returns structured scalar before/after values."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    current_config = fmu_dir.config.load()
+    updated_value = current_config.cache_max_revisions + 1
+    updated_config = current_config.model_dump(mode="json")
+    updated_config["cache_max_revisions"] = updated_value
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps(updated_config)
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/diff/{revision_path.name}",
+        params={"resource": "config.json"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == [
+        {
+            "field_path": "cache_max_revisions",
+            "before": current_config.cache_max_revisions,
+            "after": updated_value,
+        }
+    ]
+
+
+async def test_get_cache_diff_returns_mappings_list_diff(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test cache diff returns added/removed changes for stratigraphy mappings."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    current_stratigraphy = _make_stratigraphy_mappings()
+    fmu_dir.mappings.update_stratigraphy_mappings(current_stratigraphy)
+
+    incoming_stratigraphy = StratigraphyMappings(
+        root=[
+            current_stratigraphy[0],
+            current_stratigraphy[2],
+            current_stratigraphy[3],
+            _make_stratigraphy_mapping(
+                "TopNew",
+                "NEW GP. Top",
+                RelationType.primary,
+            ),
+        ]
+    )
+    revision_path = fmu_dir.cache.store_revision(
+        Path("mappings.json"),
+        Mappings(stratigraphy=incoming_stratigraphy).model_dump_json(by_alias=True),
+    )
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/diff/{revision_path.name}",
+        params={"resource": "mappings.json"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["field_path"] == "stratigraphy.root"
+    assert len(payload[0]["added"]) == 1
+    assert len(payload[0]["removed"]) == 1
+    assert payload[0]["updated"] == []
+    assert payload[0]["added"][0]["source_id"] == "TopNew"
+    assert payload[0]["removed"][0]["source_id"] == "TopVOLANTIS"
+
+
+async def test_get_cache_diff_resource_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns for missing cache revision on diff."""
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/diff/missing.json", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": ("Cache revision 'missing.json' not found for resource 'config.json'")
+    }
+
+
+async def test_get_cache_diff_invalid_resource_json(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 422 returns for invalid JSON in cache revision diff."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(Path("config.json"), "not json")
+    assert revision_path is not None
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/cache/diff/{revision_path.name}", params={"resource": "config.json"}
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid cached content for 'config.json'" in response.json()["detail"]
+
+
+async def test_get_cache_diff_resource_permission_error(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 403 returns when cache revision diff file is not readable."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    revision_path = fmu_dir.cache.store_revision(
+        Path("config.json"), json.dumps({"example": True})
+    )
+    assert revision_path is not None
+
+    original_mode = revision_path.stat().st_mode
+    revision_path.chmod(0)
+    try:
+        response = client_with_project_session.get(
+            f"{ROUTE}/cache/diff/{revision_path.name}",
+            params={"resource": "config.json"},
+        )
+    finally:
+        revision_path.chmod(original_mode)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }
+
+
 # POST project/cache/restore/{revision_id} #
 
 

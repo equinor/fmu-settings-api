@@ -14,6 +14,7 @@ from fmu.datamodels.context.mappings import (
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -932,7 +933,7 @@ async def get_cache_revision(
 
 @router.get(
     "/cache/diff/{revision_id}",
-    response_model=list[dict[str, object]],
+    response_model=list[ResourceDiff],
     summary="Get diff between current resource and cache revision",
     description=dedent(
         """
@@ -948,7 +949,7 @@ async def get_cache_diff(
     resource_service: ResourceServiceDep,
     revision_id: str,
     resource: CacheResource,
-) -> list[dict[str, object]]:
+) -> list[ResourceDiff]:
     """Get the diff between the current resource and a cache revision."""
     try:
         return resource_service.get_cache_diff(resource, revision_id)
