@@ -20,6 +20,7 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 from pydantic import ValidationError
+from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.deps import (
     ProjectServiceDep,
@@ -734,6 +735,11 @@ async def get_rms_projects(
         **GetSessionResponses,
         **ProjectResponses,
         **LockConflictResponses,
+        **inline_add_response(
+            400,
+            "The RMS version in the project is not supported",
+            [{"detail": "RMS version error for project at '{path}': {error}"}],
+        ),
     },
 )
 async def patch_rms(
@@ -749,6 +755,8 @@ async def patch_rms(
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except RmsVersionError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.patch(
