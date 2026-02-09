@@ -149,6 +149,35 @@ Tradeoff:
 
 - More invasive, but no `_LIST_DIFF_KEYS` map to maintain
 
+Implementation example:
+
+```python
+# fmu/settings/models/project_config.py
+class RmsStratigraphicZone(BaseModel):
+    __diff_key__ = "name"
+    name: str
+    top_horizon_name: str
+    base_horizon_name: str
+    stratigraphic_column_name: list[str] | None = None
+```
+
+or
+
+```python
+# fmu/settings/models/project_config.py
+class RmsProject(BaseModel):
+    zones: list[RmsStratigraphicZone] | None = Field(
+        default=None, json_schema_extra={"diff_key": "name"}
+    )
+    horizons: list[RmsHorizon] | None = Field(
+        default=None, json_schema_extra={"diff_key": "name"}
+    )
+    wells: list[RmsWell] | None = Field(
+        default=None, json_schema_extra={"diff_key": "name"}
+    )
+
+```
+
 ### Option B: Keep an identity map in `fmu-settings` (no datamodel changes)
 
 Move `_LIST_DIFF_KEYS` into `fmu-settings` and use it inside `get_model_diff`.
