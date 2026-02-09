@@ -62,6 +62,9 @@ Homepage = "https://github.com/equinor/fmu-settings-api"
 Repository = "https://github.com/equinor/fmu-settings-api"
 Documentation = "https://github.com/equinor/fmu-settings-api"
 
+[tool.uv.sources]
+fmu-settings = { git = "https://github.com/equinor/fmu-settings", rev = "refs/pull/173/head" }
+
 [tool.coverage.run]
 omit = [
     "_version.py",
