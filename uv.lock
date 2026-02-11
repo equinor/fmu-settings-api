@@ -244,7 +244,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.128.2"
+version = "0.128.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -253,9 +253,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/6e/45fb5390d46d7918426ea1c1ec4b06c1d3fd70be4a47a690ccb4f1f9438a/fastapi-0.128.2.tar.gz", hash = "sha256:7db9eb891866ac3a08e03f844b99e343a2c1cc41247e68e006c90b38d2464ea1", size = 376129, upload-time = "2026-02-05T19:48:33.957Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/fc/af386750b3fd8d8828167e4c82b787a8eeca2eca5c5429c9db8bb7c70e04/fastapi-0.128.7.tar.gz", hash = "sha256:783c273416995486c155ad2c0e2b45905dedfaf20b9ef8d9f6a9124670639a24", size = 375325, upload-time = "2026-02-10T12:26:40.968Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c1/f2/80df24108572630bb2adef3d97f1e774b18ec25bfbab5528f36cba6478c0/fastapi-0.128.2-py3-none-any.whl", hash = "sha256:55bfd9490ca0125707d80e785583c2dc57840bb66e3a0bbc087d20c364964dc0", size = 104032, upload-time = "2026-02-05T19:48:32.118Z" },
+    { url = "https://files.pythonhosted.org/packages/af/1a/f983b45661c79c31be575c570d46c437a5409b67a939c1b3d8d6b3ed7a7f/fastapi-0.128.7-py3-none-any.whl", hash = "sha256:6bd9bd31cb7047465f2d3fa3ba3f33b0870b17d4eaf7cdb36d1576ab060ad662", size = 103630, upload-time = "2026-02-10T12:26:39.414Z" },
 ]
 
 [[package]]
@@ -284,7 +284,7 @@ wheels = [
 
 [[package]]
 name = "fmu-settings"
-version = "0.20.0"
+version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
@@ -294,9 +294,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/ff/2534bc70d768eca7a45e1c9c7ef425a09f76e575608367e264a22a44c6ee/fmu_settings-0.20.0.tar.gz", hash = "sha256:852727b8c640bef340b7f99f74e6ca57198b0183d282fc0c5ed1a82f26f75466", size = 133100, upload-time = "2026-02-05T08:28:12.989Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/e5/8dc914ec7bf7d10bd5903901aa24270e6d3185224cb5c1beac8596ca74b9/fmu_settings-0.21.0.tar.gz", hash = "sha256:cb9e292dc507b0e29460ac38ecad535477f6b143ae9c57a495b1f998e1d1193e", size = 135473, upload-time = "2026-02-10T12:36:58.797Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/74/84d87d2179b1a299313f1c3f2029c5044fc4c6c81f51a1471eb0e4b8a284/fmu_settings-0.20.0-py3-none-any.whl", hash = "sha256:529a21572985e7efe482794feaf5347f79bace3e571913e71cfeb6821b26529a", size = 49758, upload-time = "2026-02-05T08:28:11.881Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/b7/942d8fa54366e9c78aa1c7eb19151fafdb6dfdf3e3adce52f266bc976e7d/fmu_settings-0.21.0-py3-none-any.whl", hash = "sha256:2b648aa681aeb42496f1610e451ea3838b96f37e2718a44010f4f175d5ea6ce6", size = 51462, upload-time = "2026-02-10T12:36:56.483Z" },
 ]
 
 [[package]]
