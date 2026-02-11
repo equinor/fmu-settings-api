@@ -11,6 +11,12 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from fmu.datamodels.context.mappings import (
+    DataSystem,
+    RelationType,
+    StratigraphyIdentifierMapping,
+    StratigraphyMappings,
+)
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
@@ -67,6 +73,65 @@ def create_stratigraphic_unit() -> Callable[..., StratigraphicUnit]:
         )
 
     return _create_stratigraphic_unit
+
+
+@pytest.fixture
+def make_stratigraphy_mapping() -> Callable[..., StratigraphyIdentifierMapping]:
+    """Fixture that returns a helper function to create stratigraphy mappings."""
+
+    def _make_stratigraphy_mapping(  # noqa: PLR0913
+        source_id: str,
+        target_id: str,
+        relation_type: RelationType,
+        source_system: DataSystem = DataSystem.rms,
+        target_system: DataSystem = DataSystem.smda,
+        target_uuid: UUID | None = None,
+    ) -> StratigraphyIdentifierMapping:
+        return StratigraphyIdentifierMapping(
+            source_system=source_system,
+            target_system=target_system,
+            relation_type=relation_type,
+            source_id=source_id,
+            target_id=target_id,
+            target_uuid=target_uuid,
+        )
+
+    return _make_stratigraphy_mapping
+
+
+@pytest.fixture
+def make_stratigraphy_mappings(
+    make_stratigraphy_mapping: Callable[..., StratigraphyIdentifierMapping],
+) -> Callable[[], StratigraphyMappings]:
+    """Fixture that returns a helper function creating default stratigraphy mappings."""
+
+    def _make_stratigraphy_mappings() -> StratigraphyMappings:
+        return StratigraphyMappings(
+            root=[
+                make_stratigraphy_mapping(
+                    "TopVolantis",
+                    "VOLANTIS GP. Top",
+                    RelationType.primary,
+                ),
+                make_stratigraphy_mapping(
+                    "TopVOLANTIS",
+                    "VOLANTIS GP. Top",
+                    RelationType.alias,
+                ),
+                make_stratigraphy_mapping(
+                    "VOLANTIS GP. Top",
+                    "VOLANTIS GP. Top",
+                    RelationType.equivalent,
+                ),
+                make_stratigraphy_mapping(
+                    "TopViking",
+                    "VIKING GP. Top",
+                    RelationType.primary,
+                ),
+            ]
+        )
+
+    return _make_stratigraphy_mappings
 
 
 @pytest.fixture(autouse=True)
