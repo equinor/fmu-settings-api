@@ -14,6 +14,7 @@ from fmu.datamodels.context.mappings import (
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -917,6 +918,41 @@ async def get_cache_revision(
     """Get the content of a specific cache revision."""
     try:
         return resource_service.get_cache_content(resource, revision_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.get(
+    "/cache/diff/{revision_id}",
+    response_model=list[ResourceDiff],
+    summary="Get diff between current resource and cache revision",
+    description=dedent(
+        """
+        Compare a resource file in the current project with a cached revision.
+
+        The `resource` query parameter selects which resource to diff.
+        The response is a list of changes keyed by `field_path`.
+        """
+    ),
+    responses={**GetSessionResponses, **ProjectResponses, **CacheResponses},
+)
+async def get_cache_diff(
+    resource_service: ResourceServiceDep,
+    revision_id: str,
+    resource: CacheResource,
+) -> list[ResourceDiff]:
+    """Get the diff between the current resource and a cache revision."""
+    try:
+        return resource_service.get_cache_diff(resource, revision_id)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:

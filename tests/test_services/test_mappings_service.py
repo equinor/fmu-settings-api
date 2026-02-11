@@ -1,5 +1,6 @@
 """Tests for the MappingsService."""
 
+from collections.abc import Callable
 from unittest.mock import Mock
 
 import pytest
@@ -20,21 +21,6 @@ from fmu_settings_api.services.mappings import MappingsService
 def mappings_service(fmu_dir: ProjectFMUDirectory) -> MappingsService:
     """Returns a MappingsService instance."""
     return MappingsService(fmu_dir)
-
-
-def _make_stratigraphy_mapping(
-    source_id: str,
-    target_id: str,
-    relation_type: RelationType,
-) -> StratigraphyIdentifierMapping:
-    return StratigraphyIdentifierMapping(
-        source_system=DataSystem.rms,
-        target_system=DataSystem.smda,
-        relation_type=relation_type,
-        source_id=source_id,
-        target_id=target_id,
-        target_uuid=None,
-    )
 
 
 def test_update_mappings_by_systems_mapping_type_mismatch(
@@ -103,6 +89,9 @@ def test_update_mappings_by_systems_target_system_mismatch(
 def test_update_mappings_by_systems_mapping_group_validation_error(
     mappings_service: MappingsService,
     fmu_dir: ProjectFMUDirectory,
+    make_stratigraphy_mapping: Callable[
+        [str, str, RelationType], StratigraphyIdentifierMapping
+    ],
 ) -> None:
     """Test that invalid mapping combinations raises ValidationError."""
     fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
@@ -111,8 +100,8 @@ def test_update_mappings_by_systems_mapping_group_validation_error(
     source_id = "Viking Gp."
 
     # More than one primary mapping is an invalid combination
-    primary = _make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
-    primary_two = _make_stratigraphy_mapping(
+    primary = make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
+    primary_two = make_stratigraphy_mapping(
         "VIKING GP", target_id, RelationType.primary
     )
     with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
@@ -124,10 +113,10 @@ def test_update_mappings_by_systems_mapping_group_validation_error(
         )
 
     # More than one equivalent mapping is an invalid combination
-    equivalent = _make_stratigraphy_mapping(
+    equivalent = make_stratigraphy_mapping(
         source_id, source_id, RelationType.equivalent
     )
-    equivalent_two = _make_stratigraphy_mapping(
+    equivalent_two = make_stratigraphy_mapping(
         source_id, source_id, RelationType.equivalent
     )
     with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
@@ -139,7 +128,7 @@ def test_update_mappings_by_systems_mapping_group_validation_error(
         )
 
     # Alias mapping without primary mapping is an invalid combination
-    alias = _make_stratigraphy_mapping("Viking gp", target_id, RelationType.alias)
+    alias = make_stratigraphy_mapping("Viking gp", target_id, RelationType.alias)
     with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
         mappings_service.update_mappings_by_systems(
             MappingType.stratigraphy,
@@ -149,8 +138,8 @@ def test_update_mappings_by_systems_mapping_group_validation_error(
         )
 
     # Duplicate mappings is an invalid combination
-    primary = _make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
-    alias_to_duplicate = _make_stratigraphy_mapping(
+    primary = make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
+    alias_to_duplicate = make_stratigraphy_mapping(
         "Viking gp", target_id, RelationType.alias
     )
     with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):

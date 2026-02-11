@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from fmu.settings import CacheResource, ProjectFMUDirectory
+from fmu.settings.models.diff import ResourceDiff
 
 from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models.resource import CacheContent, CacheList
@@ -28,19 +29,27 @@ class ResourceService:
         revision_paths = self._fmu_dir.cache.list_revisions(resource_path)
         return CacheList(revisions=[path.name for path in revision_paths])
 
+    def get_cache_diff(
+        self, resource: CacheResource, revision_id: str
+    ) -> list[ResourceDiff]:
+        """Get the diff between the current resource and a cache revision."""
+        resource_path = Path(resource.value)
+        manager = self._fmu_dir._cacheable_resource_managers().get(resource_path)
+        if manager is None:
+            raise ValueError(
+                f"Resource '{resource.value}' is not supported for diff operations"
+            )
+        current_model = manager.load(force=True, store_cache=True)
+        cached_model = self._fmu_dir.get_cache_content(resource_path, revision_id)
+        return manager.get_structured_model_diff(current_model, cached_model)
+
     def get_cache_content(
         self, resource: CacheResource, revision_id: str
     ) -> CacheContent:
         """Get the content of a specific cache revision."""
         resource_path = Path(resource.value)
-
-        try:
-            cached_model = self._fmu_dir.get_cache_content(resource_path, revision_id)
-            return CacheContent(
-                data=cached_model.model_dump(mode="json", by_alias=True)
-            )
-        except (FileNotFoundError, ValueError):
-            raise
+        cached_model = self._fmu_dir.get_cache_content(resource_path, revision_id)
+        return CacheContent(data=cached_model.model_dump(mode="json", by_alias=True))
 
     def restore_from_cache(self, resource: CacheResource, revision_id: str) -> None:
         """Restore a resource file from a cache revision by overwriting it.
