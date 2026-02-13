@@ -296,6 +296,52 @@ async def test_get_project_already_in_session(
     assert session.project_fmu_directory.config.load() == fmu_project.config
 
 
+async def test_get_changelog_success(
+    client_with_session: TestClient,
+) -> None:
+    """Test 200 is returned when changelog exists and is readable."""
+    response = client_with_session.get(ROUTE)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert isinstance(response.json(), dict)
+
+
+async def test_get_changelog_file_not_found(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Test 404 is returned when changelog file does not exist."""
+    # Remove .fmu directory to simulate missing changelog
+    fmu_dir = session_tmp_path / ".fmu"
+    if fmu_dir.exists():
+        for item in fmu_dir.iterdir():
+            if item.is_file():
+                item.unlink()
+
+    response = client_with_session.get(ROUTE)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_get_changelog_permission_denied(
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 is returned when changelog cannot be read due to permissions."""
+    changelog_path = session_tmp_path / ".fmu"
+
+    with no_permissions(changelog_path):
+        response = client_with_session.get(ROUTE)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert (
+        response.json()["detail"]
+        == "Permission denied while trying to read the changelog."
+    )
+
+
 # POST project/ #
 
 

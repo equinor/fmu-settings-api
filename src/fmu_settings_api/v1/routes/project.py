@@ -284,18 +284,11 @@ ChangelogResponses: Final[Responses] = {
         [{"detail": "Permission denied while trying to access changelog at {path}"}],
     ),
     **inline_add_response(
-        400,
+        422,
         "Invalid changelog data",
-        [{"detail": "Invalid changelog format or data at {path}: {error}"}],
-    ),
-    **inline_add_response(
-        500,
-        "Unexpected error retrieving changelog",
         [
-            {
-                "detail": "An unexpected error occurred while retrieving changelog: "
-                "{error}"
-            }
+            {"detail": "Invalid changelog format or data at {path}: {error}"},
+            {"detail": "Invalid or corrupt JSON at {path}: {error}"},
         ],
     ),
 }
@@ -1219,12 +1212,4 @@ async def get_changelog(
         raise HTTPException(
             status_code=403,
             detail="Permission denied while trying to read the changelog.",
-        ) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        # Catch-all for unexpected errors
-        raise HTTPException(
-            status_code=500,
-            detail="An unexpected error occurred while retrieving the changelog.",
         ) from e
