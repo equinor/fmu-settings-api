@@ -14,7 +14,9 @@ from fmu.datamodels.context.mappings import (
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
+from fmu.settings.models.log import Log
 from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -32,6 +34,7 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     WritePermissionDep,
 )
+from fmu_settings_api.deps.changelog import ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
@@ -265,6 +268,34 @@ CacheResponses: Final[Responses] = {
                 "for cache operations"
             },
             {"detail": "Invalid cached content for {resource}: {error}"},
+        ],
+    ),
+}
+
+ChangelogResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        "Changelog resource file not found",
+        [{"detail": "No changelog file found at {path}"}],
+    ),
+    **inline_add_response(
+        403,
+        "Permission denied accessing changelog file",
+        [{"detail": "Permission denied while trying to access changelog at {path}"}],
+    ),
+    **inline_add_response(
+        400,
+        "Invalid changelog data",
+        [{"detail": "Invalid changelog format or data at {path}: {error}"}],
+    ),
+    **inline_add_response(
+        500,
+        "Unexpected error retrieving changelog",
+        [
+            {
+                "detail": "An unexpected error occurred while retrieving changelog: "
+                "{error}"
+            }
         ],
     ),
 }
@@ -1158,4 +1189,42 @@ def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
     except PermissionError as e:
         raise HTTPException(
             status_code=403, detail="Permission denied accessing .fmu"
+        ) from e
+
+
+@router.get(
+    "/changelog",
+    response_model=Log[ChangeInfo],
+    summary="Returns changelog for the project.",
+    description=dedent(
+        """
+        Retrieves changelog from the project's .fmu directory.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **ChangelogResponses,
+    },
+)
+async def get_changelog(
+    changelog_service: ChangelogServiceDep,
+) -> Log[ChangeInfo]:
+    """Returns changelog for the project."""
+    try:
+        return changelog_service.get_changelog()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied while trying to read the changelog.",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        # Catch-all for unexpected errors
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while retrieving the changelog.",
         ) from e
