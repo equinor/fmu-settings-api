@@ -275,13 +275,8 @@ CacheResponses: Final[Responses] = {
 ChangelogResponses: Final[Responses] = {
     **inline_add_response(
         404,
-        "Changelog resource file not found",
+        "Changelog file not found",
         [{"detail": "No changelog file found at {path}"}],
-    ),
-    **inline_add_response(
-        403,
-        "Permission denied accessing changelog file",
-        [{"detail": "Permission denied while trying to access changelog at {path}"}],
     ),
     **inline_add_response(
         422,
@@ -1160,31 +1155,6 @@ async def put_mappings(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
-    """Creates an FMUProject response model for an opened project.
-
-    Includes path, configuration, and read-only status determined by lock acquisition.
-    Raises HTTP exceptions for corrupt or inaccessible projects.
-    """
-    try:
-        service = ProjectService(fmu_dir)
-        return service.get_project_data()
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Missing configuration file in project at {fmu_dir.path}: {e}",
-        ) from e
-    except ValueError as e:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Corrupt project found at {fmu_dir.path}: {e}",
-        ) from e
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=403, detail="Permission denied accessing .fmu"
-        ) from e
-
-
 @router.get(
     "/changelog",
     response_model=Log[ChangeInfo],
@@ -1211,5 +1181,36 @@ async def get_changelog(
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
-            detail="Permission denied while trying to read the changelog.",
+            detail="Permission denied accessing changelog at"
+            f"{changelog_service.fmu_dir_path}.",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid changelog format or data.",
+        ) from e
+
+
+def _create_opened_project_response(fmu_dir: ProjectFMUDirectory) -> FMUProject:
+    """Creates an FMUProject response model for an opened project.
+
+    Includes path, configuration, and read-only status determined by lock acquisition.
+    Raises HTTP exceptions for corrupt or inaccessible projects.
+    """
+    try:
+        service = ProjectService(fmu_dir)
+        return service.get_project_data()
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Missing configuration file in project at {fmu_dir.path}: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Corrupt project found at {fmu_dir.path}: {e}",
+        ) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403, detail="Permission denied accessing .fmu"
         ) from e

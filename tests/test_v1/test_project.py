@@ -26,6 +26,8 @@ from fmu.settings._fmu_dir import (
 )
 from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings._init import init_fmu_directory
+from fmu.settings.models._enums import ChangeType
+from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.mappings import Mappings
 from pydantic import ValidationError
 from pytest import MonkeyPatch
@@ -296,50 +298,97 @@ async def test_get_project_already_in_session(
     assert session.project_fmu_directory.config.load() == fmu_project.config
 
 
+# GET project/changelog #
+
+
 async def test_get_changelog_success(
-    client_with_session: TestClient,
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
 ) -> None:
     """Test 200 is returned when changelog exists and is readable."""
-    response = client_with_session.get(ROUTE)
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
 
+    fmu_dir = session.project_fmu_directory
+    fmu_dir.changelog.add_log_entry(
+        ChangeInfo(
+            change_type=ChangeType.update,
+            user="test_user",
+            path=fmu_dir.path,
+            change="Updated field names",
+            hostname="localhost",
+            file="config.json",
+            key="changelog_test",
+        )
+    )
+    response = client_with_project_session.get(f"{ROUTE}/changelog")
     assert response.status_code == status.HTTP_200_OK
-    assert isinstance(response.json(), dict)
+    response_data = response.json()
+    assert len(response_data) == 1
+    assert response_data[0]["change_type"] == "update"
+    assert response_data[0]["user"] == "test_user"
+    assert response_data[0]["path"] == str(fmu_dir.path)
+    assert response_data[0]["change"] == "Updated field names"
+    assert response_data[0]["hostname"] == "localhost"
+    assert response_data[0]["file"] == "config.json"
+    assert response_data[0]["key"] == "changelog_test"
 
 
 async def test_get_changelog_file_not_found(
-    client_with_session: TestClient,
-    session_tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    client_with_project_session: TestClient,
 ) -> None:
     """Test 404 is returned when changelog file does not exist."""
-    # Remove .fmu directory to simulate missing changelog
-    fmu_dir = session_tmp_path / ".fmu"
-    if fmu_dir.exists():
-        for item in fmu_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-
-    response = client_with_session.get(ROUTE)
+    with patch(
+        "fmu_settings_api.services.changelog.ChangelogService.get_changelog",
+        side_effect=FileNotFoundError("Changelog file not found"),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/changelog")
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Changelog file not found"}
 
 
 async def test_get_changelog_permission_denied(
-    client_with_session: TestClient,
-    session_tmp_path: Path,
-    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
 ) -> None:
     """Test 403 is returned when changelog cannot be read due to permissions."""
-    changelog_path = session_tmp_path / ".fmu"
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
 
-    with no_permissions(changelog_path):
-        response = client_with_session.get(ROUTE)
+    with patch(
+        "fmu_settings_api.services.changelog.ChangelogService.get_changelog",
+        side_effect=PermissionError("Permission denied accessing changelog."),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/changelog")
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert (
-        response.json()["detail"]
-        == "Permission denied while trying to read the changelog."
-    )
+    assert response.json() == {
+        "detail": "Permission denied accessing changelog at"
+        f"{session.project_fmu_directory.path}."
+    }
+
+
+async def test_get_changelog_validation_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 is returned when changelog validation fails."""
+    with patch(
+        "fmu_settings_api.services.changelog.ChangelogService.get_changelog",
+        side_effect=ValueError("Invalid changelog format or data."),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/changelog")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Invalid changelog format or data."}
 
 
 # POST project/ #
