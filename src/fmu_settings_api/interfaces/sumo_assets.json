@@ -1,0 +1,117 @@
+[
+    {
+        "name": "Drogon",
+        "code": "001",
+        "roleprefix": "DROGON"
+    },
+    {
+        "name": "Johan Sverdrup",
+        "code": "002",
+        "roleprefix": "JOHAN-SVERDRUP"
+    },
+    {
+        "name": "Breidablikk",
+        "code": "003",
+        "roleprefix": "BREIDABLIKK"
+    },
+    {
+        "name": "Smørbukk",
+        "code": "004",
+        "roleprefix": "SMORBUKK"
+    },
+    {
+        "name": "Heidrun",
+        "code": "005",
+        "roleprefix": "HEIDRUN"
+    },
+    {
+        "name": "Johan Castberg",
+        "code": "006",
+        "roleprefix": "JOHAN-CASTBERG"
+    },
+    {
+        "name": "Snorre",
+        "code": "007",
+        "roleprefix": "SNORRE"
+    },
+    {
+        "name": "Grosbeak",
+        "code": "008",
+        "roleprefix": "GROSBEAK"
+    },
+    {
+        "name": "Troll",
+        "code": "009",
+        "roleprefix": "TROLL"
+    },
+    {
+        "name": "Rosebank",
+        "code": "010",
+        "roleprefix": "ROSEBANK"
+    },
+    {
+        "name": "Wisting",
+        "code": "011",
+        "roleprefix": "WISTING"
+    },
+    {
+        "name": "Oseberg",
+        "code": "012",
+        "roleprefix": "OSEBERG"
+    },
+    {
+        "name": "DIG_CCS_SUB",
+        "code": "013",
+        "roleprefix": "DIG_CCS_SUB"
+    },
+    {
+        "name": "Tordis",
+        "code": "014",
+        "roleprefix": "TORDIS"
+    },
+    {
+        "name": "Bauge",
+        "code": "015",
+        "roleprefix": "BAUGE"
+    },
+    {
+        "name": "Grane",
+        "code": "016",
+        "roleprefix": "GRANE"
+    },
+    {
+        "name": "Martin Linge",
+        "code": "017",
+        "roleprefix": "MARTIN-LINGE"
+    },
+    {
+        "name": "Njord",
+        "code": "018",
+        "roleprefix": "NJORD"
+    },
+    {
+        "name": "Raia",
+        "code": "019",
+        "roleprefix": "RAIA"
+    },
+    {
+        "name": "Aasta Hansteen",
+        "code": "020",
+        "roleprefix": "AASTA-HANSTEEN"
+    },
+    {
+        "name": "Tyrihans",
+        "code": "021",
+        "roleprefix": "TYRIHANS"
+    },
+    {
+        "name": "Fram",
+        "code": "022",
+        "roleprefix": "FRAM"
+    },
+    {
+        "name": "Smørbukk Midt",
+        "code": "023",
+        "roleprefix": "SMORBUKK-MIDT"
+    }
+]

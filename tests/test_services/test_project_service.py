@@ -12,7 +12,7 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 
-from fmu_settings_api.models.project import CacheRetention
+from fmu_settings_api.models.project import CacheRetention, SumoAsset
 from fmu_settings_api.services.project import ProjectService
 
 
@@ -301,3 +301,19 @@ def test_update_rms_fields_preserves_other_fields(fmu_dir: ProjectFMUDirectory) 
     assert saved_config.zones[0].name == "Zone A"
     assert str(saved_config.path) == "/some/path"
     assert saved_config.version == "14.2.2"
+
+
+def test_project_service_get_sumo_assets(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Tests that sumo assets are returned as expected."""
+    asset = SumoAsset(name="TestAsset", code="001", roleprefix="TEST")
+    with patch(
+        "fmu_settings_api.interfaces.sumo_api.SumoApi.get_assets", return_value=[asset]
+    ) as class_init_mock:
+        service = ProjectService(fmu_dir)
+        sumo_assets = service.get_sumo_assets()
+        class_init_mock.assert_called_once()
+
+    assert len(sumo_assets) == 1
+    assert sumo_assets[0] == asset

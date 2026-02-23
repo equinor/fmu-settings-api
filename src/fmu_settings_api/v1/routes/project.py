@@ -1,5 +1,6 @@
 """Routes to add an FMU project to an existing session."""
 
+import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Final
@@ -42,6 +43,7 @@ from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
     LockStatus,
+    SumoAsset,
 )
 from fmu_settings_api.models.resource import CacheContent, CacheList
 from fmu_settings_api.models.rms import (
@@ -292,6 +294,22 @@ ChangelogResponses: Final[Responses] = {
     ),
 }
 
+SumoAssetsResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        "Sumo assets file not found",
+        [{"detail": "Sumo assets file not found: {error}"}],
+    ),
+    **inline_add_response(
+        422,
+        "Invalid file content in Sumo assets file",
+        [
+            {"detail": "Sumo assets file contains invalid assets: {errors}"},
+            {"detail": "Sumo assets file is not a valid JSON: {error}"},
+        ],
+    ),
+}
+
 
 @router.get(
     "/",
@@ -333,6 +351,38 @@ async def get_project(session_service: SessionServiceDep) -> FMUProject:
         ) from e
 
     return _create_opened_project_response(fmu_dir)
+
+
+@router.get(
+    "/sumo_assets",
+    response_model=list[SumoAsset],
+    summary="Returns a list of Sumo assets.",
+    description=dedent(
+        """
+        Returns a list of the assets that have been onboarded to
+        the Sumo platform.
+        """
+    ),
+    responses={**GetSessionResponses, **SumoAssetsResponses},
+)
+async def get_sumo_assets(project_service: ProjectServiceDep) -> list[SumoAsset]:
+    """Returns a list of the Sumo assets."""
+    try:
+        return project_service.get_sumo_assets()
+    except ValidationError as e:
+        errors = [error.get("msg", str(error)) for error in e.errors()]
+        raise HTTPException(
+            status_code=422,
+            detail=f"Sumo assets file contains invalid assets: {'; '.join(errors)}",
+        ) from e
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=422, detail=f"Sumo assets file is not a valid JSON: {str(e)}"
+        ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404, detail=f"Sumo assets file not found: {str(e)}"
+        ) from e
 
 
 @router.get(
