@@ -574,6 +574,42 @@ async def post_lock_acquire(session_service: ProjectSessionServiceDep) -> Messag
 
 
 @router.post(
+    "/lock_release",
+    response_model=Message,
+    summary="Attempts to release the project lock",
+    description=dedent(
+        """
+        Tries to release the project lock for the current session.
+        If the lock is not currently held, the route returns an informational message.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+    },
+)
+async def post_lock_release(session_service: ProjectSessionServiceDep) -> Message:
+    """Attempts to release the project lock and returns a status message."""
+    try:
+        lock_released = await session_service.release_project_lock()
+        if lock_released:
+            message = "Project lock released."
+        else:
+            lock_status = session_service.get_lock_status()
+            if lock_status.last_lock_release_error:
+                message = (
+                    f"Lock release attempted but an error occurred: "
+                    f"{lock_status.last_lock_release_error}"
+                )
+            else:
+                message = (
+                    "Lock was not released because the lock is not currently held."
+                )
+        return Message(message=message)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+
+
+@router.post(
     "/lock_refresh",
     response_model=Message,
     dependencies=[RefreshLockDep],

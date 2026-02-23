@@ -35,7 +35,7 @@ from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
-from fmu_settings_api.models.project import FMUProject
+from fmu_settings_api.models.project import FMUProject, LockStatus
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -2104,6 +2104,103 @@ async def test_post_lock_acquire_unexpected_error(
         response = client_with_project_session.post(f"{ROUTE}/lock_acquire")
 
     mock_try_acquire.assert_awaited_once()
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+# POST project/lock_release #
+
+
+async def test_post_lock_release_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock release route returns success when lock is released."""
+    with patch(
+        "fmu_settings_api.services.session.SessionService.release_project_lock",
+        AsyncMock(return_value=True),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"message": "Project lock released."}
+
+
+async def test_post_lock_release_when_not_held(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock release route when lock is not currently held."""
+    with (
+        patch(
+            "fmu_settings_api.services.session.SessionService.release_project_lock",
+            AsyncMock(return_value=False),
+        ),
+        patch(
+            "fmu_settings_api.services.session.SessionService.get_lock_status",
+            return_value=LockStatus(
+                is_lock_acquired=False,
+                lock_file_exists=False,
+                last_lock_release_error=None,
+            ),
+        ),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": "Lock was not released because the lock is not currently held."
+    }
+
+
+async def test_post_lock_release_records_release_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock release route reports tracked release errors."""
+    with (
+        patch(
+            "fmu_settings_api.services.session.SessionService.release_project_lock",
+            AsyncMock(return_value=False),
+        ),
+        patch(
+            "fmu_settings_api.services.session.SessionService.get_lock_status",
+            return_value=LockStatus(
+                is_lock_acquired=True,
+                lock_file_exists=True,
+                last_lock_release_error="Lock conflict",
+            ),
+        ),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": "Lock release attempted but an error occurred: Lock conflict"
+    }
+
+
+async def test_post_lock_release_session_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock release route returns 401 when session is missing."""
+    with patch(
+        "fmu_settings_api.services.session.SessionService.release_project_lock",
+        AsyncMock(side_effect=SessionNotFoundError("Session not found")),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Session not found"}
+
+
+async def test_post_lock_release_unexpected_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test lock release route returns 500 on unexpected errors."""
+    with patch(
+        "fmu_settings_api.services.session.SessionService.release_project_lock",
+        AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json() == {"detail": "An unexpected error occurred."}
 
