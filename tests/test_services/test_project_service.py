@@ -12,6 +12,7 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 
+from fmu_settings_api.models.project import CacheRetention
 from fmu_settings_api.services.project import ProjectService
 
 
@@ -29,6 +30,19 @@ def test_rms_project_path_returns_none(fmu_dir: ProjectFMUDirectory) -> None:
     service = ProjectService(fmu_dir)
 
     assert service.rms_project_path is None
+
+
+def test_update_cache_max_revisions_success(fmu_dir: ProjectFMUDirectory) -> None:
+    """Test saving cache max revisions to config."""
+    service = ProjectService(fmu_dir)
+    updated_value = fmu_dir.config.load().cache_max_revisions + 1
+
+    result = service.update_cache_max_revisions(
+        CacheRetention(cache_max_revisions=updated_value)
+    )
+
+    assert result is True
+    assert fmu_dir.config.load(force=True).cache_max_revisions == updated_value
 
 
 def test_update_rms_saves_path_and_version(fmu_dir: ProjectFMUDirectory) -> None:

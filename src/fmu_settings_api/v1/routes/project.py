@@ -38,7 +38,11 @@ from fmu_settings_api.deps.changelog import ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import FMUDirPath, FMUProject, Message
 from fmu_settings_api.models.common import Ok
-from fmu_settings_api.models.project import GlobalConfigPath, LockStatus
+from fmu_settings_api.models.project import (
+    CacheRetention,
+    GlobalConfigPath,
+    LockStatus,
+)
 from fmu_settings_api.models.resource import CacheContent, CacheList
 from fmu_settings_api.models.rms import (
     RmsProjectPath,
@@ -740,6 +744,34 @@ async def patch_access(project_service: ProjectServiceDep, access: Access) -> Me
     """Saves access data to the project .fmu directory."""
     project_service.update_access(access)
     return Message(message=f"Saved access data to {project_service.fmu_dir_path}")
+
+
+@router.patch(
+    "/cache_max_revisions",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves cache max revisions to the project .fmu directory",
+    description=dedent(
+        """
+        Saves the maximum number of cache revisions to keep per resource in the
+        project .fmu configuration.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+    },
+)
+async def patch_cache_max_revisions(
+    project_service: ProjectServiceDep,
+    cache_max_revisions: CacheRetention,
+) -> Message:
+    """Saves cache max revisions to the project .fmu directory."""
+    project_service.update_cache_max_revisions(cache_max_revisions)
+    return Message(
+        message=f"Saved cache max revisions to {project_service.fmu_dir_path}"
+    )
 
 
 @router.get(

@@ -14,7 +14,7 @@ from fmu.settings.models.project_config import (
 )
 
 from fmu_settings_api.models import FMUProject
-from fmu_settings_api.models.project import GlobalConfigPath
+from fmu_settings_api.models.project import CacheRetention, GlobalConfigPath
 
 from .rms import RmsService
 
@@ -93,6 +93,11 @@ class ProjectService:
     def update_access(self, access: Access) -> bool:
         """Save access data to the project FMU directory."""
         self._fmu_dir.set_config_value("access", access.model_dump())
+        return True
+
+    def update_cache_max_revisions(self, cache_retention: CacheRetention) -> bool:
+        """Save cache max revisions to the project FMU directory."""
+        self._fmu_dir.cache_max_revisions = cache_retention.cache_max_revisions
         return True
 
     def get_rms_projects(self) -> list[Path]:
