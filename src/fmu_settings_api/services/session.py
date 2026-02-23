@@ -21,6 +21,7 @@ from fmu_settings_api.session import (
     add_access_token_to_session as add_token_to_session_manager,
     add_fmu_project_to_session,
     add_rms_project_to_session,
+    release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
     try_acquire_project_lock,
@@ -91,6 +92,13 @@ class SessionService:
         lock = updated_session.project_fmu_directory._lock
 
         return lock.is_acquired()
+
+    async def release_project_lock(self) -> bool:
+        """Attempt to release the project lock for this session."""
+        updated_session = await release_project_lock(self._session.id)
+        lock = updated_session.project_fmu_directory._lock
+
+        return not lock.is_acquired()
 
     def get_lock_status(self) -> LockStatus:
         """Get the lock status including session-specific error information."""

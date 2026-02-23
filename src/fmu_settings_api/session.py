@@ -305,6 +305,33 @@ async def try_acquire_project_lock(session_id: str) -> ProjectSession:
     return session
 
 
+async def release_project_lock(session_id: str) -> ProjectSession:
+    """Releases the project lock for a session if it is currently held.
+
+    Returns:
+        The ProjectSession with updated lock error state
+
+    Raises:
+        SessionNotFoundError: If no valid session or project is found
+    """
+    session = await session_manager.get_session(session_id)
+
+    if not isinstance(session, ProjectSession):
+        raise SessionNotFoundError("No FMU project directory open")
+
+    lock = session.project_fmu_directory._lock
+
+    try:
+        if lock.is_acquired():
+            lock.release()
+            session.lock_errors.release = None
+    except Exception as e:
+        session.lock_errors.release = str(e)
+
+    await session_manager._store_session(session_id, session)
+    return session
+
+
 async def refresh_project_lock(session_id: str) -> ProjectSession:
     """Refreshes the project lock if it is currently held by this session.
 

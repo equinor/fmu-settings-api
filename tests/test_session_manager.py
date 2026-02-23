@@ -23,6 +23,7 @@ from fmu_settings_api.session import (
     add_rms_project_to_session,
     create_fmu_session,
     destroy_fmu_session,
+    release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
     session_manager,
@@ -248,6 +249,101 @@ async def test_try_acquire_project_lock_handles_is_acquired_error(
     assert mock_lock.is_acquired.call_count == 1  # noqa: PLR2004
     mock_lock.refresh.assert_not_called()
     mock_lock.acquire.assert_not_called()
+
+
+async def test_release_project_lock_releases_when_held(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that release_project_lock releases the lock when held."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_release_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.release = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await release_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.release.assert_called_once_with()
+    assert result.lock_errors.release is None
+
+
+async def test_release_project_lock_requires_project_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that release_project_lock requires a project-scoped session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    with (
+        patch("fmu_settings_api.session.session_manager", session_manager),
+        pytest.raises(SessionNotFoundError, match="No FMU project directory open"),
+    ):
+        await release_project_lock(session_id)
+
+
+async def test_release_project_lock_records_release_error(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that lock release failures are captured by release_project_lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_release_error_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.release = Mock(side_effect=LockError("Release failed"))
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await release_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.release.assert_called_once_with()
+    assert result.lock_errors.release == "Release failed"
+
+
+async def test_release_project_lock_skips_when_not_held(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that release_project_lock does not release when lock is not held."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await session_manager.create_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_release_not_held_project"
+    project_path.mkdir()
+    project_fmu_dir = init_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.release = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await release_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.release.assert_not_called()
+    assert result.lock_errors.release is None
 
 
 async def test_destroy_fmu_session(
