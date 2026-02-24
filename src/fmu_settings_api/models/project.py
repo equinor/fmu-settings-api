@@ -33,6 +33,13 @@ class GlobalConfigPath(BaseResponseModel):
     """Relative path in the project to a global config file."""
 
 
+class CacheRetention(BaseResponseModel):
+    """Cache retention setting for project resources."""
+
+    cache_max_revisions: int = Field(default=5, ge=5)
+    """Maximum number of cache revisions to keep per resource."""
+
+
 class LockStatus(BaseResponseModel):
     """Information about the project lock status."""
 

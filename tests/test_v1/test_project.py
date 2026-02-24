@@ -1513,6 +1513,121 @@ async def test_patch_access_general_exception(
         assert response.json() == {"detail": "An unexpected error occurred."}
 
 
+# PATCH project/cache_max_revisions #
+
+
+async def test_patch_cache_max_revisions_project(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test saving cache max revisions to project .fmu."""
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    updated_value = get_fmu_project.config.cache_max_revisions + 1
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/cache_max_revisions",
+        json={"cache_max_revisions": updated_value},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert (
+        response.json()["message"]
+        == f"Saved cache max revisions to {get_fmu_project.path / '.fmu'}"
+    )
+
+    get_response = client_with_project_session.get(ROUTE)
+    get_fmu_project = FMUProject.model_validate(get_response.json())
+    assert get_fmu_project.config.cache_max_revisions == updated_value
+
+
+async def test_patch_cache_max_revisions_requires_project_session(
+    client_with_session: TestClient,
+) -> None:
+    """Test saving cache max revisions to .fmu requires an active project."""
+    response = client_with_session.patch(
+        f"{ROUTE}/cache_max_revisions",
+        json={"cache_max_revisions": 6},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+
+
+async def test_patch_cache_max_revisions_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions."""
+    bad_project_dir = session_tmp_path / ".fmu"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/cache_max_revisions",
+            json={"cache_max_revisions": 6},
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
+    }
+
+
+async def test_patch_cache_max_revisions_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Test that if .fmu/ is deleted during a session an error is raised."""
+    project_dir = session_tmp_path / ".fmu"
+
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/cache_max_revisions",
+        json={"cache_max_revisions": 6},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
+
+
+async def test_patch_cache_max_revisions_general_exception(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_cache_max_revisions."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch.object(
+        session.project_fmu_directory,
+        "set_config_value",
+        side_effect=ValueError("Invalid cache max revisions"),
+    ):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/cache_max_revisions",
+            json={"cache_max_revisions": 6},
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+async def test_patch_cache_max_revisions_invalid_value(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when cache_max_revisions is below minimum value."""
+    response = client_with_project_session.patch(
+        f"{ROUTE}/cache_max_revisions",
+        json={"cache_max_revisions": 4},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert any(
+        error["loc"][-1] == "cache_max_revisions" for error in response.json()["detail"]
+    )
+
+
 async def test_create_opened_project_response_direct_exception() -> None:
     """Test the _create_opened_project_response function directly with invalid input."""
     # Create a mock that will cause an exception in the function
