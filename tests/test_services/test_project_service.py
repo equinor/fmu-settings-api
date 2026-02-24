@@ -37,11 +37,10 @@ def test_update_cache_max_revisions_success(fmu_dir: ProjectFMUDirectory) -> Non
     service = ProjectService(fmu_dir)
     updated_value = fmu_dir.config.load().cache_max_revisions + 1
 
-    result = service.update_cache_max_revisions(
+    service.update_cache_max_revisions(
         CacheRetention(cache_max_revisions=updated_value)
     )
 
-    assert result is True
     assert fmu_dir.config.load(force=True).cache_max_revisions == updated_value
 
 
@@ -167,9 +166,8 @@ def test_update_rms_coordinate_system_success(fmu_dir: ProjectFMUDirectory) -> N
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
 
     coord_system = RmsCoordinateSystem(name="westeros")
-    result = service.update_rms_coordinate_system(coord_system)
+    service.update_rms_coordinate_system(coord_system)
 
-    assert result is True
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.coordinate_system is not None
@@ -210,9 +208,8 @@ def test_update_rms_stratigraphic_framework_success(
         RmsHorizon(name="Top B", type="interpreted"),
         RmsHorizon(name="Base B", type="interpreted"),
     ]
-    result = service.update_rms_stratigraphic_framework(zones, horizons)
+    service.update_rms_stratigraphic_framework(zones, horizons)
 
-    assert result is True
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.zones is not None
@@ -255,9 +252,8 @@ def test_update_rms_wells_success(fmu_dir: ProjectFMUDirectory) -> None:
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
 
     wells = [RmsWell(name="W1"), RmsWell(name="W2")]
-    result = service.update_rms_wells(wells)
+    service.update_rms_wells(wells)
 
-    assert result is True
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
     assert saved_config.wells is not None

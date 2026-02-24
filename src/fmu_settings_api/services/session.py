@@ -81,10 +81,9 @@ class SessionService:
         await add_fmu_project_to_session(self._session.id, fmu_dir)
         return fmu_dir
 
-    async def close_project(self) -> bool:
+    async def close_project(self) -> None:
         """Remove (close) a project .fmu directory from the session."""
         await remove_fmu_project_from_session(self._session.id)
-        return True
 
     async def acquire_project_lock(self) -> bool:
         """Attempt to acquire the project lock for editing."""
