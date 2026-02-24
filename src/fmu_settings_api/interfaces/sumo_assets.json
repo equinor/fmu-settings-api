@@ -113,5 +113,15 @@
         "name": "Smørbukk Midt",
         "code": "023",
         "roleprefix": "SMORBUKK-MIDT"
+    },
+    {
+        "name": "Bacalhau",
+        "code": "024",
+        "roleprefix": "BACALHAU"
+    },
+    {
+        "name": "Borg",
+        "code": "025",
+        "roleprefix": "BORG"
     }
 ]
