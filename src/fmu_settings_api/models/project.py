@@ -66,3 +66,16 @@ class LockStatus(BaseResponseModel):
 
     last_lock_refresh_error: str | None = Field(default=None)
     """Error message from the last attempt to refresh the lock."""
+
+
+class SumoAsset(BaseResponseModel):
+    """A valid asset in Sumo."""
+
+    name: str
+    """Name of the asset in Sumo."""
+
+    code: str
+    """Code of the asset in Sumo."""
+
+    roleprefix: str
+    """Roleprefix of the asset in Sumo."""

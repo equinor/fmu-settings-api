@@ -35,7 +35,7 @@ from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
-from fmu_settings_api.models.project import FMUProject, LockStatus
+from fmu_settings_api.models.project import FMUProject, LockStatus, SumoAsset
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -389,6 +389,68 @@ async def test_get_changelog_validation_error(
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json() == {"detail": "Invalid changelog format or data."}
+
+
+# GET project/sumo_assets #
+
+
+async def test_get_sumo_assets_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 200 and Sumo assets are returned when assets are valid."""
+    response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
+
+    assert response.status_code == status.HTTP_200_OK
+    for asset in response.json():
+        assert SumoAsset.model_validate(asset)
+
+
+async def test_get_sumo_assets_file_invalid_assets(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 422 is returned when Sumo assets file contains invalid assets."""
+
+    def trigger_validation_error() -> SumoAsset:
+        return SumoAsset.model_validate({})
+
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
+        side_effect=trigger_validation_error,
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Sumo assets file contains invalid assets:" in str(response.json())
+
+
+async def test_get_sumo_assets_invalid_json(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 422 is returned when Sumo assets file is not a valid JSON."""
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
+        side_effect=json.JSONDecodeError("Some error message.", "", 0),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Sumo assets file is not a valid JSON:" in str(response.json())
+
+
+async def test_get_sumo_assets_file_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 404 is returned when Sumo assets file is not found."""
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
+        side_effect=FileNotFoundError("Some error message."),
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": "Sumo assets file not found: Some error message."
+    }
 
 
 # POST project/ #

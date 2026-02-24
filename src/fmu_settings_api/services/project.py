@@ -13,8 +13,9 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 
+from fmu_settings_api.interfaces import SumoApi
 from fmu_settings_api.models import FMUProject
-from fmu_settings_api.models.project import CacheRetention, GlobalConfigPath
+from fmu_settings_api.models.project import CacheRetention, GlobalConfigPath, SumoAsset
 
 from .rms import RmsService
 
@@ -156,3 +157,7 @@ class ProjectService:
         self._fmu_dir.set_config_value(
             "rms.wells", [well.model_dump() for well in wells]
         )
+
+    def get_sumo_assets(self) -> list[SumoAsset]:
+        """Get the Sumo assets."""
+        return SumoApi().get_assets()
