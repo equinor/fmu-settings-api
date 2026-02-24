@@ -2290,42 +2290,47 @@ async def test_post_lock_acquire_unexpected_error(
 
 async def test_post_lock_release_success(
     client_with_project_session: TestClient,
+    session_id: str,
 ) -> None:
     """Test lock release route returns success when lock is released."""
-    with patch(
-        "fmu_settings_api.services.session.SessionService.release_project_lock",
-        AsyncMock(return_value=True),
-    ):
-        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    assert session.project_fmu_directory._lock.is_acquired() is True
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_release")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"message": "Project lock released."}
+    updated_session = await session_manager.get_session(session_id)
+    assert isinstance(updated_session, ProjectSession)
+    assert updated_session.project_fmu_directory._lock.is_acquired() is False
 
 
 async def test_post_lock_release_when_not_held(
     client_with_project_session: TestClient,
+    session_id: str,
 ) -> None:
     """Test lock release route when lock is not currently held."""
-    with (
-        patch(
-            "fmu_settings_api.services.session.SessionService.release_project_lock",
-            AsyncMock(return_value=False),
-        ),
-        patch(
-            "fmu_settings_api.services.session.SessionService.get_lock_status",
-            return_value=LockStatus(
-                is_lock_acquired=False,
-                lock_file_exists=False,
-                last_lock_release_error=None,
-            ),
-        ),
-    ):
-        response = client_with_project_session.post(f"{ROUTE}/lock_release")
+    from fmu_settings_api.session import session_manager  # noqa: PLC0415
+
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+    session.project_fmu_directory._lock.release()
+    session.lock_errors.release = None
+    assert session.project_fmu_directory._lock.is_acquired() is False
+
+    response = client_with_project_session.post(f"{ROUTE}/lock_release")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "message": "Lock was not released because the lock is not currently held."
     }
+
+    updated_session = await session_manager.get_session(session_id)
+    assert isinstance(updated_session, ProjectSession)
+    assert updated_session.project_fmu_directory._lock.is_acquired() is False
 
 
 async def test_post_lock_release_records_release_error(

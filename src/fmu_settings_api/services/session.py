@@ -94,10 +94,13 @@ class SessionService:
 
     async def release_project_lock(self) -> bool:
         """Attempt to release the project lock for this session."""
+        project_session = cast("ProjectSession", self._session)
+        was_acquired = project_session.project_fmu_directory._lock.is_acquired()
+
         updated_session = await release_project_lock(self._session.id)
         lock = updated_session.project_fmu_directory._lock
 
-        return not lock.is_acquired()
+        return was_acquired and not lock.is_acquired()
 
     def get_lock_status(self) -> LockStatus:
         """Get the lock status including session-specific error information."""
