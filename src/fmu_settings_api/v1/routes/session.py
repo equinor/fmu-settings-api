@@ -34,6 +34,24 @@ from fmu_settings_api.v1.responses import (
 
 router = APIRouter(prefix="/session", tags=["session"])
 
+SessionRestoreResponses = {
+    **inline_add_response(
+        403,
+        "Permission denied while restoring a .fmu directory",
+        [{"detail": "Permission denied recovering .fmu resources"}],
+    ),
+    **inline_add_response(
+        409,
+        "A .fmu path exists but is not a directory",
+        [{"detail": ".fmu exists at {path} but is not a directory"}],
+    ),
+    **inline_add_response(
+        423,
+        "Project is locked by another process and cannot be restored",
+        [{"detail": "Project lock conflict: {error_message}"}],
+    ),
+}
+
 
 @router.post(
     "/",
@@ -181,3 +199,38 @@ async def get_session(
 ) -> SessionResponse:
     """Returns the current session in a serialisable format."""
     return session_service.get_session_response()
+
+
+@router.post(
+    "/restore",
+    response_model=Message,
+    summary="Restores missing .fmu resources for the current session",
+    description=dedent(
+        """
+        Attempts to recover missing .fmu content from in-memory state.
+
+        For all sessions this restores the user .fmu directory. If a project is
+        attached to the session, the project .fmu directory is restored as well.
+        """
+    ),
+    responses={**GetSessionResponses, **SessionRestoreResponses},
+)
+async def post_restore(session_service: SessionServiceDep) -> Message:
+    """Attempt recovery of missing .fmu directories."""
+    try:
+        restored_paths = session_service.restore_fmu_directories()
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except PermissionError as e:
+        if "Cannot write to .fmu directory because it is locked by" in str(e):
+            raise HTTPException(
+                status_code=423,
+                detail=f"Project lock conflict: {e}",
+            ) from e
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied recovering .fmu resources",
+        ) from e
+
+    restored_paths_text = ", ".join(str(path) for path in restored_paths)
+    return Message(message=f"Restored .fmu resources at {restored_paths_text}")

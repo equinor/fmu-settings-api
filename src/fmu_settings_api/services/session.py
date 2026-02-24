@@ -50,6 +50,19 @@ class SessionService:
             last_accessed=self._session.last_accessed,
         )
 
+    def restore_fmu_directories(self) -> list[Path]:
+        """Restore missing .fmu resources for the current session."""
+        restored_paths = []
+
+        self._session.user_fmu_directory.restore()
+        restored_paths.append(self._session.user_fmu_directory.path)
+
+        if isinstance(self._session, ProjectSession):
+            self._session.project_fmu_directory.restore()
+            restored_paths.append(self._session.project_fmu_directory.path)
+
+        return restored_paths
+
     async def add_access_token(self, access_token: AccessToken) -> str:
         """Add a known access token to the session."""
         await add_token_to_session_manager(self._session.id, access_token)
