@@ -3,7 +3,7 @@
 import contextlib
 from unittest.mock import patch
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, HTTPException, status
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
 
@@ -161,6 +161,38 @@ def test_logging_middleware_captures_status_code() -> None:
         ]
         assert len(request_completed_call) > 0
         assert request_completed_call[0][1]["status_code"] == status.HTTP_201_CREATED
+
+
+def test_logging_middleware_skips_request_completed_for_http_errors() -> None:
+    """Test middleware only logs request_completed for responses with status < 400."""
+    app = FastAPI()
+    app.add_middleware(LoggingMiddleware)
+
+    @app.get("/test")
+    async def test_route() -> None:
+        raise HTTPException(status_code=422, detail="Invalid configuration")
+
+    with patch("fmu_settings_api.middleware.logging.logger") as mock_logger:
+        with TestClient(app) as client:
+            response = client.get("/test")
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+        completed_calls = [
+            call
+            for call in mock_logger.info.call_args_list
+            if call[0][0] == "request_completed"
+        ]
+        assert len(completed_calls) == 0
+
+        # HTTPException handling is owned by app-level exception handlers.
+        # Middleware should not emit request_failed here, to avoid duplicate logs.
+        failed_calls = [
+            call
+            for call in mock_logger.warning.call_args_list
+            if call[0][0] == "request_failed"
+        ]
+        assert len(failed_calls) == 0
 
 
 def test_logging_middleware_logs_error_details() -> None:

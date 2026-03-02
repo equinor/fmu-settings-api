@@ -2,17 +2,27 @@
 
 import asyncio
 import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from fmu.settings._fmu_dir import UserFMUDirectory
 from fmu.settings._init import init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from .config import HttpHeader, settings
 from .logging import get_logger, setup_logging
@@ -28,6 +38,56 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 
 
 logger = get_logger(__name__)
+
+
+async def logging_http_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> Response:
+    """Log a structured ``request_failed`` event for HTTP exceptions, then delegate."""
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
+
+    started_at = getattr(request.state, "request_started_at", None)
+    logger.warning(
+        "request_failed",
+        method=request.method,
+        path=request.url.path,
+        status_code=exc.status_code,
+        error=exc.detail,
+        error_type=type(exc).__name__,
+        duration_ms=(
+            round((time.perf_counter() - started_at) * 1000, 2)
+            if started_at is not None
+            else None
+        ),
+    )
+    return await http_exception_handler(request, exc)
+
+
+async def logging_request_validation_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> Response:
+    """Log ``request_failed`` for validation errors, then delegate."""
+    if not isinstance(exc, RequestValidationError):
+        raise exc
+
+    started_at = getattr(request.state, "request_started_at", None)
+    logger.warning(
+        "request_failed",
+        method=request.method,
+        path=request.url.path,
+        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+        error=exc.errors(),
+        error_type=type(exc).__name__,
+        duration_ms=(
+            round((time.perf_counter() - started_at) * 1000, 2)
+            if started_at is not None
+            else None
+        ),
+    )
+    return await request_validation_exception_handler(request, exc)
 
 
 @asynccontextmanager
@@ -67,6 +127,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(LoggingMiddleware)
+app.add_exception_handler(StarletteHTTPException, logging_http_exception_handler)
+app.add_exception_handler(
+    RequestValidationError,
+    logging_request_validation_exception_handler,
+)
 app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
 

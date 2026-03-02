@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from starlette.status import HTTP_400_BAD_REQUEST
 
 from fmu_settings_api.logging import get_logger
 
@@ -29,7 +29,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         """Log request and response details."""
-        start_time = time.time()
+        start_time = time.perf_counter()
+        request.state.request_started_at = start_time
 
         logger.info(
             "request_started",
@@ -41,30 +42,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-            duration = time.time() - start_time
+            duration = time.perf_counter() - start_time
 
-            logger.info(
-                "request_completed",
-                method=request.method,
-                path=request.url.path,
-                status_code=response.status_code,
-                duration_ms=round(duration * 1000, 2),
-            )
+            if response.status_code < HTTP_400_BAD_REQUEST:
+                logger.info(
+                    "request_completed",
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=round(duration * 1000, 2),
+                )
             return response
-        except HTTPException as e:
-            duration = time.time() - start_time
-            logger.warning(
-                "request_failed",
-                method=request.method,
-                path=request.url.path,
-                status_code=e.status_code,
-                error=e.detail,
-                error_type=type(e).__name__,
-                duration_ms=round(duration * 1000, 2),
-            )
-            raise
         except Exception as e:
-            duration = time.time() - start_time
+            duration = time.perf_counter() - start_time
             logger.exception(
                 "request_failed",
                 method=request.method,
