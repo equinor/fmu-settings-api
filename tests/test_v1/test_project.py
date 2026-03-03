@@ -189,7 +189,7 @@ async def test_get_project_directory_config_missing(
 async def test_get_project_directory_corrupt(
     client_with_session: TestClient, session_tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Test 500 returns when project .fmu has invalid config."""
+    """Test 422 returns when project .fmu has invalid config."""
     monkeypatch.chdir(session_tmp_path)
 
     fmu_dir = init_fmu_directory(session_tmp_path)
@@ -197,9 +197,9 @@ async def test_get_project_directory_corrupt(
         f.write("incorrect")
 
     response = client_with_session.get(ROUTE)
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     detail = response.json()["detail"]
-    assert detail == "An unexpected error occurred."
+    assert "Invalid JSON in resource file" in detail
 
 
 async def test_get_project_directory_exists(
@@ -517,15 +517,15 @@ async def test_post_project_directory_config_missing(
 async def test_post_project_directory_corrupt(
     client_with_session: TestClient, session_tmp_path: Path
 ) -> None:
-    """Test 500 returns when project .fmu has invalid config."""
+    """Test 422 returns when project .fmu has invalid config."""
     fmu_dir = init_fmu_directory(session_tmp_path)
     with open(fmu_dir.config.path, "w") as f:
         f.write("incorrect")
 
     response = client_with_session.post(ROUTE, json={"path": str(session_tmp_path)})
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     detail = response.json()["detail"]
-    assert detail == "An unexpected error occurred."
+    assert "Invalid JSON in resource file" in detail
 
 
 async def test_post_project_directory_not_exists(
