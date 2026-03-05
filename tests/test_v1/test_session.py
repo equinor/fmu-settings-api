@@ -582,7 +582,7 @@ async def test_post_restore_session_restores_user_fmu_directory(
 
     response = client_with_session.post(f"{ROUTE}/restore")
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert response.json()["message"] == (f"Restored .fmu resources at {user_fmu_path}")
+    assert response.json()["message"] == "Restored .fmu resources"
     assert user_fmu_path.exists()
     assert session.user_fmu_directory.config.path.exists()
 
@@ -608,9 +608,7 @@ async def test_post_restore_session_restores_project_fmu_directory(
 
     response = client_with_project_session.post(f"{ROUTE}/restore")
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert response.json()["message"] == (
-        f"Restored .fmu resources at {user_fmu_path}, {project_fmu_path}"
-    )
+    assert response.json()["message"] == "Restored .fmu resources"
     assert project_fmu_path.exists()
     assert session.project_fmu_directory.config.path.exists()
 

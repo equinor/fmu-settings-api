@@ -722,10 +722,7 @@ async def test_delete_project_session_returns_to_user_session(
 
     response = client_with_project_session.delete(ROUTE)
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert (
-        response.json()["message"]
-        == f"FMU directory {session.project_fmu_directory.path} closed successfully"
-    )
+    assert response.json()["message"] == "Project closed successfully"
     deleted_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert deleted_session_id is None
 
@@ -922,10 +919,7 @@ async def test_patch_masterdata_project(
         f"{ROUTE}/masterdata", json=smda_masterdata
     )
     assert response.status_code == status.HTTP_200_OK
-    assert (
-        response.json()["message"]
-        == f"Saved SMDA masterdata to {get_fmu_project.path / '.fmu'}"
-    )
+    assert response.json()["message"] == "Saved SMDA masterdata"
     # Refetch the project to see that masterdata is set
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
@@ -1393,10 +1387,7 @@ async def test_patch_model_project(
     # Store model to project
     response = client_with_project_session.patch(f"{ROUTE}/model", json=model_data)
     assert response.status_code == status.HTTP_200_OK
-    assert (
-        response.json()["message"]
-        == f"Saved model data to {get_fmu_project.path / '.fmu'}"
-    )
+    assert response.json()["message"] == "Saved model data"
     # Refetch the project to see that model is set
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
@@ -1490,10 +1481,7 @@ async def test_patch_access_project(
     # Store access to project
     response = client_with_project_session.patch(f"{ROUTE}/access", json=access_data)
     assert response.status_code == status.HTTP_200_OK
-    assert (
-        response.json()["message"]
-        == f"Saved access data to {get_fmu_project.path / '.fmu'}"
-    )
+    assert response.json()["message"] == "Saved access data"
     # Refetch the project to see that access is set
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
@@ -1591,10 +1579,7 @@ async def test_patch_cache_max_revisions_project(
         json={"cache_max_revisions": updated_value},
     )
     assert response.status_code == status.HTTP_200_OK
-    assert (
-        response.json()["message"]
-        == f"Saved cache max revisions to {get_fmu_project.path / '.fmu'}"
-    )
+    assert response.json()["message"] == "Saved cache max revisions"
 
     get_response = client_with_project_session.get(ROUTE)
     get_fmu_project = FMUProject.model_validate(get_response.json())
@@ -2710,10 +2695,7 @@ async def test_patch_rms_success(
             json={"path": str(rms_path)},
         )
     assert response.status_code == status.HTTP_200_OK
-    expected_message = (
-        f"Saved RMS project path with RMS version 14.2.2 "
-        f"to {get_fmu_project.path / '.fmu'}"
-    )
+    expected_message = "Saved RMS project path with RMS version 14.2.2"
     assert response.json()["message"] == expected_message
 
     get_response = client_with_project_session.get(ROUTE)

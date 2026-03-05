@@ -218,7 +218,7 @@ async def get_session(
 async def post_restore(session_service: SessionServiceDep) -> Message:
     """Attempt recovery of missing .fmu directories."""
     try:
-        restored_paths = session_service.restore_fmu_directories()
+        session_service.restore_fmu_directories()
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except PermissionError as e:
@@ -232,5 +232,4 @@ async def post_restore(session_service: SessionServiceDep) -> Message:
             detail="Permission denied recovering .fmu resources",
         ) from e
 
-    restored_paths_text = ", ".join(str(path) for path in restored_paths)
-    return Message(message=f"Restored .fmu resources at {restored_paths_text}")
+    return Message(message="Restored .fmu resources")

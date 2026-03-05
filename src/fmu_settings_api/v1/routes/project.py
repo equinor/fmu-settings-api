@@ -589,9 +589,7 @@ async def delete_project_session(
     """Deletes a project .fmu session if it exists."""
     try:
         await session_service.close_project()
-        return Message(
-            message=f"FMU directory {session_service.fmu_dir_path} closed successfully"
-        )
+        return Message(message="Project closed successfully")
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
 
@@ -745,7 +743,7 @@ async def patch_masterdata(
 ) -> Message:
     """Saves SMDA masterdata to the project .fmu directory."""
     project_service.update_masterdata(smda_masterdata)
-    return Message(message=f"Saved SMDA masterdata to {project_service.fmu_dir_path}")
+    return Message(message="Saved SMDA masterdata")
 
 
 @router.patch(
@@ -769,7 +767,7 @@ async def patch_masterdata(
 async def patch_model(project_service: ProjectServiceDep, model: Model) -> Message:
     """Saves model data to the project .fmu directory."""
     project_service.update_model(model)
-    return Message(message=f"Saved model data to {project_service.fmu_dir_path}")
+    return Message(message="Saved model data")
 
 
 @router.patch(
@@ -793,7 +791,7 @@ async def patch_model(project_service: ProjectServiceDep, model: Model) -> Messa
 async def patch_access(project_service: ProjectServiceDep, access: Access) -> Message:
     """Saves access data to the project .fmu directory."""
     project_service.update_access(access)
-    return Message(message=f"Saved access data to {project_service.fmu_dir_path}")
+    return Message(message="Saved access data")
 
 
 @router.patch(
@@ -819,9 +817,7 @@ async def patch_cache_max_revisions(
 ) -> Message:
     """Saves cache max revisions to the project .fmu directory."""
     project_service.update_cache_max_revisions(cache_max_revisions)
-    return Message(
-        message=f"Saved cache max revisions to {project_service.fmu_dir_path}"
-    )
+    return Message(message="Saved cache max revisions")
 
 
 @router.get(
@@ -887,10 +883,7 @@ async def patch_rms(
     """Saves the RMS project path and version in the project .fmu directory."""
     try:
         rms_version = project_service.update_rms(rms_project_path.path)
-        return Message(
-            message=f"Saved RMS project path with RMS version {rms_version} "
-            f"to {project_service.fmu_dir_path}"
-        )
+        return Message(message=f"Saved RMS project path with RMS version {rms_version}")
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RmsVersionError as e:
@@ -923,9 +916,7 @@ async def patch_rms_coordinate_system(
     """Saves the RMS coordinate system in the project .fmu directory."""
     try:
         project_service.update_rms_coordinate_system(coordinate_system)
-        return Message(
-            message=f"Saved RMS coordinate system to {project_service.fmu_dir_path}"
-        )
+        return Message(message="Saved RMS coordinate system")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
@@ -960,11 +951,7 @@ async def patch_rms_stratigraphic_framework(
         project_service.update_rms_stratigraphic_framework(
             stratigraphic_framework.zones, stratigraphic_framework.horizons
         )
-        return Message(
-            message=(
-                f"Saved RMS stratigraphic framework to {project_service.fmu_dir_path}"
-            )
-        )
+        return Message(message="Saved RMS stratigraphic framework")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
@@ -995,7 +982,7 @@ async def patch_rms_wells(
     """Saves the RMS wells in the project .fmu directory."""
     try:
         project_service.update_rms_wells(wells)
-        return Message(message=f"Saved RMS wells to {project_service.fmu_dir_path}")
+        return Message(message="Saved RMS wells")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
@@ -1253,7 +1240,7 @@ async def put_mappings(
         return Message(
             message=(
                 f"Saved {mapping_type.value} mappings from {source_system.value} to "
-                f"{target_system.value} to {mappings_service.fmu_dir_path}"
+                f"{target_system.value}"
             )
         )
     except FileNotFoundError as e:

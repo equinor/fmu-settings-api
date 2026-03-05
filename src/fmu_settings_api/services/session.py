@@ -35,12 +35,6 @@ class SessionService:
         """Initialize the service with a session."""
         self._session = session
 
-    @property
-    def fmu_dir_path(self) -> Path:
-        """Returns the path to the attached project .fmu directory."""
-        project_session = cast("ProjectSession", self._session)
-        return project_session.project_fmu_directory.path
-
     def get_session_response(self) -> SessionResponse:
         """Get the session data in a serializable format."""
         return SessionResponse(
@@ -50,18 +44,11 @@ class SessionService:
             last_accessed=self._session.last_accessed,
         )
 
-    def restore_fmu_directories(self) -> list[Path]:
+    def restore_fmu_directories(self) -> None:
         """Restore missing .fmu resources for the current session."""
-        restored_paths = []
-
         self._session.user_fmu_directory.restore()
-        restored_paths.append(self._session.user_fmu_directory.path)
-
         if isinstance(self._session, ProjectSession):
             self._session.project_fmu_directory.restore()
-            restored_paths.append(self._session.project_fmu_directory.path)
-
-        return restored_paths
 
     async def add_access_token(self, access_token: AccessToken) -> str:
         """Add a known access token to the session."""
