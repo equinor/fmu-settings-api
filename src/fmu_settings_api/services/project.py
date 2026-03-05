@@ -36,11 +36,6 @@ class ProjectService:
         )
 
     @property
-    def fmu_dir_path(self) -> Path:
-        """Returns the path to the .fmu directory."""
-        return self._fmu_dir.path
-
-    @property
     def config_path(self) -> Path:
         """Returns the path to the project config file."""
         return self._fmu_dir.config.path
