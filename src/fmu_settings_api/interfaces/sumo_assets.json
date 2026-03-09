@@ -133,5 +133,10 @@
         "name": "Gudrun",
         "code": "027",
         "roleprefix": "GUDRUN"
+    },
+    {
+        "name": "Gullfaks Satellites",
+        "code": "028",
+        "roleprefix": "GULLFAKS-SATELLITES"
     }
 ]
