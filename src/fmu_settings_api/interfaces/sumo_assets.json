@@ -128,5 +128,10 @@
         "name": "Linnorm",
         "code": "026",
         "roleprefix": "LINNORM"
+    },
+    {
+        "name": "Gudrun",
+        "code": "027",
+        "roleprefix": "GUDRUN"
     }
 ]
