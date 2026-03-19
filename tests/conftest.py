@@ -24,9 +24,13 @@ from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
-from fmu_settings_api.deps import get_session
 from fmu_settings_api.models.smda import StratigraphicUnit
-from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
+from fmu_settings_api.session import (
+    SessionManager,
+    add_fmu_project_to_session,
+    create_fmu_session,
+    get_fmu_session,
+)
 
 
 @pytest.fixture
@@ -213,9 +217,7 @@ def session_manager() -> Generator[SessionManager]:
     """Mocks the session manager and returns its replacement."""
     session_manager = SessionManager()
     with (
-        patch("fmu_settings_api.deps.session.session_manager", session_manager),
         patch("fmu_settings_api.session.session_manager", session_manager),
-        patch("fmu_settings_api.v1.routes.session.session_manager", session_manager),
     ):
         yield session_manager
 
@@ -226,7 +228,7 @@ async def session_id(
 ) -> str:
     """Mocks a valid user .fmu session."""
     user_fmu_dir = init_user_fmu_directory()
-    return await session_manager.create_session(user_fmu_dir)
+    return await create_fmu_session(user_fmu_dir)
 
 
 @pytest.fixture
@@ -240,7 +242,7 @@ async def client_with_session(session_id: str) -> AsyncGenerator[TestClient]:
 @pytest.fixture
 async def client_with_project_session(session_id: str) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
-    session = await get_session(session_id)
+    session = await get_fmu_session(session_id)
 
     path = session.user_fmu_directory.path.parent.parent  # tmp_path
     fmu_dir = init_fmu_directory(path)
@@ -254,7 +256,7 @@ async def client_with_project_session(session_id: str) -> AsyncGenerator[TestCli
 @pytest.fixture
 async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
-    session = await get_session(session_id)
+    session = await get_fmu_session(session_id)
 
     path = session.user_fmu_directory.path.parent.parent  # tmp_path
     fmu_dir = init_fmu_directory(path)

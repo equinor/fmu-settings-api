@@ -63,7 +63,8 @@ class APISettings(BaseModel):
 
     API_V1_PREFIX: str = Field(default="/api/v1", frozen=True)
     SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
-    SESSION_EXPIRE_SECONDS: int = Field(default=1200, frozen=True)  # 20 minutes
+    SESSION_EXPIRE_SECONDS: int = Field(default=31556926, frozen=True)  # 1 year
+    RMS_SESSION_EXPIRE_SECONDS: int = Field(default=3600, frozen=True)  # 60 minutes
     APP_NAME: str = Field(default="fmu-settings-api", frozen=True)
     APP_VERSION: str = Field(default=__version__, frozen=True)
     TOKEN: str = Field(

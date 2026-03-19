@@ -134,8 +134,15 @@ def test_app_version_constant() -> None:
 def test_session_expire_seconds() -> None:
     """Test SESSION_EXPIRE_SECONDS is set correctly."""
     settings = APISettings()
-    expected_seconds = 1200  # 20 minutes
+    expected_seconds = 31556926  # 1 year
     assert expected_seconds == settings.SESSION_EXPIRE_SECONDS
+
+
+def test_rms_session_expire_seconds() -> None:
+    """Test SESSION_EXPIRE_SECONDS is set correctly."""
+    settings = APISettings()
+    expected_seconds = 3600  # 60 minutes
+    assert expected_seconds == settings.RMS_SESSION_EXPIRE_SECONDS
 
 
 def test_log_level_accepts_valid_values() -> None:

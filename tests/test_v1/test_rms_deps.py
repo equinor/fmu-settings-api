@@ -1,5 +1,6 @@
 """Tests for RMS dependencies."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -54,7 +55,10 @@ async def test_get_opened_rms_project_success() -> None:
     rms_executor_mock = MagicMock(spec=ApiExecutor)
     rms_project_mock = MagicMock(spec=RmsApiProxy)
     project_session_mock = MagicMock()
-    project_session_mock.rms_session = RmsSession(rms_executor_mock, rms_project_mock)
+    rms_session_expires_at = datetime.now(UTC) + timedelta(seconds=5)
+    project_session_mock.rms_session = RmsSession(
+        rms_executor_mock, rms_project_mock, rms_session_expires_at
+    )
 
     result = await get_opened_rms_project(project_session_mock)
 

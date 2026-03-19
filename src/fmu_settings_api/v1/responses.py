@@ -34,6 +34,9 @@ def inline_add_response(
     }
 
 
+## Session responses
+
+
 CreateSessionResponses: Final[Responses] = {
     **inline_add_response(
         401,
