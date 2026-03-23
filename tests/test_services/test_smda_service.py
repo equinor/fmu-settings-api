@@ -112,10 +112,7 @@ async def test_get_discoveries(given: list[str], mock_val: list[DiscoveryItem]) 
     mock_smda.discovery.assert_called_with(
         given,
         columns=[
-            "field_identifier",
-            "identifier",
             "short_identifier",
-            "projected_coordinate_system",
             "uuid",
         ],
     )
@@ -186,7 +183,6 @@ async def test_get_strat_column_areas(
     mock_smda.strat_column_areas.assert_called_with(
         given,
         [
-            "identifier",
             "uuid",
             "strat_area_identifier",
             "strat_column_identifier",
