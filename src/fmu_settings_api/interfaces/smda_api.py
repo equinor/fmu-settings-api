@@ -12,7 +12,7 @@ class SmdaRoutes:
     """Contains routes used by routes in this API."""
 
     BASE_URL: Final[str] = "https://api.gateway.equinor.com/smda/v2.0"
-    HEALTH: Final[str] = "actuator/health"
+    HEALTH: Final[str] = "availability"
     FIELDS_SEARCH: Final[str] = "smda-api/fields/search"
     COUNTRIES_SEARCH: Final[str] = "smda-api/countries/search"
     DISCOVERIES_SEARCH: Final[str] = "smda-api/discoveries/search"
