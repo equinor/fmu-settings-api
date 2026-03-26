@@ -19,7 +19,11 @@ from fmu.datamodels.context.mappings import (
 )
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings._fmu_dir import UserFMUDirectory
-from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from fmu.settings._init import (
+    REQUIRED_FMU_PROJECT_SUBDIRS,
+    init_fmu_directory,
+    init_user_fmu_directory,
+)
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
@@ -27,6 +31,31 @@ from fmu_settings_api.config import settings
 from fmu_settings_api.deps import get_session
 from fmu_settings_api.models.smda import StratigraphicUnit
 from fmu_settings_api.session import SessionManager, add_fmu_project_to_session
+
+
+@pytest.fixture
+def make_fmu_project_root() -> Callable[[Path], Path]:
+    """Return a helper that prepares a valid FMU project root for a test path."""
+
+    def _make_fmu_project_root(path: Path) -> Path:
+        path.mkdir(parents=True, exist_ok=True)
+        for dir_name in REQUIRED_FMU_PROJECT_SUBDIRS:
+            (path / dir_name).mkdir(parents=True, exist_ok=True)
+        return path
+
+    return _make_fmu_project_root
+
+
+@pytest.fixture
+def init_project_fmu_directory(
+    make_fmu_project_root: Callable[[Path], Path],
+) -> Callable[[Path], ProjectFMUDirectory]:
+    """Return a helper that initializes a valid project .fmu directory."""
+
+    def _init_project_fmu_directory(path: Path) -> ProjectFMUDirectory:
+        return init_fmu_directory(make_fmu_project_root(path))
+
+    return _init_project_fmu_directory
 
 
 @pytest.fixture
@@ -153,9 +182,11 @@ def mock_token() -> str:
 
 
 @pytest.fixture
-def fmu_dir(tmp_path: Path) -> ProjectFMUDirectory:
+def fmu_dir(
+    tmp_path: Path, make_fmu_project_root: Callable[[Path], Path]
+) -> ProjectFMUDirectory:
     """Creates a .fmu directory in a tmp path."""
-    return init_fmu_directory(tmp_path)
+    return init_fmu_directory(make_fmu_project_root(tmp_path))
 
 
 @pytest.fixture
@@ -193,7 +224,11 @@ def user_fmu_dir_no_permissions(fmu_dir_path: Path) -> Generator[Path]:
 
 
 @pytest.fixture
-def tmp_path_mocked_home(tmp_path: Path, monkeypatch: MonkeyPatch) -> Generator[Path]:
+def tmp_path_mocked_home(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
+) -> Generator[Path]:
     """Mocks Path.home() for routes that depend on UserFMUDirectory.
 
     This mocks the user .fmu into tmp_path/home/.fmu.
@@ -203,6 +238,7 @@ def tmp_path_mocked_home(tmp_path: Path, monkeypatch: MonkeyPatch) -> Generator[
     """
     mocked_user_home = tmp_path / "home"
     mocked_user_home.mkdir()
+    make_fmu_project_root(tmp_path)
     with patch("pathlib.Path.home", return_value=mocked_user_home):
         monkeypatch.chdir(tmp_path)
         yield tmp_path
@@ -238,11 +274,13 @@ async def client_with_session(session_id: str) -> AsyncGenerator[TestClient]:
 
 
 @pytest.fixture
-async def client_with_project_session(session_id: str) -> AsyncGenerator[TestClient]:
+async def client_with_project_session(
+    session_id: str, make_fmu_project_root: Callable[[Path], Path]
+) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
     session = await get_session(session_id)
 
-    path = session.user_fmu_directory.path.parent.parent  # tmp_path
+    path = make_fmu_project_root(session.user_fmu_directory.path.parent.parent)
     fmu_dir = init_fmu_directory(path)
     _ = await add_fmu_project_to_session(session_id, fmu_dir)
 
@@ -252,11 +290,13 @@ async def client_with_project_session(session_id: str) -> AsyncGenerator[TestCli
 
 
 @pytest.fixture
-async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient]:
+async def client_with_smda_session(
+    session_id: str, make_fmu_project_root: Callable[[Path], Path]
+) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
     session = await get_session(session_id)
 
-    path = session.user_fmu_directory.path.parent.parent  # tmp_path
+    path = make_fmu_project_root(session.user_fmu_directory.path.parent.parent)
     fmu_dir = init_fmu_directory(path)
     _ = await add_fmu_project_to_session(session_id, fmu_dir)
 
@@ -272,9 +312,9 @@ async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient
 
 
 @pytest.fixture
-def session_tmp_path() -> Path:
+def session_tmp_path(make_fmu_project_root: Callable[[Path], Path]) -> Path:
     """Returns the tmp_path equivalent from a mocked user .fmu dir."""
-    return UserFMUDirectory().path.parent.parent
+    return make_fmu_project_root(UserFMUDirectory().path.parent.parent)
 
 
 @pytest.fixture

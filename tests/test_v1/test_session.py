@@ -1,6 +1,7 @@
 """Tests the /api/v1/session routes."""
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -263,12 +264,13 @@ async def test_session_creation_handles_lock_conflicts(
     mock_token: str,
     session_manager: SessionManager,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests that session creation handles lock conflicts gracefully."""
     client = TestClient(app)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 
@@ -442,6 +444,7 @@ async def test_new_session_preserves_state_from_old_session(
     mock_token: str,
     session_manager: SessionManager,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests that creating a new session.
 
@@ -450,7 +453,7 @@ async def test_new_session_preserves_state_from_old_session(
     client = TestClient(app)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     project_fmu_dir = init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 
@@ -495,12 +498,13 @@ async def test_new_session_preserves_rms_project_from_old_session(
     mock_token: str,
     session_manager: SessionManager,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests that creating a new session migrates an open RMS project."""
     client = TestClient(app)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 
@@ -545,12 +549,13 @@ async def test_new_session_without_old_session_finds_nearest_project(
     mock_token: str,
     session_manager: SessionManager,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests that when there's no old session, new session finds nearest project."""
     client = TestClient(app)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     project_fmu_dir = init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 
