@@ -1,5 +1,6 @@
 """Tests dependencies (middleware)."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, create_autospec, patch
@@ -8,7 +9,8 @@ from uuid import uuid4
 import pytest
 from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from fmu.settings import ProjectFMUDirectory
+from fmu.settings._init import init_user_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 
@@ -220,15 +222,16 @@ async def test_ensure_user_fmu_directory_outer_general_error() -> None:
 
 
 async def test_check_write_permissions_project_not_acquired(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Test that check_write_permissions raises HTTPException when not acquired."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_acquired.return_value = False
@@ -245,15 +248,16 @@ async def test_check_write_permissions_project_not_acquired(
 
 
 async def test_check_write_permissions_not_locked(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Test that check_write_permissions raises 423 when project is not locked."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_locked.return_value = False
@@ -270,15 +274,16 @@ async def test_check_write_permissions_not_locked(
 
 
 async def test_check_write_permissions_permission_error(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Test that check_write_permissions raises 403 on PermissionError."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_locked.side_effect = PermissionError("Permission denied")
@@ -294,15 +299,16 @@ async def test_check_write_permissions_permission_error(
 
 
 async def test_check_write_permissions_file_not_found_error(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Test that check_write_permissions raises 423 on FileNotFoundError."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_locked.side_effect = FileNotFoundError("Lock file not found")
@@ -344,7 +350,9 @@ async def test_get_session_no_extend_does_not_extend_expiration(
 
 
 async def test_get_project_session_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that get_project_session_no_extend does not extend session expiration."""
     user_fmu_dir = init_user_fmu_directory()
@@ -356,8 +364,7 @@ async def test_get_project_session_no_extend_does_not_extend_expiration(
     assert "No FMU project directory open" in str(exc_info.value.detail)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     result = await get_project_session_no_extend(session_id)
@@ -376,15 +383,16 @@ async def test_get_project_session_no_extend_does_not_extend_expiration(
 
 
 async def test_get_project_session_extends_expiration(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that get_project_session extends session expiration."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     result = await get_project_session(session_id)
@@ -428,15 +436,16 @@ async def test_get_session_service_no_extend_does_not_extend_expiration(
 
 
 async def test_get_project_session_service_returns_session_service(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that get_project_session_service returns a SessionService instance."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     project_session = await get_project_session(session_id)
@@ -449,15 +458,16 @@ async def test_get_project_session_service_returns_session_service(
 
 
 async def test_get_project_session_service_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that get_project_session_service_no_extend does not extend expiration."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     project_session = await get_project_session_no_extend(session_id)
@@ -475,15 +485,16 @@ async def test_get_project_session_service_no_extend_does_not_extend_expiration(
 
 
 async def test_get_project_service_returns_project_service(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that get_project_service returns a ProjectService instance."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     project_session = await get_project_session(session_id)
@@ -495,15 +506,16 @@ async def test_get_project_service_returns_project_service(
 
 
 async def test_refresh_lock_dep_refreshes_lock_when_acquired(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that RefreshLockDep refreshes the lock when it is acquired."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_acquired.return_value = True
@@ -517,15 +529,16 @@ async def test_refresh_lock_dep_refreshes_lock_when_acquired(
 
 
 async def test_refresh_lock_dep_does_nothing_when_not_acquired(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that RefreshLockDep does nothing when lock is not acquired."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_acquired.return_value = False
@@ -539,15 +552,16 @@ async def test_refresh_lock_dep_does_nothing_when_not_acquired(
 
 
 async def test_refresh_lock_dep_handles_lock_error(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that RefreshLockDep handles lock errors gracefully."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_acquired.return_value = True
@@ -564,15 +578,16 @@ async def test_refresh_lock_dep_handles_lock_error(
 
 
 async def test_refresh_lock_dep_handles_permission_error(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that RefreshLockDep swallows PermissionError exceptions."""
     user_fmu_dir = init_user_fmu_directory()
     session_id = await session_manager.create_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
-    project_fmu_dir = init_fmu_directory(project_path)
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
     mock_lock.is_acquired.return_value = True
