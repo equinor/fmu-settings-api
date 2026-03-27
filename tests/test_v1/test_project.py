@@ -838,7 +838,9 @@ async def test_post_init_fmu_directory_invalid_project_root(
     response = client_with_session.post(f"{ROUTE}/init", json={"path": str(path)})
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     detail = response.json()["detail"]
+    assert detail.startswith("Failed initializing .fmu directory.")
     assert "project root containing" in detail
+    assert "Did not find:" in detail
     for dir_name in REQUIRED_FMU_PROJECT_SUBDIRS:
         assert f"'{dir_name}'" in detail
 

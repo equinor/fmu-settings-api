@@ -274,13 +274,11 @@ async def client_with_session(session_id: str) -> AsyncGenerator[TestClient]:
 
 
 @pytest.fixture
-async def client_with_project_session(
-    session_id: str, make_fmu_project_root: Callable[[Path], Path]
-) -> AsyncGenerator[TestClient]:
+async def client_with_project_session(session_id: str) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
     session = await get_session(session_id)
 
-    path = make_fmu_project_root(session.user_fmu_directory.path.parent.parent)
+    path = session.user_fmu_directory.path.parent.parent  # tmp_path
     fmu_dir = init_fmu_directory(path)
     _ = await add_fmu_project_to_session(session_id, fmu_dir)
 
@@ -290,13 +288,11 @@ async def client_with_project_session(
 
 
 @pytest.fixture
-async def client_with_smda_session(
-    session_id: str, make_fmu_project_root: Callable[[Path], Path]
-) -> AsyncGenerator[TestClient]:
+async def client_with_smda_session(session_id: str) -> AsyncGenerator[TestClient]:
     """Returns a test client with a valid session."""
     session = await get_session(session_id)
 
-    path = make_fmu_project_root(session.user_fmu_directory.path.parent.parent)
+    path = session.user_fmu_directory.path.parent.parent  # tmp_path
     fmu_dir = init_fmu_directory(path)
     _ = await add_fmu_project_to_session(session_id, fmu_dir)
 
@@ -312,9 +308,9 @@ async def client_with_smda_session(
 
 
 @pytest.fixture
-def session_tmp_path(make_fmu_project_root: Callable[[Path], Path]) -> Path:
+def session_tmp_path() -> Path:
     """Returns the tmp_path equivalent from a mocked user .fmu dir."""
-    return make_fmu_project_root(UserFMUDirectory().path.parent.parent)
+    return UserFMUDirectory().path.parent.parent
 
 
 @pytest.fixture

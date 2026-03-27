@@ -120,8 +120,9 @@ ProjectInitResponses: Final[Responses] = {
         [
             {
                 "detail": (
-                    "Initialize the .fmu directory from a project root "
-                    f"containing {REQUIRED_PROJECT_DIRS_TEXT}."
+                    "Failed initializing .fmu directory. Initialize it from a "
+                    f"project root containing {REQUIRED_PROJECT_DIRS_TEXT}. "
+                    "Did not find: {missing_project_dirs}."
                 ),
             },
         ],
