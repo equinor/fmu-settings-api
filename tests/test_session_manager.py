@@ -33,6 +33,7 @@ from fmu_settings_api.session import (
     release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
+    renew_fmu_session,
     session_manager,
     try_acquire_project_lock,
     update_fmu_session,
@@ -307,6 +308,26 @@ async def test_update_fmu_session(
 
     assert updated_session.expires_at == expires_at_new
     assert updated_session == session_manager.storage[session_id]
+
+
+async def test_renew_fmu_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests renewing a session rotates its id and expiration."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+    session = await get_fmu_session(session_id)
+    original_created_at = session.created_at
+    original_expires_at = session.expires_at
+
+    renewed_session = await renew_fmu_session(session_id)
+
+    assert renewed_session.id != session_id
+    assert renewed_session.created_at > original_created_at
+    assert renewed_session.expires_at > original_expires_at
+    assert renewed_session.user_fmu_directory == user_fmu_dir
+    assert session_id not in session_manager.storage
+    assert renewed_session.id in session_manager.storage
 
 
 async def test_destroy_fmu_session_if_expired_with_expired_session() -> None:

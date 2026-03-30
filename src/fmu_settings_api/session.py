@@ -182,6 +182,34 @@ class SessionManager:
 
         return session_id
 
+    async def renew_session(
+        self: Self,
+        session_id: str,
+        expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
+    ) -> Session | ProjectSession:
+        """Renews an existing session by rotating its id and expiration.
+
+        Returns:
+            The renewed session instance stored under its new session id
+
+        Raises:
+            SessionNotFoundError: If the session does not exist
+        """
+        session = await self._retrieve_session(session_id)
+        if session is None:
+            raise SessionNotFoundError("No active session found")
+
+        now = datetime.now(UTC)
+        new_session_id = str(uuid4())
+        session.id = new_session_id
+        session.created_at = now
+        session.expires_at = now + timedelta(seconds=expire_seconds)
+        session.last_accessed = now
+
+        del self.storage[session_id]
+        await self._store_session(new_session_id, session)
+        return session
+
     async def get_session(self: Self, session_id: str) -> Session | ProjectSession:
         """Get the session data for a session id.
 
@@ -221,6 +249,14 @@ async def create_fmu_session(
 async def get_fmu_session(session_id: str) -> Session | ProjectSession:
     """Gets a session from the session manager."""
     return await session_manager.get_session(session_id)
+
+
+async def renew_fmu_session(
+    session_id: str,
+    expire_seconds: int = settings.SESSION_EXPIRE_SECONDS,
+) -> Session | ProjectSession:
+    """Renews a session in the session manager."""
+    return await session_manager.renew_session(session_id, expire_seconds)
 
 
 async def update_fmu_session(session: Session | ProjectSession) -> None:

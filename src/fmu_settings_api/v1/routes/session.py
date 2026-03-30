@@ -22,6 +22,8 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     create_fmu_session,
     get_fmu_session,
+    get_rms_session_expiration,
+    renew_fmu_session,
 )
 from fmu_settings_api.v1.responses import (
     CreateSessionResponses,
@@ -60,13 +62,13 @@ SessionRestoreResponses = {
         .fmu directory exists by creating it if it does not.
 
         If a valid session already exists when POSTing to this route, the
-        request will return a 409 conflict response and no new session will
-        be created.
+        existing session will be renewed with a new expiry date and a new
+        session cookie value.
 
         After creating the session, the application will attempt to find the
         nearest project .fmu directory above the current working directory and
         add it to the session if found. If not found, no project will be
-        associated.
+        associated. Renewing an existing session keeps its current state.
 
         The session cookie set by this route is required for all other
         routes. Sessions are not persisted when the API is shut down.
@@ -84,10 +86,20 @@ async def post_session(
     """Creates a new user session."""
     if fmu_settings_session:
         try:
-            await get_fmu_session(fmu_settings_session)
-            raise HTTPException(
-                status_code=409,
-                detail="A session already exists",
+            session = await renew_fmu_session(fmu_settings_session)
+            response.set_cookie(
+                key=settings.SESSION_COOKIE_KEY,
+                value=session.id,
+                httponly=True,
+                secure=False,
+                samesite="lax",
+            )
+            return SessionResponse(
+                id=session.id,
+                created_at=session.created_at,
+                expires_at=session.expires_at,
+                rms_expires_at=await get_rms_session_expiration(session.id),
+                last_accessed=session.last_accessed,
             )
         except SessionNotFoundError:
             pass

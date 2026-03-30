@@ -25,6 +25,7 @@ from fmu_settings_api.session import (
     SessionManager,
     SessionNotFoundError,
     add_rms_project_to_session,
+    destroy_fmu_session_if_expired,
     get_fmu_session,
     update_fmu_session,
 )
@@ -232,22 +233,20 @@ async def test_post_session_destroy_existing_expired_session(
     session.expires_at = expired_timestamp
     await update_fmu_session(session)
 
-    # Post new session and assert that destroy was called
+    # Post new session and assert that the expired session is removed first
     with patch(
         "fmu_settings_api.deps.session.destroy_fmu_session_if_expired",
         new_callable=AsyncMock,
+        wraps=destroy_fmu_session_if_expired,
     ) as mock_destroy_session:
         response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
-        assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"detail": "A session already exists"}
-        mock_destroy_session.assert_called_once_with(session_id)
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        mock_destroy_session.assert_awaited_once_with(session_id)
 
-    # Expired session should be destroyed and new valid session should be created
-    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
     new_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
 
     assert new_session_id is not None
-    assert new_session_id is not session_id
+    assert new_session_id != session_id
     with pytest.raises(SessionNotFoundError, match="No active session found"):
         await get_fmu_session(session_id)
 
@@ -257,17 +256,17 @@ async def test_post_session_destroy_existing_expired_session(
     assert new_session.expires_at > expired_timestamp
 
 
-async def test_post_session_returns_conflict_for_existing_valid_session(
+async def test_post_session_renews_existing_valid_session(
     tmp_path_mocked_home: Path,
     client_with_session: TestClient,
     session_manager: SessionManager,
     mock_token: str,
 ) -> None:
-    """Tests creating a new session returns 409 when one already exists.
+    """Tests POSTing to session renews an existing valid user session.
 
     Scenario: A valid user session with the session_id provided already exists.
-    The existing session should be kept unchanged and the API should return
-    a conflict instead of creating a new session.
+    The existing session should be renewed with a new session id and expiry
+    while keeping the current session state.
     """
     client = TestClient(app)
     response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
@@ -278,17 +277,29 @@ async def test_post_session_returns_conflict_for_existing_valid_session(
     session = await get_fmu_session(session_id)
     assert session.id == session_id
     assert isinstance(session, Session)
+    original_created_at = session.created_at
+    original_expires_at = session.expires_at
 
-    # Posting again should keep the current session and return a conflict
     response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json() == {"detail": "A session already exists"}
+    assert response.status_code == status.HTTP_200_OK
 
-    updated_session = await get_fmu_session(session_id)
-    assert updated_session == session
+    renewed_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert renewed_session_id is not None
+    assert renewed_session_id != session_id
+
+    with pytest.raises(SessionNotFoundError, match="No active session found"):
+        await get_fmu_session(session_id)
+
+    renewed_session = await get_fmu_session(renewed_session_id)
+    assert isinstance(renewed_session, Session)
+    assert renewed_session.id == renewed_session_id
+    assert renewed_session.user_fmu_directory.path == session.user_fmu_directory.path
+    assert renewed_session.access_tokens == session.access_tokens
+    assert renewed_session.created_at > original_created_at
+    assert renewed_session.expires_at > original_expires_at
 
 
-async def test_post_session_returns_conflict_for_existing_project_session(  # noqa: PLR0913
+async def test_post_session_renews_existing_project_session(  # noqa: PLR0913
     tmp_path_mocked_home: Path,
     client_with_session: TestClient,
     session_manager: SessionManager,
@@ -296,12 +307,12 @@ async def test_post_session_returns_conflict_for_existing_project_session(  # no
     monkeypatch: MonkeyPatch,
     make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
-    """Tests creating a new session returns 409 for an existing project session.
+    """Tests POSTing to session renews an existing project session.
 
     Scenario: A valid project session with the session_id provided already
-    exists. The existing project session should be kept unchanged, no new
-    session should be created, and the attached project should not be swapped
-    even if the current working directory changes.
+    exists. The session should be renewed with a new session id while keeping
+    the attached project, access tokens, and RMS session unchanged even if the
+    current working directory changes.
     """
     project_path = tmp_path_mocked_home / "test_project"
     make_fmu_project_root(project_path)
@@ -318,42 +329,61 @@ async def test_post_session_returns_conflict_for_existing_project_session(  # no
     assert session.id == session_id
     assert isinstance(session, ProjectSession)
 
-    # Posting again should not create a replacement session
-    with patch(
-        "fmu_settings_api.v1.routes.session.create_fmu_session",
-        new_callable=AsyncMock,
-    ) as mock_create_session:
+    original_created_at = session.created_at
+    original_expires_at = session.expires_at
+
+    with (
+        patch(
+            "fmu_settings_api.v1.routes.session.create_fmu_session",
+            new_callable=AsyncMock,
+        ) as mock_create_session,
+        patch(
+            "fmu_settings_api.v1.routes.session.add_fmu_project_to_session",
+            new_callable=AsyncMock,
+        ) as mock_add_project_to_session,
+    ):
+        client.patch(
+            f"{ROUTE}/access_token",
+            json={"id": "smda_api", "key": "secret_token"},
+        )
+
+        rms_executor = MagicMock(shutdown=MagicMock())
+        rms_project = MagicMock(close=MagicMock())
+        await add_rms_project_to_session(session_id, rms_executor, rms_project)
+
+        updated_session = cast("ProjectSession", await get_fmu_session(session_id))
+        assert updated_session.rms_session is not None
+        assert updated_session.rms_session == RmsSession(
+            rms_executor, rms_project, updated_session.rms_session.expires_at
+        )
+
+        different_path = tmp_path_mocked_home / "different_project"
+        different_path.mkdir()
+        monkeypatch.chdir(different_path)
+
         response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
-        assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"detail": "A session already exists"}
-        mock_create_session.assert_not_called()
-        assert await get_fmu_session(session_id) == session
+        assert response.status_code == status.HTTP_200_OK
+        mock_create_session.assert_not_awaited()
+        mock_add_project_to_session.assert_not_awaited()
 
-    # Assert session is kept the same when valid project session exists
-    client.patch(
-        f"{ROUTE}/access_token",
-        json={"id": "smda_api", "key": "secret_token"},
+    renewed_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert renewed_session_id is not None
+    assert renewed_session_id != session_id
+
+    with pytest.raises(SessionNotFoundError, match="No active session found"):
+        await get_fmu_session(session_id)
+
+    renewed_session = cast("ProjectSession", await get_fmu_session(renewed_session_id))
+    assert isinstance(renewed_session, ProjectSession)
+    assert (
+        renewed_session.project_fmu_directory.path == session.project_fmu_directory.path
     )
-
-    rms_executor = MagicMock(shutdown=MagicMock())
-    rms_project = MagicMock(close=MagicMock())
-    await add_rms_project_to_session(session_id, rms_executor, rms_project)
-
-    updated_session = cast("ProjectSession", await get_fmu_session(session_id))
-    assert updated_session.rms_session is not None
-    assert updated_session.rms_session == RmsSession(
-        rms_executor, rms_project, updated_session.rms_session.expires_at
-    )
-
-    different_path = tmp_path_mocked_home / "different_project"
-    different_path.mkdir()
-    monkeypatch.chdir(different_path)
-
-    # Changing cwd should still not replace the existing project session
-    response = client.post(ROUTE, headers={HttpHeader.API_TOKEN_KEY: mock_token})
-    assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json() == {"detail": "A session already exists"}
-    assert updated_session == await get_fmu_session(session_id)
+    assert renewed_session.access_tokens.smda_api is not None
+    assert renewed_session.rms_session is not None
+    assert renewed_session.rms_session.executor is rms_executor
+    assert renewed_session.rms_session.project is rms_project
+    assert renewed_session.created_at > original_created_at
+    assert renewed_session.expires_at > original_expires_at
 
 
 async def test_post_session_handles_lock_conflicts(
