@@ -24,13 +24,15 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Natural Language :: English",
 ]
 dynamic = ["version"]
 dependencies = [
     "fastapi",
     "fmu-datamodels",
-    "fmu-settings>=0.22.0",
+    "fmu-settings>=0.28.0",
     "httpx",
     "packaging",
     "pydantic",

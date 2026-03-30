@@ -188,10 +188,7 @@ class SmdaService:
         discovery_res = await self._smda.discovery(
             field_identifiers,
             columns=[
-                "field_identifier",
-                "identifier",
                 "short_identifier",
-                "projected_coordinate_system",
                 "uuid",
             ],
         )
@@ -213,7 +210,6 @@ class SmdaService:
         strat_column_res = await self._smda.strat_column_areas(
             field_identifiers,
             [
-                "identifier",
                 "uuid",
                 "strat_area_identifier",
                 "strat_column_identifier",

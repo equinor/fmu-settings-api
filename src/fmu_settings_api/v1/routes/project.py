@@ -15,6 +15,10 @@ from fmu.datamodels.context.mappings import (
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings._global_config import InvalidGlobalConfigurationError
+from fmu.settings._init import (
+    REQUIRED_FMU_PROJECT_SUBDIRS,
+    InvalidFMUProjectPathError,
+)
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
@@ -59,6 +63,9 @@ from fmu_settings_api.v1.responses import (
 )
 
 router = APIRouter(prefix="/project", tags=["project"])
+REQUIRED_PROJECT_DIRS_TEXT = ", ".join(
+    f"'{dir_name}'" for dir_name in REQUIRED_FMU_PROJECT_SUBDIRS
+)
 
 ProjectResponses: Final[Responses] = {
     **inline_add_response(
@@ -99,6 +106,24 @@ ProjectExistsResponses: Final[Responses] = {
         [
             {"detail": ".fmu exists at {path} but is not a directory"},
             {"detail": ".fmu already exists at {path}"},
+        ],
+    ),
+}
+
+ProjectInitResponses: Final[Responses] = {
+    **ProjectResponses,
+    **ProjectExistsResponses,
+    **inline_add_response(
+        422,
+        "The requested path exists but is not a valid FMU project root.",
+        [
+            {
+                "detail": (
+                    "Failed initializing .fmu directory. Initialize it from a "
+                    f"project root containing {REQUIRED_PROJECT_DIRS_TEXT}. "
+                    "Did not find: {missing_project_dirs}."
+                ),
+            },
         ],
     ),
 }
@@ -480,8 +505,7 @@ async def post_project(
     ),
     responses={
         **GetSessionResponses,
-        **ProjectResponses,
-        **ProjectExistsResponses,
+        **ProjectInitResponses,
     },
 )
 async def post_init_project(
@@ -503,6 +527,8 @@ async def post_init_project(
         raise HTTPException(
             status_code=404, detail=f"Path {path} does not exist"
         ) from e
+    except InvalidFMUProjectPathError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f".fmu already exists at {path}"

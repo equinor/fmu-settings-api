@@ -25,7 +25,7 @@ from fmu.settings._fmu_dir import (
     UserFMUDirectory,
 )
 from fmu.settings._global_config import InvalidGlobalConfigurationError
-from fmu.settings._init import init_fmu_directory
+from fmu.settings._init import REQUIRED_FMU_PROJECT_SUBDIRS, init_fmu_directory
 from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.mappings import Mappings
@@ -815,6 +815,23 @@ async def test_post_init_fmu_directory_session_not_found_error(
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json() == {"detail": "Session not found"}
+
+
+async def test_post_init_fmu_directory_invalid_project_root(
+    client_with_session: TestClient, session_tmp_path: Path
+) -> None:
+    """Test 422 returns when the path is not a valid FMU project root."""
+    path = session_tmp_path / "invalid_project"
+    path.mkdir()
+
+    response = client_with_session.post(f"{ROUTE}/init", json={"path": str(path)})
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    detail = response.json()["detail"]
+    assert detail.startswith("Failed initializing .fmu directory.")
+    assert "project root containing" in detail
+    assert "Did not find:" in detail
+    for dir_name in REQUIRED_FMU_PROJECT_SUBDIRS:
+        assert f"'{dir_name}'" in detail
 
 
 async def test_post_init_fmu_directory_raises_other_exceptions(
