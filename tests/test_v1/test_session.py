@@ -1,6 +1,7 @@
 """Tests the /api/v1/session routes."""
 
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -287,12 +288,13 @@ async def test_post_session_returns_conflict_for_existing_valid_session(
     assert updated_session == session
 
 
-async def test_post_session_returns_conflict_for_existing_project_session(
+async def test_post_session_returns_conflict_for_existing_project_session(  # noqa: PLR0913
     tmp_path_mocked_home: Path,
     client_with_session: TestClient,
     session_manager: SessionManager,
     mock_token: str,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests creating a new session returns 409 for an existing project session.
 
@@ -302,7 +304,7 @@ async def test_post_session_returns_conflict_for_existing_project_session(
     even if the current working directory changes.
     """
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 
@@ -359,12 +361,13 @@ async def test_post_session_handles_lock_conflicts(
     mock_token: str,
     session_manager: SessionManager,
     monkeypatch: MonkeyPatch,
+    make_fmu_project_root: Callable[[Path], Path],
 ) -> None:
     """Tests that session creation handles lock conflicts gracefully."""
     client = TestClient(app)
 
     project_path = tmp_path_mocked_home / "test_project"
-    project_path.mkdir()
+    make_fmu_project_root(project_path)
     init_fmu_directory(project_path)
     monkeypatch.chdir(project_path)
 

@@ -633,16 +633,16 @@ async def test_post_fmu_directory_exists(
 
 
 async def test_post_fmu_directory_changes_session_instance(
-    client_with_session: TestClient, session_tmp_path: Path
+    client_with_session: TestClient,
+    session_tmp_path: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
     """Tests that posting a new project changes the instance in the session."""
     project_x = session_tmp_path / "project_x"
-    project_x.mkdir()
-    x_fmu_dir = init_fmu_directory(project_x)
+    x_fmu_dir = init_project_fmu_directory(project_x)
 
     project_y = session_tmp_path / "project_y"
-    project_y.mkdir()
-    y_fmu_dir = init_fmu_directory(project_y)
+    y_fmu_dir = init_project_fmu_directory(project_y)
 
     # Check Project X
     response = client_with_session.post(ROUTE, json={"path": str(project_x)})
