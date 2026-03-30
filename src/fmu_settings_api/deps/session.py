@@ -59,10 +59,7 @@ async def get_session(
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-async def get_project_session(
-    session: SessionDep,
-    fmu_settings_session: str | None = Cookie(None),
-) -> ProjectSession:
+async def get_project_session(session: SessionDep) -> ProjectSession:
     """Gets a session with an FMU Project opened from the session manager."""
     if not isinstance(session, ProjectSession):
         raise HTTPException(
@@ -100,19 +97,13 @@ async def ensure_smda_session(session: Session) -> None:
         )
 
 
-async def get_smda_session(
-    session: SessionDep,
-    fmu_settings_session: str | None = Cookie(None),
-) -> Session:
+async def get_smda_session(session: SessionDep) -> Session:
     """Gets a session capable of querying SMDA from the session manager."""
     await ensure_smda_session(session)
     return session
 
 
-async def get_project_smda_session(
-    session: ProjectSessionDep,
-    fmu_settings_session: str | None = Cookie(None),
-) -> ProjectSession:
+async def get_project_smda_session(session: ProjectSessionDep) -> ProjectSession:
     """Returns a project .fmu session that is SMDA-querying capable."""
     await ensure_smda_session(session)
     return session

@@ -341,7 +341,7 @@ async def test_get_project_session_service_returns_session_service(
 
     session = await get_fmu_session(session_id)
 
-    project_session = await get_project_session(session, session_id)
+    project_session = await get_project_session(session)
     service = await get_project_session_service(project_session)
 
     assert isinstance(service, SessionService)
@@ -364,7 +364,7 @@ async def test_get_project_service_returns_project_service(
 
     session = await get_fmu_session(session_id)
 
-    project_session = await get_project_session(session, session_id)
+    project_session = await get_project_session(session)
     project_service = await get_project_service(project_session)
 
     assert isinstance(project_service, ProjectService)

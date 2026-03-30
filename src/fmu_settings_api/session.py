@@ -231,7 +231,7 @@ async def update_fmu_session(session: Session | ProjectSession) -> None:
 async def destroy_fmu_session_if_expired(session_id: str) -> None:
     """Destroys the expired sessions in the session manager for the given session_id.
 
-    Cheks the user and rms session for the given session_id and destroy the ones
+    Checks the user and rms session for the given session_id and destroy the ones
     that has expired.
     """
     try:
@@ -247,18 +247,17 @@ async def destroy_fmu_session_if_expired(session_id: str) -> None:
         await session_manager.destroy_session(session_id)
 
 
-async def refresh_fmu_session(session_id: str) -> Session | ProjectSession:
-    """Refresh a session in the session manager by extending the expiration time."""
-    session: Session | ProjectSession = await get_fmu_session(session_id)
-    now = datetime.now(UTC)
-    session.expires_at = now + timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
-    if isinstance(session, ProjectSession) and session.rms_session is not None:
-        session.rms_session.expires_at = now + timedelta(
-            seconds=settings.RMS_SESSION_EXPIRE_SECONDS
-        )
+async def refresh_rms_session(project_session: ProjectSession) -> RmsSession:
+    """Refresh the expiration time for an opened RMS session."""
+    rms_session = project_session.rms_session
+    if rms_session is None:
+        raise SessionNotFoundError("No RMS project is currently open")
 
-    await update_fmu_session(session)
-    return session
+    rms_session.expires_at = datetime.now(UTC) + timedelta(
+        seconds=settings.RMS_SESSION_EXPIRE_SECONDS
+    )
+    await update_fmu_session(project_session)
+    return rms_session
 
 
 async def add_fmu_project_to_session(

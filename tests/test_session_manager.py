@@ -26,8 +26,8 @@ from fmu_settings_api.session import (
     destroy_fmu_session_if_expired,
     get_fmu_session,
     get_rms_session_expiration,
-    refresh_fmu_session,
     refresh_project_lock,
+    refresh_rms_session,
     release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
@@ -407,64 +407,23 @@ async def test_destroy_fmu_session_if_expired_when_session_is_valid() -> None:
             mocked_session_manager.destroy_session.assert_not_called()
 
 
-async def test_refresh_fmu_session_with_rms_project() -> None:
-    """Tests that both the user session and RMS session are refreshed."""
-    mocked_session = AsyncMock(spec=ProjectSession)
+async def test_refresh_rms_session_with_open_rms_project() -> None:
+    """Tests that the RMS session expiration is refreshed."""
+    mocked_session = MagicMock(spec=ProjectSession)
     mocked_rms_session = MagicMock()
-    mocked_session_id = "mocked_id"
-    mocked_session.id = mocked_session_id
     mocked_session.rms_session = mocked_rms_session
     mocked_now = datetime.now(UTC)
-    mocked_session.expires_at = mocked_now
-    mocked_session.rms_session.expires_at = mocked_now
-    mocked_session.last_accessed = mocked_now
+    mocked_rms_session.expires_at = mocked_now
 
-    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
-        mocked_get_session = AsyncMock(return_value=mocked_session)
-        mocked_update_session = AsyncMock(return_value=None)
-        mocked_session_manager.get_session.side_effect = mocked_get_session
-        mocked_session_manager.update_session.side_effect = mocked_update_session
+    with patch(
+        "fmu_settings_api.session.update_fmu_session",
+        new_callable=AsyncMock,
+    ) as mock_update_session:
+        refreshed_rms_session = await refresh_rms_session(mocked_session)
 
-        await refresh_fmu_session(mocked_session.id)
-
-        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
-        mocked_session_manager.update_session.assert_called_once_with(
-            mocked_session_id, mocked_session
-        )
-        updated_session_id = mocked_session_manager.update_session.call_args[0][0]
-        updated_session = mocked_session_manager.update_session.call_args[0][1]
-        assert updated_session_id == mocked_session_id
-        assert updated_session == mocked_session
-        assert updated_session.id == mocked_session_id
-        assert updated_session.expires_at > mocked_now
-        assert updated_session.rms_session.expires_at > mocked_now
-
-
-async def test_refresh_fmu_session_without_rms_project() -> None:
-    """Tests that only the user session is refreshed."""
-    mocked_session = AsyncMock(spec=ProjectSession)
-    mocked_session_id = "mocked_id"
-    mocked_session.id = mocked_session_id
-    mocked_now = datetime.now(UTC)
-    mocked_session.expires_at = mocked_now
-    mocked_session.rms_session = None
-    mocked_session.last_accessed = mocked_now
-
-    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
-        mocked_get_session = AsyncMock(return_value=mocked_session)
-        mocked_update_session = AsyncMock(return_value=None)
-        mocked_session_manager.get_session.side_effect = mocked_get_session
-        mocked_session_manager.update_session.side_effect = mocked_update_session
-
-        await refresh_fmu_session(mocked_session.id)
-
-        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
-        mocked_session_manager.update_session.assert_called_once()
-        updated_session = mocked_session_manager.update_session.call_args[0][1]
-        assert updated_session == mocked_session
-        assert updated_session.id == mocked_session_id
-        assert updated_session.expires_at > mocked_now
-        assert updated_session.rms_session is None
+        mock_update_session.assert_awaited_once_with(mocked_session)
+        assert mocked_session.rms_session.expires_at > mocked_now
+        assert refreshed_rms_session == mocked_rms_session
 
 
 async def test_add_fmu_project_to_session_acquires_lock(

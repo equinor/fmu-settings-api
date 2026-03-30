@@ -15,16 +15,13 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     UserFMUDirDep,
 )
-from fmu_settings_api.deps.session import DestroySessionIfExpiredDep, SessionDep
+from fmu_settings_api.deps.session import DestroySessionIfExpiredDep
 from fmu_settings_api.models import AccessToken, Message, SessionResponse
 from fmu_settings_api.session import (
-    ProjectSession,
     SessionNotFoundError,
     add_fmu_project_to_session,
     create_fmu_session,
     get_fmu_session,
-    get_rms_session_expiration,
-    refresh_fmu_session,
 )
 from fmu_settings_api.v1.responses import (
     CreateSessionResponses,
@@ -56,20 +53,20 @@ SessionRestoreResponses = {
 @router.post(
     "/",
     response_model=SessionResponse,
-    summary="Creates a new user session or adds a project to the existing one.",
+    summary="Creates a new user session.",
     description=dedent(
         """
         When creating a session the application will ensure that the user
         .fmu directory exists by creating it if it does not.
 
-        If a session already exists when POSTing to this route, a project will be added
-        to the existing session if a project can be found. In case a session with a
-        project already exists, the existing session will kept as-is and
-        no new session is created.
+        If a valid session already exists when POSTing to this route, the
+        request will return a 409 conflict response and no new session will
+        be created.
 
-        When adding a project to the session, the application will attempt to find the
+        After creating the session, the application will attempt to find the
         nearest project .fmu directory above the current working directory and
-        add it to the session if found. If not found, no project will be associated.
+        add it to the session if found. If not found, no project will be
+        associated.
 
         The session cookie set by this route is required for all other
         routes. Sessions are not persisted when the API is shut down.
@@ -84,32 +81,18 @@ async def post_session(
     expired_session_dep: DestroySessionIfExpiredDep,
     fmu_settings_session: Annotated[str | None, Cookie()] = None,
 ) -> SessionResponse:
-    """Creates a new user session or adds a project to the existing one."""
+    """Creates a new user session."""
     if fmu_settings_session:
         try:
-            existing_session = await get_fmu_session(fmu_settings_session)
-            if isinstance(existing_session, ProjectSession):
-                response.set_cookie(
-                    key=settings.SESSION_COOKIE_KEY,
-                    value=existing_session.id,
-                    httponly=True,
-                    secure=False,
-                    samesite="lax",
-                )
-                return SessionResponse(
-                    id=existing_session.id,
-                    created_at=existing_session.created_at,
-                    expires_at=existing_session.expires_at,
-                    rms_expires_at=await get_rms_session_expiration(
-                        existing_session.id
-                    ),
-                    last_accessed=existing_session.last_accessed,
-                )
-            session_id = existing_session.id
+            await get_fmu_session(fmu_settings_session)
+            raise HTTPException(
+                status_code=409,
+                detail="A session already exists",
+            )
         except SessionNotFoundError:
-            session_id = await create_fmu_session(user_fmu_dir)
-    else:
-        session_id = await create_fmu_session(user_fmu_dir)
+            pass
+
+    session_id = await create_fmu_session(user_fmu_dir)
 
     response.set_cookie(
         key=settings.SESSION_COOKIE_KEY,
@@ -131,34 +114,6 @@ async def post_session(
         created_at=session.created_at,
         expires_at=session.expires_at,
         rms_expires_at=None,
-        last_accessed=session.last_accessed,
-    )
-
-
-@router.patch(
-    "/",
-    response_model=SessionResponse,
-    summary="Refresh a session for the user.",
-    description=dedent(
-        """
-        Refresh an existing session for the user by extending the
-        session expiration time. If an RMS session is present, this will
-        also be refreshed.
-        """
-    ),
-    responses=GetSessionResponses,
-)
-async def refresh_session(
-    response: Response,
-    session: SessionDep,
-) -> SessionResponse:
-    """Refresh an existing user session."""
-    session = await refresh_fmu_session(session.id)
-    return SessionResponse(
-        id=session.id,
-        created_at=session.created_at,
-        expires_at=session.expires_at,
-        rms_expires_at=await get_rms_session_expiration(session.id),
         last_accessed=session.last_accessed,
     )
 

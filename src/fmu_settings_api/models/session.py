@@ -18,7 +18,7 @@ class SessionResponse(BaseResponseModel):
     """Timestamp when the session will expire."""
 
     rms_expires_at: datetime | None
-    """Timestamp when the rms session will expire."""
+    """Timestamp when the RMS session will expire."""
 
     last_accessed: datetime
     """Timestamp when the session was last accessed."""
