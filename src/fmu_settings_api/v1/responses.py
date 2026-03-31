@@ -34,6 +34,9 @@ def inline_add_response(
     }
 
 
+## Session responses
+
+
 CreateSessionResponses: Final[Responses] = {
     **inline_add_response(
         401,
@@ -63,15 +66,11 @@ CreateSessionResponses: Final[Responses] = {
         409,
         dedent(
             """
-            Occurs in two cases:
-
-            - When attempting to create a session when one already exists
-            - When trying to create a user .fmu directory, but it already
+            Occurs when trying to create a user .fmu directory, but it already
             exists. Typically means that .fmu exists as a file.
             """
         ),
         [
-            {"detail": "A session already exists"},
             {
                 "detail": (
                     "User .fmu already exists but is invalid (i.e. is not a directory)"

@@ -41,6 +41,7 @@ from fmu_settings_api.session import (
     Session,
     SessionManager,
     SessionNotFoundError,
+    get_fmu_session,
 )
 from fmu_settings_api.v1.routes.project import _create_opened_project_response
 
@@ -258,9 +259,7 @@ async def test_get_project_updates_session(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == session_tmp_path / ".fmu"
@@ -289,9 +288,7 @@ async def test_get_project_already_in_session(
     )
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == session_tmp_path / ".fmu"
@@ -310,7 +307,7 @@ async def test_get_changelog_success(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -361,7 +358,7 @@ async def test_get_changelog_permission_denied(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch(
@@ -596,12 +593,10 @@ async def test_post_project_removes_non_existing_from_user_recent_projects(
         "recent_project_directories", [session_tmp_path, non_existing_path]
     )
 
-    from fmu_settings_api.session import session_manager  # noqa PLC0415
-
     # need to force a reload of the user config in the session
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     session.user_fmu_directory.config.load(force=True)
 
     response = client_with_session.post(ROUTE, json={"path": str(non_existing_path)})
@@ -630,9 +625,7 @@ async def test_post_fmu_directory_exists(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == session_tmp_path / ".fmu"
@@ -662,9 +655,7 @@ async def test_post_fmu_directory_changes_session_instance(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == project_x / ".fmu"
@@ -678,7 +669,7 @@ async def test_post_fmu_directory_changes_session_instance(
     assert fmu_project.project_dir_name == project_y.name
     assert y_fmu_dir.config.load() == fmu_project.config
 
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == project_y / ".fmu"
@@ -710,13 +701,11 @@ async def test_delete_project_session_returns_to_user_session(
     client_with_project_session: TestClient, session_tmp_path: Path
 ) -> None:
     """Tests that deleting a project session returns to a user session."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
     session_id = client_with_project_session.cookies.get(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
 
@@ -726,7 +715,7 @@ async def test_delete_project_session_returns_to_user_session(
     deleted_session_id = response.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert deleted_session_id is None
 
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, Session)
 
@@ -893,9 +882,7 @@ async def test_post_init_updates_session_instance(
     session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY, None)
     assert session_id is not None
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert session is not None
     assert isinstance(session, ProjectSession)
     assert session.project_fmu_directory.path == session_tmp_path / ".fmu"
@@ -1006,7 +993,7 @@ async def test_patch_masterdata_lockfile_removed(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -1036,7 +1023,7 @@ async def test_patch_masterdata_lockfile_removed_and_acquired_by_other(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -1073,7 +1060,7 @@ async def test_patch_masterdata_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     # Mock the project_fmu_directory.set_config_value to raise ValueError
@@ -1468,7 +1455,7 @@ async def test_patch_model_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     # Mock the project_fmu_directory.set_config_value to raise ValueError
@@ -1564,7 +1551,7 @@ async def test_patch_access_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     # Mock the project_fmu_directory.set_config_value to raise ValueError
@@ -1661,7 +1648,7 @@ async def test_patch_cache_max_revisions_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch.object(
@@ -2151,43 +2138,6 @@ async def test_get_lock_status_with_lock_file_not_exists(
             assert lock_status["lock_file_read_error"] is None
 
 
-async def test_get_lock_status_does_not_update_expiration(
-    client_with_project_session: TestClient,
-    session_id: str,
-) -> None:
-    """Test that lock status endpoint does not update the session expiration."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    before_acquire = await session_manager.get_session(
-        session_id, extend_expiration=False
-    )
-    # Must be copied. Session is reference
-    before_acquire_expiration = before_acquire.expires_at
-    before_acquire_accessed = before_acquire.last_accessed
-
-    # Acquire lock (or something.)
-    client_with_project_session.post(f"{ROUTE}/lock_acquire")
-
-    before_status = await session_manager.get_session(
-        session_id, extend_expiration=False
-    )
-    before_expiration = before_status.expires_at
-    before_accessed = before_status.last_accessed
-
-    assert before_acquire_accessed < before_accessed
-    assert before_acquire_expiration < before_expiration  # Updates expiration
-
-    # Request
-    client_with_project_session.get(f"{ROUTE}/lock_status")
-
-    after_status = await session_manager.get_session(
-        session_id, extend_expiration=False
-    )
-
-    assert before_accessed < after_status.last_accessed
-    assert before_expiration == after_status.expires_at
-
-
 # POST project/lock_acquire #
 
 
@@ -2196,9 +2146,7 @@ async def test_post_lock_acquire_success(
     session_id: str,
 ) -> None:
     """Test lock acquire route returns writable project when lock is held."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2224,9 +2172,7 @@ async def test_post_lock_acquire_conflict_returns_read_only(
     session_id: str,
 ) -> None:
     """Test lock acquire route returns read-only when acquisition fails."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2397,9 +2343,7 @@ async def test_post_lock_refresh_success(
     session_id: str,
 ) -> None:
     """Test lock refresh route returns success message after refreshing the lock."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2428,9 +2372,7 @@ async def test_post_lock_refresh_when_not_held(
     session_id: str,
 ) -> None:
     """Test lock refresh route when lock is not held."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2463,9 +2405,7 @@ async def test_post_lock_refresh_records_refresh_error(
     """Test lock refresh route records error if refresh fails."""
     from fmu.settings._resources.lock_manager import LockError  # noqa: PLC0415
 
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2495,9 +2435,7 @@ async def test_post_lock_refresh_permission_error(
     session_id: str,
 ) -> None:
     """Test lock refresh route swallows permission errors gracefully."""
-    from fmu_settings_api.session import session_manager  # noqa: PLC0415
-
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     mock_lock = Mock()
@@ -2579,7 +2517,7 @@ async def test_get_rms_projects_returns_list(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch.object(
@@ -2610,7 +2548,7 @@ async def test_get_rms_projects_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch.object(
@@ -2635,7 +2573,7 @@ async def test_get_rms_projects_file_not_found(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch.object(
@@ -2658,7 +2596,7 @@ async def test_get_rms_projects_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch.object(
@@ -2854,7 +2792,7 @@ async def test_patch_rms_general_exception(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     rms_path = session_tmp_path / "rms/model/project.rms14.2.2"
@@ -3172,7 +3110,7 @@ async def test_get_mappings_stratigraphy_returns_grouped(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3213,7 +3151,7 @@ async def test_get_mappings_stratigraphy_filters_by_systems(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3258,7 +3196,7 @@ async def test_get_mappings_stratigraphy_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
     fmu_dir = session.project_fmu_directory
 
@@ -3326,7 +3264,7 @@ async def test_get_mappings_stratigraphy_file_not_found(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     with patch(
@@ -3354,7 +3292,7 @@ async def test_put_mappings_stratigraphy_success(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3384,7 +3322,7 @@ async def test_put_mappings_stratigraphy_preserves_other_systems(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3436,7 +3374,7 @@ async def test_put_mappings_stratigraphy_body_validation_mismatch(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3468,7 +3406,7 @@ async def test_put_mappings_stratigraphy_body_target_system_mismatch(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3587,7 +3525,7 @@ async def test_get_cache_returns_resource_revisions(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3614,7 +3552,7 @@ async def test_get_cache_resource_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3646,7 +3584,7 @@ async def test_get_cache_revision_returns_resource_content(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3672,7 +3610,7 @@ async def test_get_cache_revision_returns_mappings_content(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3712,7 +3650,7 @@ async def test_get_cache_revision_invalid_resource_json(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3735,7 +3673,7 @@ async def test_get_cache_revision_resource_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3771,7 +3709,7 @@ async def test_get_cache_diff_returns_resource_diff(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3821,7 +3759,7 @@ async def test_get_cache_diff_invalid_resource_json(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3844,7 +3782,7 @@ async def test_get_cache_diff_resource_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3881,7 +3819,7 @@ async def test_post_cache_restore_updates_resource(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3917,7 +3855,7 @@ async def test_post_cache_restore_updates_mappings(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3950,7 +3888,7 @@ async def test_post_cache_restore_resource_missing_file(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -3998,7 +3936,7 @@ async def test_post_cache_restore_invalid_resource_content(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
@@ -4025,7 +3963,7 @@ async def test_post_cache_restore_resource_permission_error(
         settings.SESSION_COOKIE_KEY, None
     )
     assert session_id is not None
-    session = await session_manager.get_session(session_id)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory

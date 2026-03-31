@@ -24,13 +24,9 @@ from fmu_settings_api.deps.permissions import (
 from fmu_settings_api.deps.project import get_project_service
 from fmu_settings_api.deps.session import (
     get_project_session,
-    get_project_session_no_extend,
     get_project_session_service,
-    get_project_session_service_no_extend,
     get_session,
-    get_session_no_extend,
     get_session_service,
-    get_session_service_no_extend,
 )
 from fmu_settings_api.deps.smda import get_project_smda_interface
 from fmu_settings_api.deps.user_fmu import ensure_user_fmu_directory
@@ -44,6 +40,8 @@ from fmu_settings_api.session import (
     Session,
     SessionManager,
     add_fmu_project_to_session,
+    create_fmu_session,
+    get_fmu_session,
 )
 
 ROUTE = "/api/v1/health"
@@ -56,22 +54,19 @@ async def test_get_session_dep(
     with pytest.raises(HTTPException, match="401: No active session found"):
         await get_session(None)
 
-    with pytest.raises(HTTPException, match="401: Invalid or expired session"):
-        await get_session(Cookie(default=uuid4()))
-
     user_fmu_dir = init_user_fmu_directory()
-    valid_session = await session_manager.create_session(user_fmu_dir)
-    session = await get_session(valid_session)
+    valid_session = await create_fmu_session(user_fmu_dir)
+    session = await get_session(None, valid_session)
     assert session.user_fmu_directory.path == user_fmu_dir.path
 
     with (
         patch(
-            "fmu_settings_api.deps.session.session_manager.get_session",
+            "fmu_settings_api.deps.session.get_fmu_session",
             side_effect=Exception("foo"),
         ),
         pytest.raises(HTTPException, match="500: Session error: foo"),
     ):
-        await get_session(Cookie(default=object))
+        await get_session(None, Cookie(default=object))
 
 
 def test_get_session_dep_from_request(
@@ -228,7 +223,7 @@ async def test_check_write_permissions_project_not_acquired(
 ) -> None:
     """Test that check_write_permissions raises HTTPException when not acquired."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -254,7 +249,7 @@ async def test_check_write_permissions_not_locked(
 ) -> None:
     """Test that check_write_permissions raises 423 when project is not locked."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -280,7 +275,7 @@ async def test_check_write_permissions_permission_error(
 ) -> None:
     """Test that check_write_permissions raises 403 on PermissionError."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -305,7 +300,7 @@ async def test_check_write_permissions_file_not_found_error(
 ) -> None:
     """Test that check_write_permissions raises 423 on FileNotFoundError."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -324,115 +319,18 @@ async def test_check_write_permissions_file_not_found_error(
     assert "read-only" in str(exc_info.value.detail)
 
 
-async def test_get_session_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
-) -> None:
-    """Tests that get_session_no_extend does not extend session expiration."""
-    with pytest.raises(HTTPException, match="401: No active session found"):
-        await get_session_no_extend(None)
-
-    with pytest.raises(HTTPException, match="401: Invalid or expired session"):
-        await get_session_no_extend(Cookie(default=uuid4()))
-
-    user_fmu_dir = init_user_fmu_directory()
-    valid_session = await session_manager.create_session(user_fmu_dir)
-    session = await get_session_no_extend(valid_session)
-    assert session.user_fmu_directory.path == user_fmu_dir.path
-
-    with (
-        patch(
-            "fmu_settings_api.deps.session.session_manager.get_session",
-            side_effect=Exception("foo"),
-        ),
-        pytest.raises(HTTPException, match="500: Session error: foo"),
-    ):
-        await get_session_no_extend(Cookie(default=object))
-
-
-async def test_get_project_session_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path,
-    session_manager: SessionManager,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that get_project_session_no_extend does not extend session expiration."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    with pytest.raises(HTTPException) as exc_info:
-        await get_project_session_no_extend(session_id)
-    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-    assert "No FMU project directory open" in str(exc_info.value.detail)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-    await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-    result = await get_project_session_no_extend(session_id)
-    assert isinstance(result, ProjectSession)
-    assert result.project_fmu_directory.path == project_fmu_dir.path
-
-    original_expires_at = result.expires_at
-    result2 = await get_project_session_no_extend(session_id)
-    assert result2.expires_at == original_expires_at
-
-    project_fmu_dir.path.parent.rename(tmp_path_mocked_home / "deleted")
-    with pytest.raises(HTTPException) as exc_info:
-        await get_project_session_no_extend(session_id)
-    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
-    assert "Project .fmu directory not found" in str(exc_info.value.detail)
-
-
-async def test_get_project_session_extends_expiration(
-    tmp_path_mocked_home: Path,
-    session_manager: SessionManager,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that get_project_session extends session expiration."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-    await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-    result = await get_project_session(session_id)
-    original_expires_at = result.expires_at
-
-    result2 = await get_project_session(session_id)
-    assert result2.expires_at > original_expires_at
-
-
 async def test_get_session_service_returns_session_service(
     tmp_path_mocked_home: Path, session_manager: SessionManager
 ) -> None:
     """Tests that get_session_service returns a SessionService instance."""
     user_fmu_dir = init_user_fmu_directory()
-    valid_session = await session_manager.create_session(user_fmu_dir)
-    session = await get_session(valid_session)
+    valid_session = await create_fmu_session(user_fmu_dir)
+    session = await get_session(None, valid_session)
 
     service = await get_session_service(session)
     assert isinstance(service, SessionService)
     assert service._session == session
     assert isinstance(service._session, Session)
-
-
-async def test_get_session_service_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path, session_manager: SessionManager
-) -> None:
-    """Tests that get_session_service_no_extend does not extend session expiration."""
-    user_fmu_dir = init_user_fmu_directory()
-    valid_session = await session_manager.create_session(user_fmu_dir)
-    session = await get_session_no_extend(valid_session)
-
-    service = await get_session_service_no_extend(session)
-    assert isinstance(service, SessionService)
-    assert service._session == session
-    assert isinstance(service._session, Session)
-
-    original_expires_at = session.expires_at
-    session2 = await get_session_no_extend(valid_session)
-    service2 = await get_session_service_no_extend(session2)
-    assert service2._session.expires_at == original_expires_at
 
 
 async def test_get_project_session_service_returns_session_service(
@@ -442,46 +340,21 @@ async def test_get_project_session_service_returns_session_service(
 ) -> None:
     """Tests that get_project_session_service returns a SessionService instance."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-    project_session = await get_project_session(session_id)
+    session = await get_fmu_session(session_id)
+
+    project_session = await get_project_session(session)
     service = await get_project_session_service(project_session)
 
     assert isinstance(service, SessionService)
     assert service._session == project_session
     assert isinstance(service._session, ProjectSession)
     assert service._session.project_fmu_directory.path == project_fmu_dir.path
-
-
-async def test_get_project_session_service_no_extend_does_not_extend_expiration(
-    tmp_path_mocked_home: Path,
-    session_manager: SessionManager,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that get_project_session_service_no_extend does not extend expiration."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-    await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-    project_session = await get_project_session_no_extend(session_id)
-    service = await get_project_session_service_no_extend(project_session)
-
-    assert isinstance(service, SessionService)
-    assert service._session == project_session
-    assert isinstance(service._session, ProjectSession)
-    assert service._session.project_fmu_directory.path == project_fmu_dir.path
-
-    original_expires_at = project_session.expires_at
-    project_session2 = await get_project_session_no_extend(session_id)
-    service2 = await get_project_session_service_no_extend(project_session2)
-    assert service2._session.expires_at == original_expires_at
 
 
 async def test_get_project_service_returns_project_service(
@@ -491,13 +364,15 @@ async def test_get_project_service_returns_project_service(
 ) -> None:
     """Tests that get_project_service returns a ProjectService instance."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-    project_session = await get_project_session(session_id)
+    session = await get_fmu_session(session_id)
+
+    project_session = await get_project_session(session)
     project_service = await get_project_service(project_session)
 
     assert isinstance(project_service, ProjectService)
@@ -512,7 +387,7 @@ async def test_refresh_lock_dep_refreshes_lock_when_acquired(
 ) -> None:
     """Tests that RefreshLockDep refreshes the lock when it is acquired."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -535,7 +410,7 @@ async def test_refresh_lock_dep_does_nothing_when_not_acquired(
 ) -> None:
     """Tests that RefreshLockDep does nothing when lock is not acquired."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -558,7 +433,7 @@ async def test_refresh_lock_dep_handles_lock_error(
 ) -> None:
     """Tests that RefreshLockDep handles lock errors gracefully."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -571,7 +446,7 @@ async def test_refresh_lock_dep_handles_lock_error(
     await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     await refresh_project_lock_dep(session_id)
-    session = await session_manager.get_session(session_id, extend_expiration=False)
+    session = await get_fmu_session(session_id)
     assert isinstance(session, ProjectSession)
     assert session.lock_errors.refresh is not None
     assert "Lock refresh failed" in session.lock_errors.refresh
@@ -584,7 +459,7 @@ async def test_refresh_lock_dep_handles_permission_error(
 ) -> None:
     """Tests that RefreshLockDep swallows PermissionError exceptions."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -615,7 +490,7 @@ async def test_refresh_lock_dep_no_project_session(
 ) -> None:
     """Tests that RefreshLockDep raises 401 when no project session exists."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with pytest.raises(HTTPException) as exc_info:
         await refresh_project_lock_dep(session_id)

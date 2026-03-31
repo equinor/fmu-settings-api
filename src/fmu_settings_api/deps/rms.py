@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException
 from runrms.api import RmsApiProxy
 
 from fmu_settings_api.services.rms import RmsService
+from fmu_settings_api.session import refresh_rms_session
 
 from .project import ProjectServiceDep
 from .session import ProjectSessionDep
@@ -37,7 +38,7 @@ RmsProjectPathDep = Annotated[Path, Depends(get_rms_project_path)]
 async def get_opened_rms_project(
     project_session: ProjectSessionDep,
 ) -> RmsApiProxy:
-    """Returns the opened RMS project from the session."""
+    """Returns the opened RMS project from the session and refreshes its expiry."""
     if project_session.rms_session is None:
         raise HTTPException(
             status_code=400,
@@ -45,7 +46,9 @@ async def get_opened_rms_project(
                 "No RMS project is currently open. Please open an RMS project first."
             ),
         )
-    return project_session.rms_session.project
+
+    refreshed_rms_session = await refresh_rms_session(project_session)
+    return refreshed_rms_session.project
 
 
 RmsProjectDep = Annotated[RmsApiProxy, Depends(get_opened_rms_project)]

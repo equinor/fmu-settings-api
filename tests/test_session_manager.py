@@ -4,7 +4,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fmu.settings import ProjectFMUDirectory
@@ -15,6 +15,7 @@ from pydantic import SecretStr
 from fmu_settings_api.config import settings
 from fmu_settings_api.models.common import AccessToken
 from fmu_settings_api.session import (
+    AccessTokens,
     ProjectSession,
     RmsSession,
     Session,
@@ -24,12 +25,18 @@ from fmu_settings_api.session import (
     add_fmu_project_to_session,
     add_rms_project_to_session,
     create_fmu_session,
-    destroy_fmu_session,
+    destroy_fmu_session_if_expired,
+    get_fmu_session,
+    get_rms_session_expiration,
+    refresh_project_lock,
+    refresh_rms_session,
     release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
+    renew_fmu_session,
     session_manager,
     try_acquire_project_lock,
+    update_fmu_session,
 )
 
 
@@ -45,23 +52,224 @@ def mock_rms_project() -> MagicMock:
     return MagicMock(close=MagicMock())
 
 
-def test_session_manager_init() -> None:
-    """Tests initialization of the SessionManager."""
-    assert session_manager.storage == SessionManager().storage == {}
+class TestSessionManagerClass:
+    """Tests of the internal methods of the SessionManager class."""
+
+    def test_session_manager_init(self) -> None:
+        """Tests initialization of the SessionManager."""
+        assert session_manager.storage == SessionManager().storage == {}
+
+    async def test_store_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests storing a new session to the storage backend."""
+        now = datetime.now(UTC)
+        session = Session(
+            id="test_id",
+            user_fmu_directory=init_user_fmu_directory(),
+            created_at=now,
+            expires_at=now,
+            last_accessed=now,
+            access_tokens=AccessTokens(fmu_settings=SecretStr("some_secret")),
+        )
+        session_id = session.id
+        await session_manager._store_session(session_id, session)
+        assert session_manager.storage[session_id] == session
+
+    async def test_retrieve_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests retrieving a session from the storage backend."""
+        now = datetime.now(UTC)
+        session_id = "test_id"
+        session = Session(
+            id=session_id,
+            user_fmu_directory=init_user_fmu_directory(),
+            created_at=now,
+            expires_at=now,
+            last_accessed=now,
+            access_tokens=AccessTokens(fmu_settings=SecretStr("some_secret")),
+        )
+        await session_manager._store_session(session_id, session)
+        retrieved_session = await session_manager._retrieve_session(session_id)
+
+        assert retrieved_session == session_manager.storage[session_id]
+        assert retrieved_session == session
+
+    async def test_update_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests updating a session."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+        session = await session_manager.get_session(session_id)
+        expires_at_old = session.expires_at
+        expires_at_new = expires_at_old + timedelta(seconds=5)
+        session.expires_at = expires_at_new
+
+        await session_manager.update_session(session.id, session)
+
+        assert session_manager.storage[session_id].expires_at == expires_at_new
+        assert session_manager.storage[session_id] == session
+
+    async def test_destroy_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests destroying a session."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+        await session_manager.destroy_session(session_id)
+        assert session_id not in session_manager.storage
+        assert len(session_manager.storage) == 0
+
+    async def test_destroy_session_releases_project_lock(
+        self,
+        session_manager: SessionManager,
+        tmp_path_mocked_home: Path,
+        init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+    ) -> None:
+        """Tests that destroying a session with a project releases the project lock."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+
+        project_path = tmp_path_mocked_home / "test_project"
+        project_fmu_dir = init_project_fmu_directory(project_path)
+
+        mock_lock = Mock()
+        project_fmu_dir._lock = mock_lock
+
+        with patch("fmu_settings_api.session.session_manager", session_manager):
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
+            mock_lock.acquire.assert_called_once()
+
+            await session_manager.destroy_session(session_id)
+            mock_lock.release.assert_called_once()
+
+    async def test_destroy_session_handles_lock_release_exceptions(
+        self,
+        session_manager: SessionManager,
+        tmp_path_mocked_home: Path,
+        init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+    ) -> None:
+        """Tests that session destruction handles lock release exceptions gracefully."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+
+        project_path = tmp_path_mocked_home / "test_project"
+        project_fmu_dir = init_project_fmu_directory(project_path)
+
+        mock_lock = Mock()
+        mock_lock.release.side_effect = Exception("Lock release failed")
+        project_fmu_dir._lock = mock_lock
+
+        with patch("fmu_settings_api.session.session_manager", session_manager):
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+            await session_manager.destroy_session(session_id)
+
+            assert session_id not in session_manager.storage
+
+    async def test_destroy_session_closes_rms_project(
+        self,
+        session_manager: SessionManager,
+        tmp_path_mocked_home: Path,
+        init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+        mock_rms_executor: MagicMock,
+        mock_rms_project: MagicMock,
+    ) -> None:
+        """Test that destroying a session closes the RMS project."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+
+        project_path = tmp_path_mocked_home / "test_project"
+        project_fmu_dir = init_project_fmu_directory(project_path)
+
+        with patch("fmu_settings_api.session.session_manager", session_manager):
+            await add_fmu_project_to_session(session_id, project_fmu_dir)
+            await add_rms_project_to_session(
+                session_id, mock_rms_executor, mock_rms_project
+            )
+
+            await session_manager.destroy_session(session_id)
+
+        mock_rms_project.close.assert_called_once()
+        mock_rms_executor.shutdown.assert_called_once()
+
+    async def test_create_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests creating a new session."""
+        user_fmu_dir = init_user_fmu_directory()
+        mocked_now = datetime.now(UTC)
+        expire_seconds = 5
+
+        with patch("fmu_settings_api.session.datetime") as datetime_mock:
+            datetime_mock.now.return_value = mocked_now
+            session_id = await session_manager.create_session(
+                user_fmu_dir, expire_seconds
+            )
+
+        assert session_id in session_manager.storage
+        assert session_manager.storage[session_id].user_fmu_directory == user_fmu_dir
+        assert session_manager.storage[session_id].expires_at == mocked_now + timedelta(
+            seconds=expire_seconds
+        )
+        assert len(session_manager.storage) == 1
+
+    async def test_create_session_uses_default_expire_seconds(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Creating a new session will use the default expiration when not specified."""
+        user_fmu_dir = init_user_fmu_directory()
+        mocked_now = datetime.now(UTC)
+
+        with patch("fmu_settings_api.session.datetime") as datetime_mock:
+            datetime_mock.now.return_value = mocked_now
+            session_id = await session_manager.create_session(user_fmu_dir)
+
+        assert session_id in session_manager.storage
+        assert session_manager.storage[session_id].user_fmu_directory == user_fmu_dir
+        assert session_manager.storage[session_id].expires_at == mocked_now + timedelta(
+            seconds=settings.SESSION_EXPIRE_SECONDS
+        )
+        assert len(session_manager.storage) == 1
+
+    async def test_get_existing_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests getting an existing session."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+        session = await session_manager.get_session(session_id)
+        assert session == session_manager.storage[session_id]
+        assert len(session_manager.storage) == 1
+
+    async def test_get_non_existing_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests getting a non existing session raises SessionNotFoundError."""
+        user_fmu_dir = init_user_fmu_directory()
+        await session_manager.create_session(user_fmu_dir)
+        with pytest.raises(SessionNotFoundError, match="No active session found"):
+            await session_manager.get_session("no")
+        assert len(session_manager.storage) == 1
+
+    async def test_get_existing_session_updates_last_accessed(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests getting an existing session updates its last accessed."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+        orig_session = deepcopy(session_manager.storage[session_id])
+        session = await session_manager.get_session(session_id)
+        assert session is not None
+        assert orig_session.last_accessed < session.last_accessed
 
 
-async def test_create_session(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests creating a new session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    assert session_id in session_manager.storage
-    assert session_manager.storage[session_id].user_fmu_directory == user_fmu_dir
-    assert len(session_manager.storage) == 1
+# Test wrapper functions
 
 
-async def test_create_session_wrapper(
+async def test_create_fmu_session(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
     """Tests creating a new session with the wrapper."""
@@ -73,88 +281,362 @@ async def test_create_session_wrapper(
     assert len(session_manager.storage) == 1
 
 
-async def test_get_non_existing_session(
+async def test_get_fmu_session(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
-    """Tests getting an existing session."""
+    """Tests getting a session with the wrapper."""
     user_fmu_dir = init_user_fmu_directory()
-    await session_manager.create_session(user_fmu_dir)
-    with pytest.raises(SessionNotFoundError, match="No active session found"):
-        await session_manager.get_session("no")
-    assert len(session_manager.storage) == 1
-
-
-async def test_get_existing_session(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests getting an existing session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    session = await session_manager.get_session(session_id)
+    session_id = await create_fmu_session(user_fmu_dir)
+    session = await get_fmu_session(session_id)
     assert session == session_manager.storage[session_id]
     assert len(session_manager.storage) == 1
 
 
-async def test_get_existing_session_expiration(
+async def test_update_fmu_session(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
-    """Tests getting an existing session expires."""
+    """Tests updating a session with the wrapper."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    orig_session = session_manager.storage[session_id]
-    expiration_duration = timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
-    assert orig_session.created_at + expiration_duration == orig_session.expires_at
+    session_id = await create_fmu_session(user_fmu_dir)
+    session = await get_fmu_session(session_id)
+    expires_at_old = session.expires_at
+    expires_at_new = expires_at_old + timedelta(seconds=5)
+    session.expires_at = expires_at_new
 
-    # Pretend it expired a second ago.
-    orig_session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
-    with pytest.raises(SessionNotFoundError, match="Invalid or expired session"):
-        assert await session_manager.get_session(session_id)
-    # It should also be destroyed.
+    await update_fmu_session(session)
+    updated_session = await get_fmu_session(session_id)
+
+    assert updated_session.expires_at == expires_at_new
+    assert updated_session == session_manager.storage[session_id]
+
+
+async def test_renew_fmu_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests renewing a session rotates its id and expiration."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+    session = await get_fmu_session(session_id)
+    original_created_at = session.created_at
+    original_expires_at = session.expires_at
+
+    renewed_session = await renew_fmu_session(session_id)
+
+    assert renewed_session.id != session_id
+    assert renewed_session.created_at > original_created_at
+    assert renewed_session.expires_at > original_expires_at
+    assert renewed_session.user_fmu_directory == user_fmu_dir
     assert session_id not in session_manager.storage
-    assert len(session_manager.storage) == 0
+    assert renewed_session.id in session_manager.storage
 
 
-async def test_get_existing_session_updates_last_accessed(
+async def test_destroy_fmu_session_if_expired_with_expired_session() -> None:
+    """Tests that the session is destroyed and the RMS session is removed.
+
+    Scnenario: Both the user session and the RMS session has expired.
+    """
+    mocked_session = AsyncMock(spec=ProjectSession)
+    mocked_rms_session = MagicMock()
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+    mocked_session.rms_session = mocked_rms_session
+    expired_timestamp = datetime.now(UTC)
+
+    # Expire both sessions
+    mocked_session.expires_at = expired_timestamp
+    mocked_session.rms_session.expires_at = expired_timestamp
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_destroy_session = AsyncMock(return_value=None)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+        mocked_session_manager.destroy_session.side_effect = mocked_destroy_session
+        with patch(
+            "fmu_settings_api.session.remove_rms_project_from_session",
+            new_callable=AsyncMock,
+        ) as mock_remove_rms_project:
+            mock_remove_rms_project.return_value = None
+            await destroy_fmu_session_if_expired(mocked_session.id)
+
+            mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+            mocked_session_manager.destroy_session.assert_called_once_with(
+                mocked_session_id
+            )
+            mock_remove_rms_project.assert_called_once_with(mocked_session_id)
+
+
+async def test_destroy_fmu_session_if_expired_with_only_rms_session_expired() -> None:
+    """Tests that only the RMS session is removed if only RMS session has expired.
+
+    Scnenario: User session is valid, RMS session has expired.
+    """
+    mocked_session = AsyncMock(spec=ProjectSession)
+    mocked_rms_session = MagicMock()
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+    mocked_session.rms_session = mocked_rms_session
+
+    # Expire only the RMS session
+    active_datetime = datetime.now(UTC) + timedelta(seconds=60)
+    mocked_session.expires_at = active_datetime
+    expired_datetime = datetime.now(UTC)
+    mocked_session.rms_session.expires_at = expired_datetime
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_destroy_session = AsyncMock(return_value=None)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+        mocked_session_manager.destroy_session.side_effect = mocked_destroy_session
+
+        with patch(
+            "fmu_settings_api.session.remove_rms_project_from_session",
+            new_callable=AsyncMock,
+        ) as mock_remove_rms_project:
+            mock_remove_rms_project.return_value = None
+            await destroy_fmu_session_if_expired(mocked_session.id)
+
+            mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+            mock_remove_rms_project.assert_called_once_with(mocked_session_id)
+            mocked_session_manager.destroy_session.assert_not_called()
+
+
+async def test_destroy_fmu_session_if_expired_when_session_is_valid() -> None:
+    """Tests that no session is destroyed or removed when both sessions are active.
+
+    Scnenario: Both user session and RMS session is active.
+    """
+    mocked_session = AsyncMock(spec=ProjectSession)
+    mocked_rms_session = MagicMock()
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+    mocked_session.rms_session = mocked_rms_session
+
+    # Set both sessions as active
+    active_datetime = datetime.now(UTC) + timedelta(seconds=60)
+    mocked_session.expires_at = active_datetime
+    mocked_session.rms_session.expires_at = active_datetime
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_destroy_session = AsyncMock(return_value=None)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+        mocked_session_manager.destroy_session.side_effect = mocked_destroy_session
+
+        with patch(
+            "fmu_settings_api.session.remove_rms_project_from_session",
+            new_callable=AsyncMock,
+        ) as mock_remove_rms_project:
+            mock_remove_rms_project.return_value = None
+            await destroy_fmu_session_if_expired(mocked_session.id)
+
+            mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+            mock_remove_rms_project.assert_not_called()
+            mocked_session_manager.destroy_session.assert_not_called()
+
+
+async def test_refresh_rms_session_with_open_rms_project() -> None:
+    """Tests that the RMS session expiration is refreshed."""
+    mocked_session = MagicMock(spec=ProjectSession)
+    mocked_rms_session = MagicMock()
+    mocked_session.rms_session = mocked_rms_session
+    mocked_now = datetime.now(UTC)
+    mocked_rms_session.expires_at = mocked_now
+
+    with patch(
+        "fmu_settings_api.session.update_fmu_session",
+        new_callable=AsyncMock,
+    ) as mock_update_session:
+        refreshed_rms_session = await refresh_rms_session(mocked_session)
+
+        mock_update_session.assert_awaited_once_with(mocked_session)
+        assert mocked_session.rms_session.expires_at > mocked_now
+        assert refreshed_rms_session == mocked_rms_session
+
+
+async def test_add_fmu_project_to_session_acquires_lock(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+) -> None:
+    """Tests that adding an FMU project to a session acquires the lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_fmu_dir = init_project_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+    mock_lock.acquire.assert_called_once()
+
+
+async def test_add_fmu_project_to_session_releases_previous_lock(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+) -> None:
+    """Tests that adding a new project releases the previous project's lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project1_path = tmp_path_mocked_home / "test_project1"
+    project1_fmu_dir = init_project_fmu_directory(project1_path)
+
+    project2_path = tmp_path_mocked_home / "test_project2"
+    project2_fmu_dir = init_project_fmu_directory(project2_path)
+
+    mock_lock1 = Mock()
+    mock_lock2 = Mock()
+    project1_fmu_dir._lock = mock_lock1
+    project2_fmu_dir._lock = mock_lock2
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project1_fmu_dir)
+        mock_lock1.acquire.assert_called_once()
+
+        await add_fmu_project_to_session(session_id, project2_fmu_dir)
+        mock_lock1.release.assert_called_once()
+        mock_lock2.acquire.assert_called_once()
+
+
+async def test_add_fmu_project_to_session_handles_previous_lock_release_error(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+) -> None:
+    """Tests handling exception when releasing previous lock."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project1_path = tmp_path_mocked_home / "test_project1"
+    project1_fmu_dir = init_project_fmu_directory(project1_path)
+
+    mock_lock1 = Mock()
+    project1_fmu_dir._lock = mock_lock1
+
+    project2_path = tmp_path_mocked_home / "test_project2"
+    project2_fmu_dir = init_project_fmu_directory(project2_path)
+
+    mock_lock2 = Mock()
+    project2_fmu_dir._lock = mock_lock2
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project1_fmu_dir)
+
+        mock_lock1.release.side_effect = Exception("Failed to release lock")
+
+        project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
+
+        assert project_session.project_fmu_directory == project2_fmu_dir
+        assert project_session.lock_errors.release == "Failed to release lock"
+
+        mock_lock1.release.assert_called_once()
+        mock_lock2.acquire.assert_called_once()
+
+
+async def test_add_fmu_project_to_session_closes_existing_rms(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+    mock_rms_executor: MagicMock,
+    mock_rms_project: MagicMock,
+) -> None:
+    """Test that switching projects closes any existing RMS project."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project1_path = tmp_path_mocked_home / "test_project1"
+    project1_fmu_dir = init_project_fmu_directory(project1_path)
+
+    project2_path = tmp_path_mocked_home / "test_project2"
+    project2_fmu_dir = init_project_fmu_directory(project2_path)
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project1_fmu_dir)
+
+        session = await get_fmu_session(session_id)
+        rms_session_expires_at = datetime.now(UTC) + timedelta(seconds=5)
+
+        assert isinstance(session, ProjectSession)
+        session.rms_session = RmsSession(
+            mock_rms_executor, mock_rms_project, rms_session_expires_at
+        )
+
+        project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
+
+        original_session = await get_fmu_session(session_id)
+
+    mock_rms_project.close.assert_called_once()
+    mock_rms_executor.shutdown.assert_called_once()
+    assert project_session == original_session
+    assert project_session.project_fmu_directory == project2_fmu_dir
+    assert project_session.rms_session is None
+
+
+async def test_add_fmu_project_to_session_handles_lock_error_gracefully(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+) -> None:
+    """Tests that LockError is gracefully handled in add_fmu_project_to_session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "test_project"
+    project_fmu_dir = init_project_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.acquire.side_effect = LockError("Project is locked by another process")
+    mock_lock.is_acquired.return_value = False
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
+
+        assert project_session is not None
+        assert project_session.project_fmu_directory == project_fmu_dir
+
+        mock_lock.acquire.assert_called_once()
+        assert not project_session.project_fmu_directory._lock.is_acquired()
+
+
+async def test_add_access_token_to_session_with_valid_token(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
-    """Tests getting an existing session updates its last accessed."""
+    """Tests adding a valid access token to a session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    orig_session = deepcopy(session_manager.storage[session_id])
-    session = await session_manager.get_session(session_id)
-    assert session is not None
-    assert orig_session.last_accessed < session.last_accessed
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    session = await get_fmu_session(session_id)
+    assert session.access_tokens.smda_api is None
+
+    token = AccessToken(id="smda_api", key=SecretStr("secret"))
+    await add_access_token_to_session(session_id, token)
+
+    session = await get_fmu_session(session_id)
+    assert session.access_tokens.smda_api is not None
+
+    # Assert obfuscated
+    assert str(session.access_tokens.smda_api) == "*" * 10
 
 
-async def test_get_existing_session_updates_expires_at(
+async def test_add_access_token_to_session_with_invalid_token(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
-    """Tests getting an existing session updates its expiration."""
+    """Tests adding an invalid access token to a session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    orig_session = deepcopy(session_manager.storage[session_id])
-    session = await session_manager.get_session(session_id)
-    assert session is not None
-    assert (
-        orig_session.last_accessed + timedelta(seconds=settings.SESSION_EXPIRE_SECONDS)
-        < session.expires_at
-    )
-    assert orig_session.expires_at < session.expires_at
+    session_id = await create_fmu_session(user_fmu_dir)
 
+    session = await get_fmu_session(session_id)
+    assert session.access_tokens.smda_api is None
 
-async def test_get_existing_session_does_not_update_expires_at(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests getting an existing session doesn't update expiration if not extended."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    orig_session = deepcopy(session_manager.storage[session_id])
-    session = await session_manager.get_session(session_id, extend_expiration=False)
-    assert session is not None
-    # Last accessed changed
-    assert orig_session.last_accessed < session.last_accessed
-    # But same expiration
-    assert orig_session.expires_at == session.expires_at
+    token = AccessToken(id="foo", key=SecretStr("secret"))
+    with pytest.raises(ValueError, match="Invalid access token id"):
+        await add_access_token_to_session(session_id, token)
 
 
 async def test_try_acquire_project_lock_acquires_when_not_held(
@@ -164,7 +646,7 @@ async def test_try_acquire_project_lock_acquires_when_not_held(
 ) -> None:
     """Tests that try_acquire_project_lock acquires the lock when not already held."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_acquire_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -192,7 +674,7 @@ async def test_try_acquire_project_lock_records_acquire_error(
 ) -> None:
     """Tests that lock acquire failures are captured by try_acquire_project_lock."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_acquire_error_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -218,7 +700,7 @@ async def test_try_acquire_project_lock_requires_project_session(
 ) -> None:
     """Tests that try_acquire_project_lock requires a project-scoped session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with (
         patch("fmu_settings_api.session.session_manager", session_manager),
@@ -234,7 +716,7 @@ async def test_try_acquire_project_lock_handles_is_acquired_error(
 ) -> None:
     """Tests that try_acquire_project_lock tolerates lock status errors."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_status_error_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -263,7 +745,7 @@ async def test_release_project_lock_releases_when_held(
 ) -> None:
     """Tests that release_project_lock releases the lock when held."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_release_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -289,7 +771,7 @@ async def test_release_project_lock_requires_project_session(
 ) -> None:
     """Tests that release_project_lock requires a project-scoped session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with (
         patch("fmu_settings_api.session.session_manager", session_manager),
@@ -305,7 +787,7 @@ async def test_release_project_lock_records_release_error(
 ) -> None:
     """Tests that lock release failures are captured by release_project_lock."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_release_error_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -333,7 +815,7 @@ async def test_release_project_lock_skips_when_not_held(
 ) -> None:
     """Tests that release_project_lock does not release when lock is not held."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "lock_release_not_held_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -354,101 +836,102 @@ async def test_release_project_lock_skips_when_not_held(
     assert result.lock_errors.release is None
 
 
-async def test_destroy_fmu_session(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests destroying a session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await destroy_fmu_session(session_id)
-    assert session_id not in session_manager.storage
-    assert len(session_manager.storage) == 0
-
-
-async def test_add_valid_access_token_to_session(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests adding an access token to a session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    session = await session_manager.get_session(session_id)
-    assert session.access_tokens.smda_api is None
-
-    token = AccessToken(id="smda_api", key=SecretStr("secret"))
-    await add_access_token_to_session(session_id, token)
-
-    session = await session_manager.get_session(session_id)
-    assert session.access_tokens.smda_api is not None
-
-    # Assert obfuscated
-    assert str(session.access_tokens.smda_api) == "*" * 10
-
-
-async def test_add_invalid_access_token_to_session(
-    session_manager: SessionManager, tmp_path_mocked_home: Path
-) -> None:
-    """Tests adding an invalid access token to a session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    session = await session_manager.get_session(session_id)
-    assert session.access_tokens.smda_api is None
-
-    token = AccessToken(id="foo", key=SecretStr("secret"))
-    with pytest.raises(ValueError, match="Invalid access token id"):
-        await add_access_token_to_session(session_id, token)
-
-
-async def test_add_fmu_project_to_session_acquires_lock(
+async def test_refresh_project_lock_refreshes_when_held(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
     init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
-    """Tests that adding an FMU project to a session acquires the lock."""
+    """Tests that refresh_project_lock refreshes the lock when held."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
-    project_path = tmp_path_mocked_home / "test_project"
+    project_path = tmp_path_mocked_home / "lock_refresh_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock()
     project_fmu_dir._lock = mock_lock
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await refresh_project_lock(session_id)
 
-    mock_lock.acquire.assert_called_once()
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.refresh.assert_called_once_with()
+    assert result.lock_errors.refresh is None
 
 
-async def test_add_fmu_project_to_session_releases_previous_lock(
+async def test_refresh_project_lock_requires_project_session(
+    session_manager: SessionManager, tmp_path_mocked_home: Path
+) -> None:
+    """Tests that refresh_project_lock requires a project-scoped session."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    with (
+        patch("fmu_settings_api.session.session_manager", session_manager),
+        pytest.raises(SessionNotFoundError, match="No FMU project directory open"),
+    ):
+        await refresh_project_lock(session_id)
+
+
+async def test_refresh_project_lock_records_refresh_error(
     session_manager: SessionManager,
     tmp_path_mocked_home: Path,
     init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
 ) -> None:
-    """Tests that adding a new project releases the previous project's lock."""
+    """Tests that lock refresh failures are captured by refresh_project_lock."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
-    project1_path = tmp_path_mocked_home / "test_project1"
-    project1_fmu_dir = init_project_fmu_directory(project1_path)
+    project_path = tmp_path_mocked_home / "lock_refresh_error_project"
+    project_fmu_dir = init_project_fmu_directory(project_path)
 
-    project2_path = tmp_path_mocked_home / "test_project2"
-    project2_fmu_dir = init_project_fmu_directory(project2_path)
-
-    mock_lock1 = Mock()
-    mock_lock2 = Mock()
-    project1_fmu_dir._lock = mock_lock1
-    project2_fmu_dir._lock = mock_lock2
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = True
+    mock_lock.refresh = Mock(side_effect=LockError("Refresh failed"))
+    project_fmu_dir._lock = mock_lock
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project1_fmu_dir)
-        mock_lock1.acquire.assert_called_once()
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await refresh_project_lock(session_id)
 
-        await add_fmu_project_to_session(session_id, project2_fmu_dir)
-        mock_lock1.release.assert_called_once()
-        mock_lock2.acquire.assert_called_once()
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.refresh.assert_called_once_with()
+    assert result.lock_errors.refresh == "Refresh failed"
+
+
+async def test_refresh_project_lock_skips_when_not_held(
+    session_manager: SessionManager,
+    tmp_path_mocked_home: Path,
+    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
+) -> None:
+    """Tests that refresh_project_lock does not refresh when lock is not held."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+
+    project_path = tmp_path_mocked_home / "lock_refresh_not_held_project"
+    project_fmu_dir = init_project_fmu_directory(project_path)
+
+    mock_lock = Mock()
+    mock_lock.is_acquired.return_value = False
+    mock_lock.refresh = Mock()
+    project_fmu_dir._lock = mock_lock
+
+    with patch("fmu_settings_api.session.session_manager", session_manager):
+        await add_fmu_project_to_session(session_id, project_fmu_dir)
+        mock_lock.reset_mock()
+        result = await refresh_project_lock(session_id)
+
+    assert isinstance(result, ProjectSession)
+    mock_lock.is_acquired.assert_called_once_with()
+    mock_lock.refresh.assert_not_called()
+    assert result.lock_errors.refresh is None
 
 
 async def test_remove_fmu_project_from_session_releases_lock(
@@ -458,7 +941,7 @@ async def test_remove_fmu_project_from_session_releases_lock(
 ) -> None:
     """Tests that removing an FMU project from a session releases the lock."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -481,7 +964,7 @@ async def test_remove_fmu_project_from_session_handles_lock_release_exception(
 ) -> None:
     """Tests that removing an FMU project handles lock release exceptions gracefully."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -501,126 +984,17 @@ async def test_remove_fmu_project_from_session_handles_lock_release_exception(
         assert result.id == session_id
 
 
-async def test_destroy_session_releases_project_lock(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that destroying a session with a project releases the project lock."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-        mock_lock.acquire.assert_called_once()
-
-        await session_manager.destroy_session(session_id)
-        mock_lock.release.assert_called_once()
-
-
-async def test_destroy_session_handles_lock_release_exceptions(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that session destruction handles lock release exceptions gracefully."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.release.side_effect = Exception("Lock release failed")
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        await session_manager.destroy_session(session_id)
-
-        assert session_id not in session_manager.storage
-
-
-async def test_lock_error_gracefully_handled_in_add_fmu_project_to_session(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests that LockError is gracefully handled in add_fmu_project_to_session."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-
-    mock_lock = Mock()
-    mock_lock.acquire.side_effect = LockError("Project is locked by another process")
-    mock_lock.is_acquired.return_value = False
-    project_fmu_dir._lock = mock_lock
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        project_session = await add_fmu_project_to_session(session_id, project_fmu_dir)
-
-        assert project_session is not None
-        assert project_session.project_fmu_directory == project_fmu_dir
-
-        mock_lock.acquire.assert_called_once()
-        assert not project_session.project_fmu_directory._lock.is_acquired()
-
-
-async def test_add_fmu_project_to_session_handles_previous_lock_release_error(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-) -> None:
-    """Tests handling exception when releasing previous lock."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project1_path = tmp_path_mocked_home / "test_project1"
-    project1_fmu_dir = init_project_fmu_directory(project1_path)
-
-    mock_lock1 = Mock()
-    project1_fmu_dir._lock = mock_lock1
-
-    project2_path = tmp_path_mocked_home / "test_project2"
-    project2_fmu_dir = init_project_fmu_directory(project2_path)
-
-    mock_lock2 = Mock()
-    project2_fmu_dir._lock = mock_lock2
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project1_fmu_dir)
-
-        mock_lock1.release.side_effect = Exception("Failed to release lock")
-
-        project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
-
-        assert project_session.project_fmu_directory == project2_fmu_dir
-        assert project_session.lock_errors.release == "Failed to release lock"
-
-        mock_lock1.release.assert_called_once()
-        mock_lock2.acquire.assert_called_once()
-
-
 async def test_remove_fmu_project_from_session_with_regular_session(
     session_manager: SessionManager, tmp_path_mocked_home: Path
 ) -> None:
     """Tests remove_fmu_project_from_session when session is not a ProjectSession."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         result_session = await remove_fmu_project_from_session(session_id)
 
-        original_session = await session_manager.get_session(session_id)
+        original_session = await get_fmu_session(session_id)
 
     assert result_session == original_session
 
@@ -634,7 +1008,7 @@ async def test_add_rms_project_to_session_success(
 ) -> None:
     """Test adding an RMS project to a valid project session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -646,7 +1020,7 @@ async def test_add_rms_project_to_session_success(
             session_id, mock_rms_executor, mock_rms_project
         )
 
-        original_session = await session_manager.get_session(session_id)
+        original_session = await get_fmu_session(session_id)
 
     assert result_session == original_session
     assert result_session.rms_session is not None
@@ -662,7 +1036,7 @@ async def test_add_rms_project_to_session_no_project_session(
 ) -> None:
     """Test adding an RMS project when no FMU project is open in session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with (
         patch("fmu_settings_api.session.session_manager", session_manager),
@@ -682,28 +1056,32 @@ async def test_add_rms_project_to_session_closes_existing(
 ) -> None:
     """Test that adding a new RMS project closes the existing one."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
 
     mock_rms_executor_existing = MagicMock(shutdown=MagicMock())
     mock_rms_project_existing = MagicMock(close=MagicMock())
+    rms_session_expires_at = datetime.now(UTC) + timedelta(seconds=5)
 
     with patch("fmu_settings_api.session.session_manager", session_manager):
         await add_fmu_project_to_session(session_id, project_fmu_dir)
 
-        session = await session_manager.get_session(session_id)
+        session = await get_fmu_session(session_id)
+
         assert isinstance(session, ProjectSession)
         session.rms_session = RmsSession(
-            mock_rms_executor_existing, mock_rms_project_existing
+            mock_rms_executor_existing,
+            mock_rms_project_existing,
+            rms_session_expires_at,
         )
 
         result_session = await add_rms_project_to_session(
             session_id, mock_rms_executor, mock_rms_project
         )
 
-        original_session = await session_manager.get_session(session_id)
+        original_session = await get_fmu_session(session_id)
 
     mock_rms_project_existing.close.assert_called_once()
     mock_rms_executor_existing.shutdown.assert_called_once()
@@ -711,41 +1089,7 @@ async def test_add_rms_project_to_session_closes_existing(
     assert result_session.rms_session is not None
     assert result_session.rms_session.executor == mock_rms_executor
     assert result_session.rms_session.project == mock_rms_project
-
-
-async def test_add_fmu_project_to_session_closes_existing_rms(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-    mock_rms_executor: MagicMock,
-    mock_rms_project: MagicMock,
-) -> None:
-    """Test that switching projects closes any existing RMS project."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project1_path = tmp_path_mocked_home / "test_project1"
-    project1_fmu_dir = init_project_fmu_directory(project1_path)
-
-    project2_path = tmp_path_mocked_home / "test_project2"
-    project2_fmu_dir = init_project_fmu_directory(project2_path)
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project1_fmu_dir)
-
-        session = await session_manager.get_session(session_id)
-        assert isinstance(session, ProjectSession)
-        session.rms_session = RmsSession(mock_rms_executor, mock_rms_project)
-
-        project_session = await add_fmu_project_to_session(session_id, project2_fmu_dir)
-
-        original_session = await session_manager.get_session(session_id)
-
-    mock_rms_project.close.assert_called_once()
-    mock_rms_executor.shutdown.assert_called_once()
-    assert project_session == original_session
-    assert project_session.project_fmu_directory == project2_fmu_dir
-    assert project_session.rms_session is None
+    assert result_session.rms_session.expires_at > rms_session_expires_at
 
 
 async def test_remove_rms_project_from_session_success(
@@ -757,7 +1101,7 @@ async def test_remove_rms_project_from_session_success(
 ) -> None:
     """Test removing an RMS project from a session."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -769,7 +1113,7 @@ async def test_remove_rms_project_from_session_success(
         )
 
     result_session = await remove_rms_project_from_session(session_id)
-    original_session = await session_manager.get_session(session_id)
+    original_session = await get_fmu_session(session_id)
 
     assert result_session.rms_session is None
     assert isinstance(original_session, ProjectSession)
@@ -782,7 +1126,7 @@ async def test_remove_rms_project_from_session_no_project_session(
 ) -> None:
     """Test removing an RMS project when no FMU project is open."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     with (
         patch("fmu_settings_api.session.session_manager", session_manager),
@@ -800,7 +1144,7 @@ async def test_remove_rms_project_from_session_closes_project(
 ) -> None:
     """Test that removing an RMS project calls close() on it."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -812,38 +1156,12 @@ async def test_remove_rms_project_from_session_closes_project(
         )
 
         result_session = await remove_rms_project_from_session(session_id)
-        original_session = await session_manager.get_session(session_id)
+        original_session = await get_fmu_session(session_id)
 
     mock_rms_project.close.assert_called_once()
     mock_rms_executor.shutdown.assert_called_once()
     assert result_session == original_session
     assert result_session.id == session_id
-
-
-async def test_destroy_session_closes_rms_project(
-    session_manager: SessionManager,
-    tmp_path_mocked_home: Path,
-    init_project_fmu_directory: Callable[[Path], ProjectFMUDirectory],
-    mock_rms_executor: MagicMock,
-    mock_rms_project: MagicMock,
-) -> None:
-    """Test that destroying a session closes the RMS project."""
-    user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
-
-    project_path = tmp_path_mocked_home / "test_project"
-    project_fmu_dir = init_project_fmu_directory(project_path)
-
-    with patch("fmu_settings_api.session.session_manager", session_manager):
-        await add_fmu_project_to_session(session_id, project_fmu_dir)
-        await add_rms_project_to_session(
-            session_id, mock_rms_executor, mock_rms_project
-        )
-
-        await session_manager.destroy_session(session_id)
-
-    mock_rms_project.close.assert_called_once()
-    mock_rms_executor.shutdown.assert_called_once()
 
 
 async def test_remove_fmu_project_from_session_closes_rms_project(
@@ -855,7 +1173,7 @@ async def test_remove_fmu_project_from_session_closes_rms_project(
 ) -> None:
     """Test that closing the FMU project also closes the RMS project."""
     user_fmu_dir = init_user_fmu_directory()
-    session_id = await session_manager.create_session(user_fmu_dir)
+    session_id = await create_fmu_session(user_fmu_dir)
 
     project_path = tmp_path_mocked_home / "test_project"
     project_fmu_dir = init_project_fmu_directory(project_path)
@@ -870,3 +1188,55 @@ async def test_remove_fmu_project_from_session_closes_rms_project(
 
     mock_rms_project.close.assert_called_once()
     mock_rms_executor.shutdown.assert_called_once()
+
+
+async def test_get_rms_session_expiration() -> None:
+    """Tests getting the RMS session expiration time from a session."""
+    mocked_session = AsyncMock(spec=ProjectSession)
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+    mocked_rms_session = MagicMock()
+    mocked_rms_session.expires_at = datetime.now(UTC)
+    mocked_session.rms_session = mocked_rms_session
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+
+        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
+
+        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+        assert rms_session_expiration == mocked_session.rms_session.expires_at
+
+
+async def test_get_rms_session_expiration_when_no_rms_session_present() -> None:
+    """Tests that None is returned when no RMS session present in the session."""
+    mocked_session = AsyncMock(spec=ProjectSession)
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+    mocked_session.rms_session = None
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+
+        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
+
+        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+        assert rms_session_expiration is None
+
+
+async def test_get_rms_session_expiration_requires_project_session() -> None:
+    """Tests that None is returned when the session is not a project session."""
+    mocked_session = AsyncMock(spec=Session)
+    mocked_session_id = "mocked_id"
+    mocked_session.id = mocked_session_id
+
+    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
+        mocked_get_session = AsyncMock(return_value=mocked_session)
+        mocked_session_manager.get_session.side_effect = mocked_get_session
+
+        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
+
+        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
+        assert rms_session_expiration is None

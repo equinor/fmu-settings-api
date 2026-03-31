@@ -8,14 +8,10 @@ from .project import ProjectServiceDep
 from .resource import ResourceServiceDep
 from .session import (
     ProjectSessionDep,
-    ProjectSessionNoExtendDep,
     ProjectSessionServiceDep,
-    ProjectSessionServiceNoExtendDep,
     ProjectSmdaSessionDep,
     SessionDep,
-    SessionNoExtendDep,
     SessionServiceDep,
-    SessionServiceNoExtendDep,
     get_session,
     get_smda_session,
 )
@@ -31,13 +27,9 @@ __all__ = [
     "UserFMUDirDep",
     "get_session",
     "SessionDep",
-    "SessionNoExtendDep",
     "SessionServiceDep",
-    "SessionServiceNoExtendDep",
     "ProjectSessionDep",
-    "ProjectSessionNoExtendDep",
     "ProjectSessionServiceDep",
-    "ProjectSessionServiceNoExtendDep",
     "RefreshLockDep",
     "get_smda_session",
     "ProjectSmdaSessionDep",
