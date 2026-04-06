@@ -153,5 +153,10 @@
         "name": "Trestakk",
         "code": "031",
         "roleprefix": "TRESTAKK"
+    },
+    {
+        "name": "Garantiana",
+        "code": "032",
+        "roleprefix": "GARANTIANA"
     }
 ]
