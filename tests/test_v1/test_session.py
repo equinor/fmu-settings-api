@@ -568,6 +568,39 @@ async def test_patch_access_token_unknown_failure(
         assert response.json()["detail"] == "An unexpected error occurred."
 
 
+# GET session/restore/check #
+
+
+async def test_get_restore_check_session_lists_recoverable_user_files(
+    client_with_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests GET /session/restore/check reports recoverable user .fmu files."""
+    session_id = client_with_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+
+    session = await session_manager.get_session(session_id)
+    shutil.rmtree(session.user_fmu_directory.path)
+
+    response = client_with_session.get(f"{ROUTE}/restore/check")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": ["README", "config.json"]}
+
+
+async def test_get_restore_check_session_reports_no_recoverable_files(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests GET /session/restore/check reports no recoverable files."""
+    response = client_with_project_session.get(f"{ROUTE}/restore/check")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": []}
+
+
+# POST session/restore #
+
+
 async def test_post_restore_session_restores_user_fmu_directory(
     client_with_session: TestClient,
     session_manager: SessionManager,
@@ -585,25 +618,23 @@ async def test_post_restore_session_restores_user_fmu_directory(
 
     response = client_with_session.post(f"{ROUTE}/restore")
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert response.json()["message"] == "Restored .fmu resources"
+    assert response.json() == {"files": ["README", "config.json"]}
     assert user_fmu_path.exists()
     assert session.user_fmu_directory.config.path.exists()
 
 
-async def test_post_restore_session_restores_project_fmu_directory(
+async def test_post_restore_session_does_not_restore_project_fmu_directory(
     client_with_project_session: TestClient,
     session_manager: SessionManager,
 ) -> None:
-    """Tests POST /session/restore recovers a deleted project .fmu directory."""
+    """Tests POST /session/restore only recovers deleted user .fmu files."""
     session_id = client_with_project_session.cookies.get(settings.SESSION_COOKIE_KEY)
     assert session_id is not None
 
     session = await session_manager.get_session(session_id)
     assert isinstance(session, ProjectSession)
 
-    user_fmu_path = session.user_fmu_directory.path
     project_fmu_path = session.project_fmu_directory.path
-    assert user_fmu_path.exists()
     assert project_fmu_path.exists()
 
     shutil.rmtree(project_fmu_path)
@@ -611,27 +642,8 @@ async def test_post_restore_session_restores_project_fmu_directory(
 
     response = client_with_project_session.post(f"{ROUTE}/restore")
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert response.json()["message"] == "Restored .fmu resources"
-    assert project_fmu_path.exists()
-    assert session.project_fmu_directory.config.path.exists()
-
-
-def test_post_restore_session_returns_lock_conflict_for_project(
-    client_with_project_session: TestClient,
-) -> None:
-    """Tests POST /session/restore returns 423 on project lock conflicts."""
-    error = (
-        "Cannot write to .fmu directory because it is locked by "
-        "someone@somehost (PID: 1234). Lock expires at Mon Jan  1 00:00:00 2030."
-    )
-    with patch(
-        "fmu_settings_api.services.session.SessionService.restore_fmu_directories",
-        side_effect=PermissionError(error),
-    ):
-        response = client_with_project_session.post(f"{ROUTE}/restore")
-
-    assert response.status_code == status.HTTP_423_LOCKED, response.json()
-    assert response.json()["detail"] == f"Project lock conflict: {error}"
+    assert response.json() == {"files": []}
+    assert not project_fmu_path.exists()
 
 
 def test_post_restore_session_returns_permission_denied(
@@ -639,7 +651,7 @@ def test_post_restore_session_returns_permission_denied(
 ) -> None:
     """Tests POST /session/restore returns 403 on permission issues."""
     with patch(
-        "fmu_settings_api.services.session.SessionService.restore_fmu_directories",
+        "fmu_settings_api.services.session.SessionService.restore_fmu_files",
         side_effect=PermissionError("Permission denied"),
     ):
         response = client_with_session.post(f"{ROUTE}/restore")
@@ -654,7 +666,7 @@ def test_post_restore_session_returns_conflict(
     """Tests POST /session/restore returns 409 when .fmu is not a directory."""
     error = ".fmu exists at /tmp/example but is not a directory"
     with patch(
-        "fmu_settings_api.services.session.SessionService.restore_fmu_directories",
+        "fmu_settings_api.services.session.SessionService.restore_fmu_files",
         side_effect=FileExistsError(error),
     ):
         response = client_with_session.post(f"{ROUTE}/restore")

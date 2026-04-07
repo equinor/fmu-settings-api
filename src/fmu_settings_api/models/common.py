@@ -1,5 +1,6 @@
 """Common response models from the API."""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr
@@ -21,6 +22,13 @@ class Message(BaseResponseModel):
     """A generic message to return to the GUI."""
 
     message: str
+
+
+class RestorableFilesResponse(BaseResponseModel):
+    """A list of missing .fmu files that can be restored or were restored."""
+
+    files: list[Path]
+    """Relative paths to the restorable or restored files."""
 
 
 class APIKey(BaseResponseModel):

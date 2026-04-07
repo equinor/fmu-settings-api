@@ -15,7 +15,12 @@ from fmu_settings_api.deps import (
     UserFMUDirDep,
 )
 from fmu_settings_api.deps.session import DestroySessionIfExpiredDep
-from fmu_settings_api.models import AccessToken, Message, SessionResponse
+from fmu_settings_api.models import (
+    AccessToken,
+    Message,
+    RestorableFilesResponse,
+    SessionResponse,
+)
 from fmu_settings_api.session import (
     SessionNotFoundError,
     add_fmu_project_to_session,
@@ -42,11 +47,6 @@ SessionRestoreResponses = {
         409,
         "A .fmu path exists but is not a directory",
         [{"detail": ".fmu exists at {path} but is not a directory"}],
-    ),
-    **inline_add_response(
-        423,
-        "Project is locked by another process and cannot be restored",
-        [{"detail": "Project lock conflict: {error_message}"}],
     ),
 }
 
@@ -192,35 +192,45 @@ async def get_session(
     return session_service.get_session_response()
 
 
-@router.post(
-    "/restore",
-    response_model=Message,
-    summary="Restores missing .fmu resources for the current session",
+@router.get(
+    "/restore/check",
+    response_model=RestorableFilesResponse,
+    summary="Checks which missing user .fmu resources can be restored",
     description=dedent(
         """
-        Attempts to recover missing .fmu content from in-memory state.
+        Lists recoverable missing user .fmu content from in-memory state.
+        """
+    ),
+    responses=GetSessionResponses,
+)
+async def get_restore_check(
+    session_service: SessionServiceDep,
+) -> RestorableFilesResponse:
+    """List recoverable missing user .fmu files for the current session."""
+    return RestorableFilesResponse(files=session_service.get_restorable_fmu_files())
 
-        For all sessions this restores the user .fmu directory. If a project is
-        attached to the session, the project .fmu directory is restored as well.
+
+@router.post(
+    "/restore",
+    response_model=RestorableFilesResponse,
+    summary="Restores missing user .fmu resources for the current session",
+    description=dedent(
+        """
+        Attempts to recover missing user .fmu content from in-memory state.
         """
     ),
     responses={**GetSessionResponses, **SessionRestoreResponses},
 )
-async def post_restore(session_service: SessionServiceDep) -> Message:
-    """Attempt recovery of missing .fmu directories."""
+async def post_restore(
+    session_service: SessionServiceDep,
+) -> RestorableFilesResponse:
+    """Attempt recovery of missing user .fmu files."""
     try:
-        session_service.restore_fmu_directories()
+        return RestorableFilesResponse(files=session_service.restore_fmu_files())
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except PermissionError as e:
-        if "Cannot write to .fmu directory because it is locked by" in str(e):
-            raise HTTPException(
-                status_code=423,
-                detail=f"Project lock conflict: {e}",
-            ) from e
         raise HTTPException(
             status_code=403,
             detail="Permission denied recovering .fmu resources",
         ) from e
-
-    return Message(message="Restored .fmu resources")

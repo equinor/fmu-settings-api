@@ -35,6 +35,19 @@ class ProjectService:
             config=self._fmu_dir.config.load(),
         )
 
+    def get_restorable_fmu_files(self) -> list[Path]:
+        """List missing project .fmu files that can currently be recovered."""
+        return self._fmu_dir.list_restorable_files()
+
+    def restore_fmu_files(self) -> list[Path]:
+        """Restore missing project .fmu resources."""
+        restorable_files = self.get_restorable_fmu_files()
+        if not restorable_files:
+            return []
+
+        self._fmu_dir.restore()
+        return restorable_files
+
     @property
     def config_path(self) -> Path:
         """Returns the path to the project config file."""
