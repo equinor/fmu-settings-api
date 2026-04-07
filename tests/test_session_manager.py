@@ -265,6 +265,42 @@ class TestSessionManagerClass:
         assert session is not None
         assert orig_session.last_accessed < session.last_accessed
 
+    async def test_renew_existing_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests renewing an existing session rotates its id and timestamps."""
+        user_fmu_dir = init_user_fmu_directory()
+        session_id = await session_manager.create_session(user_fmu_dir)
+        original_session = deepcopy(session_manager.storage[session_id])
+        accessed_at = original_session.last_accessed + timedelta(seconds=1)
+        renewed_at = accessed_at + timedelta(seconds=1)
+
+        with patch("fmu_settings_api.session.datetime") as datetime_mock:
+            datetime_mock.now.side_effect = [accessed_at, renewed_at]
+            renewed_session = await session_manager.renew_session(session_id)
+
+        assert renewed_session.id != session_id
+        assert renewed_session.created_at == renewed_at
+        assert renewed_session.expires_at == renewed_at + timedelta(
+            seconds=settings.SESSION_EXPIRE_SECONDS
+        )
+        assert renewed_session.last_accessed == accessed_at
+        assert renewed_session.user_fmu_directory == user_fmu_dir
+        assert session_id not in session_manager.storage
+        assert renewed_session.id in session_manager.storage
+
+    async def test_renew_non_existing_session(
+        self, session_manager: SessionManager, tmp_path_mocked_home: Path
+    ) -> None:
+        """Tests renewing a non existing session raises SessionNotFoundError."""
+        user_fmu_dir = init_user_fmu_directory()
+        await session_manager.create_session(user_fmu_dir)
+
+        with pytest.raises(SessionNotFoundError, match="No active session found"):
+            await session_manager.renew_session("no")
+
+        assert len(session_manager.storage) == 1
+
 
 # Test wrapper functions
 

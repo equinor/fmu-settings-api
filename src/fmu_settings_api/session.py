@@ -195,16 +195,13 @@ class SessionManager:
         Raises:
             SessionNotFoundError: If the session does not exist
         """
-        session = await self._retrieve_session(session_id)
-        if session is None:
-            raise SessionNotFoundError("No active session found")
+        session = await self.get_session(session_id)
 
         now = datetime.now(UTC)
         new_session_id = str(uuid4())
         session.id = new_session_id
         session.created_at = now
         session.expires_at = now + timedelta(seconds=expire_seconds)
-        session.last_accessed = now
 
         del self.storage[session_id]
         await self._store_session(new_session_id, session)
