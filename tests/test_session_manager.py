@@ -1229,50 +1229,29 @@ async def test_remove_fmu_project_from_session_closes_rms_project(
 async def test_get_rms_session_expiration() -> None:
     """Tests getting the RMS session expiration time from a session."""
     mocked_session = AsyncMock(spec=ProjectSession)
-    mocked_session_id = "mocked_id"
-    mocked_session.id = mocked_session_id
     mocked_rms_session = MagicMock()
     mocked_rms_session.expires_at = datetime.now(UTC)
     mocked_session.rms_session = mocked_rms_session
 
-    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
-        mocked_get_session = AsyncMock(return_value=mocked_session)
-        mocked_session_manager.get_session.side_effect = mocked_get_session
+    rms_session_expiration = get_rms_session_expiration(mocked_session)
 
-        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
-
-        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
-        assert rms_session_expiration == mocked_session.rms_session.expires_at
+    assert rms_session_expiration == mocked_session.rms_session.expires_at
 
 
 async def test_get_rms_session_expiration_when_no_rms_session_present() -> None:
     """Tests that None is returned when no RMS session present in the session."""
     mocked_session = AsyncMock(spec=ProjectSession)
-    mocked_session_id = "mocked_id"
-    mocked_session.id = mocked_session_id
     mocked_session.rms_session = None
 
-    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
-        mocked_get_session = AsyncMock(return_value=mocked_session)
-        mocked_session_manager.get_session.side_effect = mocked_get_session
+    rms_session_expiration = get_rms_session_expiration(mocked_session)
 
-        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
-
-        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
-        assert rms_session_expiration is None
+    assert rms_session_expiration is None
 
 
 async def test_get_rms_session_expiration_requires_project_session() -> None:
     """Tests that None is returned when the session is not a project session."""
     mocked_session = AsyncMock(spec=Session)
-    mocked_session_id = "mocked_id"
-    mocked_session.id = mocked_session_id
 
-    with patch("fmu_settings_api.session.session_manager") as mocked_session_manager:
-        mocked_get_session = AsyncMock(return_value=mocked_session)
-        mocked_session_manager.get_session.side_effect = mocked_get_session
+    rms_session_expiration = get_rms_session_expiration(mocked_session)
 
-        rms_session_expiration = await get_rms_session_expiration(mocked_session_id)
-
-        mocked_session_manager.get_session.assert_called_with(mocked_session_id)
-        assert rms_session_expiration is None
+    assert rms_session_expiration is None

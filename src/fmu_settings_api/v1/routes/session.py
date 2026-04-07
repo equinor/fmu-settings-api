@@ -1,7 +1,6 @@
 """The main router for /api/v1/session."""
 
 import contextlib
-from pathlib import Path
 from textwrap import dedent
 from typing import Annotated
 
@@ -98,7 +97,7 @@ async def post_session(
                 id=session.id,
                 created_at=session.created_at,
                 expires_at=session.expires_at,
-                rms_expires_at=await get_rms_session_expiration(session.id),
+                rms_expires_at=get_rms_session_expiration(session),
                 last_accessed=session.last_accessed,
             )
         except SessionNotFoundError:
@@ -115,8 +114,7 @@ async def post_session(
     )
 
     with contextlib.suppress(FileNotFoundError, LockError):
-        path = Path.cwd()
-        project_fmu_dir = find_nearest_fmu_directory(path)
+        project_fmu_dir = find_nearest_fmu_directory()
         await add_fmu_project_to_session(session_id, project_fmu_dir)
 
     session = await get_fmu_session(session_id)
@@ -191,7 +189,7 @@ async def get_session(
     session_service: SessionServiceDep,
 ) -> SessionResponse:
     """Returns the current session in a serialisable format."""
-    return await session_service.get_session_response()
+    return session_service.get_session_response()
 
 
 @router.post(

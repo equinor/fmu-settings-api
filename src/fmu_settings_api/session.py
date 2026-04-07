@@ -272,9 +272,9 @@ async def destroy_fmu_session_if_expired(session_id: str) -> None:
     except SessionNotFoundError:
         return
     now = datetime.now(UTC)
-    rms_session_expiration = await get_rms_session_expiration(session.id)
+    rms_session_expiration = get_rms_session_expiration(session)
     if rms_session_expiration is not None and rms_session_expiration < now:
-        await remove_rms_project_from_session(session.id)
+        await remove_rms_project_from_session(session_id)
 
     if session.expires_at < now:
         await session_manager.destroy_session(session_id)
@@ -536,13 +536,12 @@ async def remove_rms_project_from_session(session_id: str) -> ProjectSession:
     return session
 
 
-async def get_rms_session_expiration(session_id: str) -> datetime | None:
+def get_rms_session_expiration(session: Session | ProjectSession) -> datetime | None:
     """Get the expiration time of an RMS session.
 
-    If the user session with session_id contains an open RMS session,
+    If the session contains an open RMS session,
     the expiration time of this RMS session is returned.
     """
-    session = await get_fmu_session(session_id)
     if isinstance(session, ProjectSession) and session.rms_session is not None:
         return session.rms_session.expires_at
     return None

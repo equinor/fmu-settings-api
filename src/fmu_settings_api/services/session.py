@@ -36,13 +36,13 @@ class SessionService:
         """Initialize the service with a session."""
         self._session = session
 
-    async def get_session_response(self) -> SessionResponse:
+    def get_session_response(self) -> SessionResponse:
         """Get the session data in a serializable format."""
         return SessionResponse(
             id=self._session.id,
             created_at=self._session.created_at,
             expires_at=self._session.expires_at,
-            rms_expires_at=await get_rms_session_expiration(self._session.id),
+            rms_expires_at=get_rms_session_expiration(self._session),
             last_accessed=self._session.last_accessed,
         )
 
