@@ -21,6 +21,7 @@ from fmu_settings_api.session import (
     add_access_token_to_session as add_token_to_session_manager,
     add_fmu_project_to_session,
     add_rms_project_to_session,
+    get_rms_session_expiration,
     release_project_lock,
     remove_fmu_project_from_session,
     remove_rms_project_from_session,
@@ -41,6 +42,7 @@ class SessionService:
             id=self._session.id,
             created_at=self._session.created_at,
             expires_at=self._session.expires_at,
+            rms_expires_at=get_rms_session_expiration(self._session),
             last_accessed=self._session.last_accessed,
         )
 

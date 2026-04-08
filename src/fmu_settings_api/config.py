@@ -2,6 +2,7 @@
 
 import hashlib
 import secrets
+from datetime import timedelta
 from typing import TYPE_CHECKING, Annotated, Any, Final, Literal, Self
 
 from pydantic import (
@@ -63,7 +64,14 @@ class APISettings(BaseModel):
 
     API_V1_PREFIX: str = Field(default="/api/v1", frozen=True)
     SESSION_COOKIE_KEY: str = Field(default="fmu_settings_session", frozen=True)
-    SESSION_EXPIRE_SECONDS: int = Field(default=1200, frozen=True)  # 20 minutes
+    SESSION_EXPIRE_SECONDS: int = Field(
+        default=int(timedelta(days=365).total_seconds()),
+        frozen=True,
+    )  # 365 days
+    RMS_SESSION_EXPIRE_SECONDS: int = Field(
+        default=int(timedelta(minutes=120).total_seconds()),
+        frozen=True,
+    )  # 2 hours
     APP_NAME: str = Field(default="fmu-settings-api", frozen=True)
     APP_VERSION: str = Field(default=__version__, frozen=True)
     TOKEN: str = Field(

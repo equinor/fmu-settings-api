@@ -33,7 +33,6 @@ from runrms.exceptions import RmsVersionError
 from fmu_settings_api.deps import (
     ProjectServiceDep,
     ProjectSessionServiceDep,
-    ProjectSessionServiceNoExtendDep,
     RefreshLockDep,
     ResourceServiceDep,
     SessionServiceDep,
@@ -706,7 +705,7 @@ async def post_lock_release(session_service: ProjectSessionServiceDep) -> Messag
     },
 )
 async def post_lock_refresh(
-    session_service: ProjectSessionServiceNoExtendDep,
+    session_service: ProjectSessionServiceDep,
 ) -> Message:
     """Refreshes the project lock and returns a status message."""
     lock_status = session_service.get_lock_status()
@@ -740,7 +739,7 @@ async def post_lock_refresh(
     },
 )
 async def get_lock_status(
-    session_service: ProjectSessionServiceNoExtendDep,
+    session_service: ProjectSessionServiceDep,
 ) -> LockStatus:
     """Returns the lock status and lock file contents if available."""
     return session_service.get_lock_status()
