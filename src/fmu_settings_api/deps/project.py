@@ -20,7 +20,7 @@ async def get_project_service(
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 
 
-async def get_restore_project_service(
+async def get_project_service_for_restore(
     session: SessionDep,
 ) -> ProjectService:
     """Returns a ProjectService for restore routes, even if .fmu is deleted."""
@@ -34,5 +34,5 @@ async def get_restore_project_service(
 
 
 ProjectServiceForRestoreDep = Annotated[
-    ProjectService, Depends(get_restore_project_service)
+    ProjectService, Depends(get_project_service_for_restore)
 ]

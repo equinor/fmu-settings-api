@@ -23,7 +23,7 @@ from fmu_settings_api.deps.permissions import (
 )
 from fmu_settings_api.deps.project import (
     get_project_service,
-    get_restore_project_service,
+    get_project_service_for_restore,
 )
 from fmu_settings_api.deps.session import (
     get_project_session,
@@ -393,7 +393,7 @@ async def test_get_restore_project_service_requires_project_session(
     session = await get_fmu_session(session_id)
 
     with pytest.raises(HTTPException, match="401: No FMU project directory open"):
-        await get_restore_project_service(session)
+        await get_project_service_for_restore(session)
 
 
 async def test_refresh_lock_dep_refreshes_lock_when_acquired(
