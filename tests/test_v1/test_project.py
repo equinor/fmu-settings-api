@@ -3986,3 +3986,154 @@ async def test_post_cache_restore_resource_permission_error(
     assert response.json() == {
         "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
     }
+
+
+# GET project/restore/check #
+
+
+async def test_get_restore_check_lists_recoverable_project_files(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests GET /project/restore/check reports recoverable project .fmu files."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    project_fmu_path = session.project_fmu_directory.path
+    shutil.rmtree(project_fmu_path)
+
+    response = client_with_project_session.get(f"{ROUTE}/restore/check")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": ["README", "config.json"]}
+
+
+async def test_get_restore_check_reports_no_recoverable_project_files(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests GET /project/restore/check reports empty results when no files missing."""
+    response = client_with_project_session.get(f"{ROUTE}/restore/check")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": []}
+
+
+# POST project/restore #
+
+
+async def test_post_restore_restores_project_fmu_directory(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests POST /project/restore recovers a deleted project .fmu directory."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    project_fmu_path = session.project_fmu_directory.path
+    assert project_fmu_path.exists()
+
+    shutil.rmtree(project_fmu_path)
+    assert not project_fmu_path.exists()
+
+    response = client_with_project_session.post(f"{ROUTE}/restore")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": ["README", "config.json"]}
+    assert project_fmu_path.exists()
+    assert session.project_fmu_directory.config.path.exists()
+
+
+async def test_post_restore_returns_restored_mappings_file(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+    make_stratigraphy_mappings: Callable[[], StratigraphyMappings],
+) -> None:
+    """Tests POST /project/restore reports project-only files like mappings.json."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    mappings = make_stratigraphy_mappings()
+    fmu_dir.mappings.update_stratigraphy_mappings(mappings)
+
+    mappings_path = fmu_dir.mappings.path
+    assert mappings_path.exists()
+    mappings_path.unlink()
+    assert not mappings_path.exists()
+
+    response = client_with_project_session.post(f"{ROUTE}/restore")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"files": ["mappings.json"]}
+    assert mappings_path.exists()
+    assert fmu_dir.mappings.stratigraphy_mappings == mappings
+
+
+def test_post_restore_returns_conflict(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests POST /project/restore returns 409 when .fmu is not a directory."""
+    error = ".fmu exists at /tmp/example but is not a directory"
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.restore_fmu_files",
+        side_effect=FileExistsError(error),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/restore")
+
+    assert response.status_code == status.HTTP_409_CONFLICT, response.json()
+    assert response.json()["detail"] == error
+
+
+def test_post_restore_returns_lock_conflict(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests POST /project/restore returns 423 on project lock conflicts."""
+    error = (
+        "Cannot write to .fmu directory because it is locked by "
+        "someone@somehost (PID: 1234). Lock expires at Mon Jan  1 00:00:00 2030."
+    )
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.restore_fmu_files",
+        side_effect=PermissionError(error),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/restore")
+
+    assert response.status_code == status.HTTP_423_LOCKED, response.json()
+    assert response.json()["detail"] == f"Project lock conflict: {error}"
+
+
+async def test_post_restore_returns_permission_denied(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Tests POST /project/restore returns 403 on permission issues."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await session_manager.get_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.restore_fmu_files",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/restore")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
+    assert response.json()["detail"] == (
+        f"Permission denied accessing .fmu at "
+        f"{session.project_fmu_directory.config.path}"
+    )

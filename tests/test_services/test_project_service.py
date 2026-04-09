@@ -44,6 +44,17 @@ def test_update_cache_max_revisions_success(fmu_dir: ProjectFMUDirectory) -> Non
     assert fmu_dir.config.load(force=True).cache_max_revisions == updated_value
 
 
+def test_restore_fmu_files_returns_empty_without_calling_restore(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test restore_fmu_files returns early when nothing is restorable."""
+    service = ProjectService(fmu_dir)
+
+    with patch.object(fmu_dir, "restore") as mock_restore:
+        assert service.restore_fmu_files() == []
+        mock_restore.assert_not_called()
+
+
 def test_update_rms_saves_path_and_version(fmu_dir: ProjectFMUDirectory) -> None:
     """Test that update_rms saves the RMS project path and version."""
     rms_project_path = Path("/path/to/rms/project.rms14.2.2")

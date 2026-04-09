@@ -21,7 +21,10 @@ from fmu_settings_api.deps.permissions import (
     check_write_permissions,
     refresh_project_lock_dep,
 )
-from fmu_settings_api.deps.project import get_project_service
+from fmu_settings_api.deps.project import (
+    get_project_service,
+    get_project_service_for_restore,
+)
 from fmu_settings_api.deps.session import (
     get_project_session,
     get_project_session_service,
@@ -378,6 +381,19 @@ async def test_get_project_service_returns_project_service(
     assert isinstance(project_service, ProjectService)
     assert project_service._fmu_dir == project_fmu_dir
     assert project_service._fmu_dir.path == project_fmu_dir.path
+
+
+async def test_get_restore_project_service_requires_project_session(
+    tmp_path_mocked_home: Path,
+    session_manager: SessionManager,
+) -> None:
+    """Tests that get_restore_project_service rejects plain user sessions."""
+    user_fmu_dir = init_user_fmu_directory()
+    session_id = await create_fmu_session(user_fmu_dir)
+    session = await get_fmu_session(session_id)
+
+    with pytest.raises(HTTPException, match="401: No FMU project directory open"):
+        await get_project_service_for_restore(session)
 
 
 async def test_refresh_lock_dep_refreshes_lock_when_acquired(

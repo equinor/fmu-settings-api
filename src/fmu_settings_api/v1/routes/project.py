@@ -32,6 +32,7 @@ from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.deps import (
     ProjectServiceDep,
+    ProjectServiceForRestoreDep,
     ProjectSessionServiceDep,
     RefreshLockDep,
     ResourceServiceDep,
@@ -40,7 +41,12 @@ from fmu_settings_api.deps import (
 )
 from fmu_settings_api.deps.changelog import ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
-from fmu_settings_api.models import FMUDirPath, FMUProject, Message
+from fmu_settings_api.models import (
+    FMUDirPath,
+    FMUProject,
+    Message,
+    RestorableFilesResponse,
+)
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import (
     CacheRetention,
@@ -1163,6 +1169,62 @@ async def post_cache_restore(
             detail=(
                 f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
             ),
+        ) from e
+
+
+@router.get(
+    "/restore/check",
+    response_model=RestorableFilesResponse,
+    summary="Checks which missing project .fmu resources can be restored",
+    description=dedent(
+        """
+        Lists recoverable missing project .fmu content from in-memory state.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+    },
+)
+async def get_restore_check(
+    project_service: ProjectServiceForRestoreDep,
+) -> RestorableFilesResponse:
+    """List recoverable missing project .fmu files for the current session."""
+    return RestorableFilesResponse(files=project_service.get_restorable_fmu_files())
+
+
+@router.post(
+    "/restore",
+    response_model=RestorableFilesResponse,
+    summary="Restores missing project .fmu resources for the current session",
+    description=dedent(
+        """
+        Attempts to recover missing project .fmu content from in-memory state.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+    },
+)
+async def post_restore(
+    project_service: ProjectServiceForRestoreDep,
+) -> RestorableFilesResponse:
+    """Attempt recovery of missing project .fmu files."""
+    try:
+        return RestorableFilesResponse(files=project_service.restore_fmu_files())
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except PermissionError as e:
+        if "Cannot write to .fmu directory because it is locked by" in str(e):
+            raise HTTPException(
+                status_code=423,
+                detail=f"Project lock conflict: {e}",
+            ) from e
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied accessing .fmu at {project_service.config_path}",
         ) from e
 
 
