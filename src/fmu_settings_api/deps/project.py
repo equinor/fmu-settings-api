@@ -33,6 +33,6 @@ async def get_restore_project_service(
     return ProjectService(session.project_fmu_directory)
 
 
-ProjectRestoreServiceDep = Annotated[
+ProjectServiceForRestoreDep = Annotated[
     ProjectService, Depends(get_restore_project_service)
 ]

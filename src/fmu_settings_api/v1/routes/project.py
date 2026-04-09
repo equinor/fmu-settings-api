@@ -31,8 +31,8 @@ from pydantic import ValidationError
 from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.deps import (
-    ProjectRestoreServiceDep,
     ProjectServiceDep,
+    ProjectServiceForRestoreDep,
     ProjectSessionServiceDep,
     RefreshLockDep,
     ResourceServiceDep,
@@ -1187,7 +1187,7 @@ async def post_cache_restore(
     },
 )
 async def get_restore_check(
-    project_service: ProjectRestoreServiceDep,
+    project_service: ProjectServiceForRestoreDep,
 ) -> RestorableFilesResponse:
     """List recoverable missing project .fmu files for the current session."""
     return RestorableFilesResponse(files=project_service.get_restorable_fmu_files())
@@ -1209,7 +1209,7 @@ async def get_restore_check(
     },
 )
 async def post_restore(
-    project_service: ProjectRestoreServiceDep,
+    project_service: ProjectServiceForRestoreDep,
 ) -> RestorableFilesResponse:
     """Attempt recovery of missing project .fmu files."""
     try:
