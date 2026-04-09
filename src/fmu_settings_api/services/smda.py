@@ -16,6 +16,7 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaSelectedField,
     SmdaStratigraphicUnitsResult,
     StratigraphicUnit,
 )
@@ -35,34 +36,60 @@ class SmdaService:
 
     async def search_field(self, field: SmdaField) -> SmdaFieldSearchResult:
         """Search for a field identifier in SMDA."""
-        res = await self._smda.field([field.identifier])
+        res = await self._smda.field(
+            [field.identifier],
+            columns=["country_identifier", "identifier", "uuid"],
+        )
         data = res.json()["data"]
+        data["results"] = [
+            {
+                "identifier": result["identifier"],
+                "uuid": result["uuid"],
+                "country": result["country_identifier"],
+            }
+            for result in data["results"]
+        ]
         return SmdaFieldSearchResult(**data)
 
     async def get_masterdata(
-        self, smda_fields: list[SmdaField]
+        self, smda_fields: list[SmdaSelectedField]
     ) -> SmdaMasterdataResult:
         """Retrieve masterdata for fields to be confirmed in the GUI."""
         if not smda_fields:
             raise ValueError("At least one SMDA field must be provided")
 
-        # Sorted for tests as sets don't guarantee order
-        unique_field_identifiers = sorted({field.identifier for field in smda_fields})
+        if smda_fields[0].uuid is not None:
+            field_res = await self._smda.field(
+                field_uuid=smda_fields[0].uuid,
+                columns=[
+                    "country_identifier",
+                    "identifier",
+                    "projected_coordinate_system",
+                    "uuid",
+                ],
+            )
+            field_results = field_res.json()["data"]["results"]
+        else:
+            # Sorted for tests as sets don't guarantee order
+            unique_field_identifiers = sorted(
+                {field.identifier for field in smda_fields}
+            )
+            # Query initial list of fields (with duplicates removed)
+            field_res = await self._smda.field(
+                unique_field_identifiers,
+                columns=[
+                    "country_identifier",
+                    "identifier",
+                    "projected_coordinate_system",
+                    "uuid",
+                ],
+            )
+            field_results = field_res.json()["data"]["results"]
 
-        # Query initial list of fields (with duplicates removed)
-        field_res = await self._smda.field(
-            unique_field_identifiers,
-            columns=[
-                "country_identifier",
-                "identifier",
-                "projected_coordinate_system",
-                "uuid",
-            ],
-        )
-        field_results = field_res.json()["data"]["results"]
         if not field_results:
+            requested_identifiers = [field.identifier for field in smda_fields]
             raise ValueError(
-                f"No fields found for identifiers: {unique_field_identifiers}"
+                f"No fields found for identifiers: {requested_identifiers}"
             )
 
         field_items = [FieldItem.model_validate(field) for field in field_results]

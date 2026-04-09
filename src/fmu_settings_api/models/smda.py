@@ -22,6 +22,16 @@ class SmdaField(BaseResponseModel):
     """A field identifier (name)."""
 
 
+class SmdaSelectedField(BaseResponseModel):
+    """A selected field for masterdata lookup."""
+
+    identifier: str = Field(examples=["TROLL"])
+    """A field identifier (name)."""
+
+    uuid: UUID | None = None
+    """The SMDA UUID identifier corresponding to the field identifier."""
+
+
 class SmdaStratColumn(BaseResponseModel):
     """An identifier for a stratigraphic column."""
 
@@ -37,6 +47,9 @@ class SmdaFieldUUID(BaseResponseModel):
 
     uuid: UUID
     """The SMDA UUID identifier corresponding to the field identifier."""
+
+    country: str
+    """The country identifier corresponding to the field identifier."""
 
 
 class SmdaFieldSearchResult(BaseResponseModel):

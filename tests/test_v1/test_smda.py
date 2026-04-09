@@ -136,6 +136,7 @@ async def test_post_field_succeeds_with_one(
             "pages": 1,
             "results": [
                 {
+                    "country_identifier": "Norway",
                     "identifier": "TROLL",
                     "uuid": str(uuid),
                 }
@@ -159,7 +160,7 @@ async def test_post_field_succeeds_with_one(
         hits=1,
         pages=1,
         results=[
-            SmdaFieldUUID(identifier="TROLL", uuid=uuid),
+            SmdaFieldUUID(identifier="TROLL", uuid=uuid, country="Norway"),
         ],
     )
 
@@ -365,6 +366,89 @@ async def test_post_masterdata_success(
 
     mock_smda_instance.field.assert_called_once_with(
         ["DROGON"],
+        columns=[
+            "country_identifier",
+            "identifier",
+            "projected_coordinate_system",
+            "uuid",
+        ],
+    )
+
+
+async def test_post_masterdata_uses_selected_field_uuid_for_lookup(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests that masterdata requests use the selected field uuid for lookup."""
+    selected_uuid = uuid4()
+    mock_identifier_field_response = MagicMock(spec=httpx.Response)
+    mock_identifier_field_response.status_code = 200
+    mock_identifier_field_response.json.return_value = {
+        "data": {
+            "hits": 1,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": selected_uuid,
+                },
+            ],
+        }
+    }
+
+    with (
+        patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_coordinate_systems",
+            new_callable=AsyncMock,
+        ) as mock_get_coordinate_systems,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_countries",
+            new_callable=AsyncMock,
+        ) as mock_get_countries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_discoveries",
+            new_callable=AsyncMock,
+        ) as mock_get_discoveries,
+        patch(
+            "fmu_settings_api.services.smda.SmdaService._get_strat_column_areas",
+            new_callable=AsyncMock,
+        ) as mock_get_strat_column_areas,
+    ):
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.field.return_value = mock_identifier_field_response
+        mock_smda_class.return_value = mock_smda_instance
+
+        mock_get_coordinate_systems.return_value = [
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32637",
+                uuid=uuid4(),
+            ),
+            CoordinateSystem(
+                identifier="ST_WGS84_UTM37N_P32638",
+                uuid=uuid4(),
+            ),
+        ]
+        mock_get_countries.return_value = [
+            CountryItem(identifier="Norway", uuid=uuid4())
+        ]
+        mock_get_discoveries.return_value = []
+        mock_get_strat_column_areas.return_value = []
+        response = client_with_smda_session.post(
+            f"{ROUTE}/masterdata",
+            json=[{"identifier": "DROGON", "uuid": str(selected_uuid)}],
+        )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+    assert len(response_data["field"]) == 1
+    assert str(response_data["field"][0]["uuid"]) == str(selected_uuid)
+    assert response_data["country"][0]["identifier"] == "Norway"
+
+    mock_smda_instance.field.assert_called_once_with(
+        field_uuid=selected_uuid,
         columns=[
             "country_identifier",
             "identifier",

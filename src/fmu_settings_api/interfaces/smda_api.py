@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import Any, Final
+from uuid import UUID
 
 import httpx
 
@@ -72,14 +73,23 @@ class SmdaAPI:
         return res.status_code == httpx.codes.OK
 
     async def field(
-        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+        self,
+        field_identifiers: Sequence[str] | None = None,
+        field_uuid: UUID | None = None,
+        columns: Sequence[str] | None = None,
     ) -> httpx.Response:
         """Searches for a field identifier in SMDA."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        json: dict[str, Any] = {"_projection": _projection}
+
+        if field_identifiers:
+            json["identifier"] = field_identifiers
+        if field_uuid is not None:
+            json["uuid"] = [str(field_uuid)]
 
         return await self.post(
             SmdaRoutes.FIELDS_SEARCH,
-            json={"_projection": _projection, "identifier": field_identifiers},
+            json=json,
         )
 
     async def country(

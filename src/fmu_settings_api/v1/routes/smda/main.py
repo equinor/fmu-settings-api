@@ -17,6 +17,7 @@ from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
     SmdaMasterdataResult,
+    SmdaSelectedField,
     SmdaStratColumn,
     SmdaStratigraphicUnitsResult,
 )
@@ -145,9 +146,10 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
         A route to search SMDA for an field (asset) by its named identifier.
 
         This endpoint applies a projection to the SMDA query so that only the relevant
-        data is returned: an identifier known by SMDA and its corresponding UUID. The
-        UUID should be used by other endpoints required the collection of data by a
-        field, i.e. this route is a dependency for most other routes.
+        data is returned: an identifier known by SMDA, its corresponding UUID, and the
+        country the field belongs to. The UUID should be used by other endpoints
+        required the collection of data by a field, i.e. this route is a dependency for
+        most other routes.
 
         The number of results (hits) and number of pages those results span over is also
         returned in the result. This endpoint does not implement pagination. The
@@ -209,8 +211,9 @@ async def post_field(
         A route to gather prospective SMDA masterdata relevant to FMU.
 
         This route receives a list of valid field names and returns masterdata that
-        pertains to them. The field names should be valid as return from from the
-        `smda/field` routes.
+        pertains to them. The field names should be valid as returned from the
+        `smda/field` route. Callers may also provide a field UUID to disambiguate
+        fields that share the same identifier.
 
         The data returned from this endpoint is meant to be confirmed by the user who
         may need to do some additional selection or pruning based upon the model they
@@ -232,7 +235,7 @@ async def post_field(
     },
 )
 async def post_masterdata(
-    smda_fields: list[SmdaField],
+    smda_fields: list[SmdaSelectedField],
     smda_service: ProjectSmdaServiceDep,
 ) -> SmdaMasterdataResult:
     """Queries SMDA masterdata for .fmu project configuration."""
