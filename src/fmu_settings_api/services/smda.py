@@ -88,9 +88,13 @@ class SmdaService:
 
         if not field_results:
             requested_identifiers = [field.identifier for field in smda_fields]
-            raise ValueError(
-                f"No fields found for identifiers: {requested_identifiers}"
-            )
+            requested_uuids = [
+                str(field.uuid) for field in smda_fields if field.uuid is not None
+            ]
+            error_msg = f"No fields found for identifiers: {requested_identifiers}"
+            if requested_uuids:
+                error_msg += f" and UUIDs: {requested_uuids}"
+            raise ValueError(error_msg)
 
         field_items = [FieldItem.model_validate(field) for field in field_results]
         field_identifiers = [field.identifier for field in field_items]

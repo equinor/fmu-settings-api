@@ -143,13 +143,13 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
     summary="Searches for a field identifier in SMDA",
     description=dedent(
         """
-        A route to search SMDA for an field (asset) by its named identifier.
+        A route to search SMDA for a field (asset) by its named identifier.
 
         This endpoint applies a projection to the SMDA query so that only the relevant
         data is returned: an identifier known by SMDA, its corresponding UUID, and the
-        country the field belongs to. The UUID should be used by other endpoints
-        required the collection of data by a field, i.e. this route is a dependency for
-        most other routes.
+        main country the field belongs to, not a list of countries where the field
+        exists. The UUID should be used by other endpoints required the collection of
+        data by a field, i.e. this route is a dependency for most other routes.
 
         The number of results (hits) and number of pages those results span over is also
         returned in the result. This endpoint does not implement pagination. The
