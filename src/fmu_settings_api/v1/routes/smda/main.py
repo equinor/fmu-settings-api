@@ -213,7 +213,10 @@ async def post_field(
         This route receives a list of valid field names and returns masterdata that
         pertains to them. The field names should be valid as returned from the
         `smda/field` route. Callers may also provide a field UUID to disambiguate
-        fields that share the same identifier.
+        fields that share the same identifier. If the first field does not include
+        a UUID, the endpoint searches for all provided field identifiers. If the
+        first field includes a UUID, the endpoint looks up only that field, even if
+        more fields are included in the request.
 
         The data returned from this endpoint is meant to be confirmed by the user who
         may need to do some additional selection or pruning based upon the model they
