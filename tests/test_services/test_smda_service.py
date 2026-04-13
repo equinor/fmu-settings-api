@@ -12,7 +12,7 @@ from fmu.datamodels.common.masterdata import (
     StratigraphicColumn,
 )
 
-from fmu_settings_api.models.smda import SmdaField
+from fmu_settings_api.models.smda import SmdaField, SmdaSelectedField
 from fmu_settings_api.services.smda import SmdaService
 
 
@@ -400,6 +400,108 @@ async def test_get_masterdata_no_fields_found() -> None:
     service = SmdaService(mock_smda)
 
     with pytest.raises(ValueError) as exc_info:
-        await service.get_masterdata([SmdaField(identifier="NONEXISTENT")])
+        await service.get_masterdata([SmdaSelectedField(identifier="NONEXISTENT")])
 
     assert "No fields found for identifiers" in str(exc_info.value)
+
+
+async def test_search_field_adds_country_to_results() -> None:
+    """Tests that field search exposes country in each result row."""
+    mock_smda = AsyncMock()
+    field_resp = MagicMock()
+    field_uuid = uuid4()
+    field_resp.json.return_value = {
+        "data": {
+            "hits": 1,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "uuid": field_uuid,
+                }
+            ],
+        }
+    }
+    mock_smda.field.return_value = field_resp
+
+    service = SmdaService(mock_smda)
+    result = await service.search_field(SmdaField(identifier="DROGON"))
+
+    mock_smda.field.assert_called_once_with(
+        ["DROGON"],
+        columns=["country_identifier", "identifier", "uuid"],
+    )
+    assert result.results[0].country == "Norway"
+
+
+async def test_get_masterdata_uses_selected_field_uuid_for_lookup() -> None:
+    """Tests that get_masterdata uses the selected field uuid for lookup."""
+    mock_smda = AsyncMock()
+    selected_uuid = uuid4()
+    field_resp = MagicMock()
+    field_resp.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": "DROGON",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "uuid": selected_uuid,
+                },
+            ]
+        }
+    }
+    mock_smda.field.return_value = field_resp
+    mock_smda.coordinate_system.return_value = MagicMock(
+        json=MagicMock(
+            return_value={
+                "data": {
+                    "results": [
+                        {
+                            "identifier": "ST_WGS84_UTM37N_P32637",
+                            "uuid": uuid4(),
+                        },
+                        {
+                            "identifier": "ST_WGS84_UTM37N_P32638",
+                            "uuid": uuid4(),
+                        },
+                    ]
+                }
+            }
+        )
+    )
+    mock_smda.country.return_value = MagicMock(
+        json=MagicMock(
+            return_value={
+                "data": {
+                    "results": [
+                        {"identifier": "Norway", "uuid": uuid4()},
+                    ]
+                }
+            }
+        )
+    )
+    mock_smda.discovery.return_value = MagicMock(
+        json=MagicMock(return_value={"data": {"results": []}})
+    )
+    mock_smda.strat_column_areas.return_value = MagicMock(
+        json=MagicMock(return_value={"data": {"results": []}})
+    )
+
+    service = SmdaService(mock_smda)
+    result = await service.get_masterdata(
+        [SmdaSelectedField(identifier="DROGON", uuid=selected_uuid)]
+    )
+
+    mock_smda.field.assert_called_once_with(
+        field_uuid=selected_uuid,
+        columns=[
+            "country_identifier",
+            "identifier",
+            "projected_coordinate_system",
+            "uuid",
+        ],
+    )
+    assert len(result.field) == 1
+    assert result.field[0].uuid == selected_uuid
