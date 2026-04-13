@@ -138,6 +138,7 @@ class SmdaAPI:
             json={
                 "_projection": _projection,
                 "strat_column_identifier": strat_column_identifier,
+                "_sort": ["strat_unit_level", "top_age"],
             },
         )
 

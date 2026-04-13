@@ -100,6 +100,7 @@ async def test_strat_units_with_identifier(mock_httpx_post: MagicMock) -> None:
         json={
             "_projection": "identifier,uuid",
             "strat_column_identifier": "LITHO_DROGON",
+            "_sort": ["strat_unit_level", "top_age"],
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
@@ -123,6 +124,7 @@ async def test_strat_units_with_columns(mock_httpx_post: MagicMock) -> None:
         json={
             "_projection": "identifier,uuid,strat_unit_type",
             "strat_column_identifier": "LITHO_DROGON",
+            "_sort": ["strat_unit_level", "top_age"],
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
