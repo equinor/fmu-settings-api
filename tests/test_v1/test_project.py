@@ -3312,6 +3312,43 @@ async def test_put_mappings_stratigraphy_success(
     assert "smda" in response_data["message"]
 
 
+async def test_put_mappings_stratigraphy_creates_file_if_missing(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+    make_stratigraphy_mapping: Callable[..., StratigraphyIdentifierMapping],
+) -> None:
+    """Test PUT creates mappings.json when saving mappings for the first time."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await get_fmu_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    mappings_path = fmu_dir.mappings.path
+    assert not mappings_path.exists()
+
+    mapping = make_stratigraphy_mapping(
+        "TopVolantis",
+        "VOLANTIS GP. Top",
+        RelationType.primary,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.smda,
+    )
+    payload = [mapping.model_dump(mode="json")]
+
+    response = client_with_project_session.put(
+        f"{ROUTE}/mappings/stratigraphy/rms/smda", json=payload
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert mappings_path.exists()
+    assert fmu_dir.mappings.stratigraphy_mappings == StratigraphyMappings(
+        root=[mapping]
+    )
+
+
 async def test_put_mappings_stratigraphy_preserves_other_systems(
     client_with_project_session: TestClient,
     session_manager: SessionManager,
