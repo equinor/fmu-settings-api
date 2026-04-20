@@ -39,6 +39,28 @@ def test_health_check() -> None:
     assert Ok() == Ok.model_validate(response.json())
 
 
+def test_openapi_mappings_response_schema_is_explicit() -> None:
+    """Ensure mappings responses expose a concrete schema in OpenAPI."""
+    schema = app.openapi()
+    response_schema = schema["paths"][
+        "/api/v1/project/mappings/{mapping_type}/{source_system}/{target_system}"
+    ]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    mapping_group_schema = schema["components"]["schemas"]["MappingGroupResponse"]
+
+    assert response_schema["type"] == "array"
+    assert response_schema["items"] == {
+        "$ref": "#/components/schemas/MappingGroupResponse"
+    }
+
+    assert "official_name" in mapping_group_schema["properties"]
+    assert "mappings" in mapping_group_schema["properties"]
+    mappings_property = mapping_group_schema["properties"]["mappings"]
+    assert mappings_property["items"] == {
+        "$ref": "#/components/schemas/IdentifierMappingResponse"
+    }
+    assert mappings_property["type"] == "array"
+
+
 def test_shutdown_releases_project_lock() -> None:
     """Ensure lifespan teardown releases project locks."""
     lock = MagicMock()

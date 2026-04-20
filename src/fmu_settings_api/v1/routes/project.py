@@ -22,7 +22,6 @@ from fmu.settings._init import (
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
-from fmu.settings.models.mappings import MappingGroup
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
     RmsWell,
@@ -44,6 +43,7 @@ from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import (
     FMUDirPath,
     FMUProject,
+    MappingGroupResponse,
     Message,
     RestorableFilesResponse,
 )
@@ -1267,7 +1267,7 @@ async def post_restore(
 
 @router.get(
     "/mappings/{mapping_type}/{source_system}/{target_system}",
-    response_model=list[MappingGroup],
+    response_model=list[MappingGroupResponse],
     summary="Returns mappings for a specific mapping type and system combination.",
     description=dedent(
         """
@@ -1291,12 +1291,15 @@ async def get_mappings(
     mapping_type: MappingType,
     source_system: DataSystem,
     target_system: DataSystem,
-) -> list[MappingGroup]:
+) -> list[MappingGroupResponse]:
     """Returns mappings for specific mapping type and system combination."""
     try:
-        return mappings_service.get_mappings_by_systems(
-            mapping_type, source_system, target_system
-        )
+        return [
+            MappingGroupResponse.from_mapping_group(mapping_group)
+            for mapping_group in mappings_service.get_mappings_by_systems(
+                mapping_type, source_system, target_system
+            )
+        ]
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
