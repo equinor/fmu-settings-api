@@ -3,12 +3,13 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, cast
 
 from fmu.datamodels.context.mappings import (
     AnyIdentifierMapping,
     DataSystem,
     MappingType,
+    StratigraphyIdentifierMapping,
     StratigraphyMappings,
 )
 from fmu.settings import ProjectFMUDirectory
@@ -169,7 +170,10 @@ class MappingsService:
                 )
             ]
 
-            updated_mappings = StratigraphyMappings(root=other_mappings + new_mappings)
+            updated_mappings = StratigraphyMappings(
+                root=other_mappings
+                + cast("list[StratigraphyIdentifierMapping]", new_mappings)
+            )
             self.update_stratigraphy_mappings(updated_mappings)
         else:
             raise ValueError(f"Mapping type '{mapping_type}' is not yet supported")
