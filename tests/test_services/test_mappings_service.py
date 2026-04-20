@@ -149,3 +149,33 @@ def test_update_mappings_by_systems_mapping_group_validation_error(
             DataSystem.smda,
             [primary, alias, alias_to_duplicate],
         )
+
+
+def test_update_mappings_by_systems_creates_mappings_file_if_missing(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_stratigraphy_mapping: Callable[
+        [str, str, RelationType], StratigraphyIdentifierMapping
+    ],
+) -> None:
+    """Test first-time mapping updates create mappings.json instead of failing."""
+    mappings_path = fmu_dir.mappings.path
+    assert not mappings_path.exists()
+
+    primary = make_stratigraphy_mapping(
+        "TopVolantis",
+        "VOLANTIS GP. Top",
+        RelationType.primary,
+    )
+
+    mappings_service.update_mappings_by_systems(
+        MappingType.stratigraphy,
+        DataSystem.rms,
+        DataSystem.smda,
+        [primary],
+    )
+
+    assert mappings_path.exists()
+    assert fmu_dir.mappings.stratigraphy_mappings == StratigraphyMappings(
+        root=[primary]
+    )

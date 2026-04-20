@@ -159,7 +159,10 @@ class MappingsService:
         self.build_mapping_groups(new_mappings)
 
         if mapping_type == MappingType.stratigraphy:
-            all_mappings = self.list_stratigraphy_mappings()
+            try:
+                all_mappings = self.list_stratigraphy_mappings()
+            except FileNotFoundError:
+                all_mappings = StratigraphyMappings(root=[])
 
             other_mappings = [
                 mapping
