@@ -288,6 +288,43 @@ MappingsResponses: Final[Responses] = {
     ),
 }
 
+GetMappingsResponses: Final[Responses] = {
+    200: {
+        "description": "Mappings grouped by target context.",
+        "content": {
+            "application/json": {
+                "example": [
+                    {
+                        "official_name": "VOLANTIS GP. Top",
+                        "target_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af10",
+                        "mapping_type": "stratigraphy",
+                        "target_system": "smda",
+                        "source_system": "rms",
+                        "mappings": [
+                            {
+                                "relation_type": "primary",
+                                "source_id": "TopVolantis",
+                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa9",
+                            },
+                            {
+                                "relation_type": "alias",
+                                "source_id": "Top_Volantis",
+                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af11",
+                            },
+                            {
+                                "relation_type": "equivalent",
+                                "source_id": "VOLANTIS GP. Top",
+                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af10",
+                            },
+                        ],
+                    }
+                ],
+            },
+        },
+    },
+    **MappingsResponses,
+}
+
 
 CacheResponses: Final[Responses] = {
     **inline_add_response(
@@ -1246,7 +1283,7 @@ async def post_restore(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **MappingsResponses,
+        **GetMappingsResponses,
     },
 )
 async def get_mappings(
