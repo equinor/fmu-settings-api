@@ -8,6 +8,7 @@ from .common import (
     Ok,
     RestorableFilesResponse,
 )
+from .mappings import IdentifierMappingResponse, MappingGroupResponse
 from .project import FMUDirPath, FMUProject
 from .session import SessionResponse
 
@@ -17,6 +18,8 @@ __all__ = [
     "BaseResponseModel",
     "FMUDirPath",
     "FMUProject",
+    "IdentifierMappingResponse",
+    "MappingGroupResponse",
     "Message",
     "Ok",
     "RestorableFilesResponse",
