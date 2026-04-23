@@ -190,9 +190,23 @@ class SmdaService:
                 f"{strat_column_identifier}"
             )
 
+        horizon_identifiers: set[str] = set()
+        for strat_unit_data in strat_unit_results:
+            for identifier in (strat_unit_data["top"], strat_unit_data["base"]):
+                if identifier:
+                    horizon_identifiers.add(identifier)
+
+        horizon_uuids = await self._get_horizon_uuids(horizon_identifiers)
+
         strat_unit_items = []
         for strat_unit_data in strat_unit_results:
-            strat_unit_item = StratigraphicUnit.model_validate(strat_unit_data)
+            strat_unit_item = StratigraphicUnit.model_validate(
+                {
+                    **strat_unit_data,
+                    "top_horizon_uuid": horizon_uuids.get(strat_unit_data["top"]),
+                    "base_horizon_uuid": horizon_uuids.get(strat_unit_data["base"]),
+                }
+            )
             if strat_unit_item not in strat_unit_items:
                 strat_unit_items.append(strat_unit_item)
         return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
@@ -270,3 +284,30 @@ class SmdaService:
             if crs_item not in crs_items:
                 crs_items.append(crs_item)
         return crs_items
+
+    async def _get_horizon_uuids(
+        self, strat_surface_name_identifiers: set[str]
+    ) -> dict[str, str]:
+        """Queries horizon UUIDs keyed by strat surface name identifier."""
+        unique_identifiers = sorted(set(strat_surface_name_identifiers))
+
+        if not unique_identifiers:
+            return {}
+
+        async with asyncio.TaskGroup() as tg:
+            horizon_tasks = {
+                identifier: tg.create_task(self._smda.horizon(identifier))
+                for identifier in unique_identifiers
+            }
+
+        horizon_uuids: dict[str, str] = {}
+        for identifier, task in horizon_tasks.items():
+            horizon_results = task.result().json()["data"]["results"]
+            if not horizon_results:
+                continue
+
+            horizon_uuid = horizon_results[0].get("strat_surface_name_uuid")
+            if horizon_uuid is not None:
+                horizon_uuids[identifier] = horizon_uuid
+
+        return horizon_uuids
