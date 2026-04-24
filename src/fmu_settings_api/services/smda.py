@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Sequence
 
+import httpx
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
@@ -12,6 +13,7 @@ from fmu.datamodels.common.masterdata import (
 )
 
 from fmu_settings_api.interfaces import SmdaAPI
+from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
@@ -20,6 +22,8 @@ from fmu_settings_api.models.smda import (
     SmdaStratigraphicUnitsResult,
     StratigraphicUnit,
 )
+
+logger = get_logger(__name__)
 
 
 class SmdaService:
@@ -190,9 +194,23 @@ class SmdaService:
                 f"{strat_column_identifier}"
             )
 
+        surface_identifiers: set[str] = set()
+        for strat_unit_data in strat_unit_results:
+            for identifier in (strat_unit_data["top"], strat_unit_data["base"]):
+                if identifier:
+                    surface_identifiers.add(identifier)
+
+        horizon_uuids = await self._get_horizon_uuids(surface_identifiers)
+
         strat_unit_items = []
         for strat_unit_data in strat_unit_results:
-            strat_unit_item = StratigraphicUnit.model_validate(strat_unit_data)
+            strat_unit_item = StratigraphicUnit.model_validate(
+                {
+                    **strat_unit_data,
+                    "top_uuid": horizon_uuids.get(strat_unit_data["top"]),
+                    "base_uuid": horizon_uuids.get(strat_unit_data["base"]),
+                }
+            )
             if strat_unit_item not in strat_unit_items:
                 strat_unit_items.append(strat_unit_item)
         return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
@@ -270,3 +288,40 @@ class SmdaService:
             if crs_item not in crs_items:
                 crs_items.append(crs_item)
         return crs_items
+
+    async def _get_horizon_uuids(self, identifiers: set[str]) -> dict[str, str]:
+        """Queries horizon UUIDs keyed by strat surface name identifier."""
+        unique_identifiers = sorted(set(identifiers))
+
+        if not unique_identifiers:
+            return {}
+
+        horizon_uuids: dict[str, str] = {}
+        horizon_responses = await asyncio.gather(
+            *(self._smda.horizon(identifier) for identifier in unique_identifiers),
+            return_exceptions=True,
+        )
+
+        for identifier, response in zip(
+            unique_identifiers, horizon_responses, strict=True
+        ):
+            if isinstance(response, httpx.HTTPError | TimeoutError):
+                logger.warning(
+                    "smda_horizon_lookup_failed",
+                    identifier=identifier,
+                    error=str(response),
+                )
+                continue
+
+            if isinstance(response, BaseException):
+                raise response
+
+            horizon_results = response.json()["data"]["results"]
+            if not horizon_results:
+                continue
+
+            horizon_uuid = horizon_results[0].get("uuid")
+            if horizon_uuid is not None:
+                horizon_uuids[identifier] = horizon_uuid
+
+        return horizon_uuids

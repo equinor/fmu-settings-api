@@ -4,6 +4,7 @@ from functools import cache
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
@@ -265,8 +266,11 @@ async def test_get_coordinate_systems(
 
 async def test_get_stratigraphic_units_success() -> None:
     """Tests get_stratigraphic_units returns units correctly."""
+    expected_horizon_lookup_count = 2
     mock_smda = AsyncMock()
     strat_unit_resp = MagicMock()
+    top_uuid = gen_uuid("VIKING GP. Top")
+    base_uuid = gen_uuid("VIKING GP. Base")
     strat_unit_resp.json.return_value = {
         "data": {
             "results": [
@@ -291,6 +295,36 @@ async def test_get_stratigraphic_units_success() -> None:
     }
     mock_smda.strat_units.return_value = strat_unit_resp
 
+    horizon_responses = {
+        "VIKING GP. Top": {
+            "data": {
+                "results": [
+                    {
+                        "identifier": "VIKING GP. Top",
+                        "uuid": str(top_uuid),
+                    }
+                ]
+            }
+        },
+        "VIKING GP. Base": {
+            "data": {
+                "results": [
+                    {
+                        "identifier": "VIKING GP. Base",
+                        "uuid": str(base_uuid),
+                    }
+                ]
+            }
+        },
+    }
+
+    async def horizon_side_effect(identifier: str) -> MagicMock:
+        horizon_resp = MagicMock()
+        horizon_resp.json.return_value = horizon_responses[identifier]
+        return horizon_resp
+
+    mock_smda.horizon.side_effect = horizon_side_effect
+
     service = SmdaService(mock_smda)
     result = await service.get_stratigraphic_units("LITHO_DROGON")
 
@@ -313,9 +347,14 @@ async def test_get_stratigraphic_units_success() -> None:
             "color_b",
         ],
     )
+    assert mock_smda.horizon.await_count == expected_horizon_lookup_count
+    mock_smda.horizon.assert_any_await("VIKING GP. Top")
+    mock_smda.horizon.assert_any_await("VIKING GP. Base")
     assert len(result.stratigraphic_units) == 1
     assert result.stratigraphic_units[0].identifier == "VIKING GP."
     assert result.stratigraphic_units[0].strat_unit_type == "group"
+    assert result.stratigraphic_units[0].top_uuid == top_uuid
+    assert result.stratigraphic_units[0].base_uuid == base_uuid
 
 
 async def test_get_stratigraphic_units_empty_identifier() -> None:
@@ -344,6 +383,8 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     """Tests duplicate stratigraphic units are filtered out."""
     mock_smda = AsyncMock()
     strat_unit_resp = MagicMock()
+    top_uuid = gen_uuid("VIKING GP. Top")
+    base_uuid = gen_uuid("VIKING GP. Base")
     strat_unit_resp.json.return_value = {
         "data": {
             "results": [
@@ -384,10 +425,74 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     }
     mock_smda.strat_units.return_value = strat_unit_resp
 
+    async def horizon_side_effect(identifier: str) -> MagicMock:
+        horizon_resp = MagicMock()
+        horizon_resp.json.return_value = {
+            "data": {
+                "results": [
+                    {
+                        "identifier": identifier,
+                        "uuid": str(
+                            top_uuid if identifier == "VIKING GP. Top" else base_uuid
+                        ),
+                    }
+                ]
+            }
+        }
+        return horizon_resp
+
+    mock_smda.horizon.side_effect = horizon_side_effect
+
     service = SmdaService(mock_smda)
     result = await service.get_stratigraphic_units("LITHO_DROGON")
 
     assert len(result.stratigraphic_units) == 1
+    assert result.stratigraphic_units[0].top_uuid == top_uuid
+    assert result.stratigraphic_units[0].base_uuid == base_uuid
+
+
+async def test_get_stratigraphic_units_horizon_http_error_returns_null_uuids() -> None:
+    """Tests horizon lookup errors do not fail stratigraphic units response."""
+    mock_smda = AsyncMock()
+    strat_unit_resp = MagicMock()
+    strat_unit_resp.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "identifier": "VIKING GP.",
+                    "uuid": gen_uuid("VIKING GP."),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                }
+            ]
+        }
+    }
+    mock_smda.strat_units.return_value = strat_unit_resp
+
+    mock_request = httpx.Request(method="POST", url="https://smda/strat-surface-names")
+    mock_response = httpx.Response(status_code=503, request=mock_request)
+    mock_smda.horizon.side_effect = httpx.HTTPStatusError(
+        "503 Service Unavailable",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    service = SmdaService(mock_smda)
+    result = await service.get_stratigraphic_units("LITHO_DROGON")
+
+    assert len(result.stratigraphic_units) == 1
+    assert result.stratigraphic_units[0].top_uuid is None
+    assert result.stratigraphic_units[0].base_uuid is None
 
 
 async def test_get_masterdata_no_fields_found() -> None:
