@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Sequence
 
+import httpx
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
@@ -12,6 +13,7 @@ from fmu.datamodels.common.masterdata import (
 )
 
 from fmu_settings_api.interfaces import SmdaAPI
+from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
@@ -20,6 +22,8 @@ from fmu_settings_api.models.smda import (
     SmdaStratigraphicUnitsResult,
     StratigraphicUnit,
 )
+
+logger = get_logger(__name__)
 
 
 class SmdaService:
@@ -292,15 +296,27 @@ class SmdaService:
         if not unique_identifiers:
             return {}
 
-        async with asyncio.TaskGroup() as tg:
-            horizon_tasks = {
-                identifier: tg.create_task(self._smda.horizon(identifier))
-                for identifier in unique_identifiers
-            }
-
         horizon_uuids: dict[str, str] = {}
-        for identifier, task in horizon_tasks.items():
-            horizon_results = task.result().json()["data"]["results"]
+        horizon_responses = await asyncio.gather(
+            *(self._smda.horizon(identifier) for identifier in unique_identifiers),
+            return_exceptions=True,
+        )
+
+        for identifier, response in zip(
+            unique_identifiers, horizon_responses, strict=True
+        ):
+            if isinstance(response, httpx.HTTPError | TimeoutError):
+                logger.warning(
+                    "smda_horizon_lookup_failed",
+                    identifier=identifier,
+                    error=str(response),
+                )
+                continue
+
+            if isinstance(response, BaseException):
+                raise response
+
+            horizon_results = response.json()["data"]["results"]
             if not horizon_results:
                 continue
 
