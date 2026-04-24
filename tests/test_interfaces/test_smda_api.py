@@ -143,8 +143,8 @@ async def test_horizon_with_identifier(mock_httpx_post: MagicMock) -> None:
             HttpHeader.OCP_APIM_SUBSCRIPTION_KEY: "key",
         },
         json={
-            "_projection": ("strat_surface_name_identifier,strat_surface_name_uuid"),
-            "strat_surface_name_identifier": "VIKING GP. Top",
+            "_projection": ("identifier,uuid"),
+            "identifier": "VIKING GP. Top",
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore

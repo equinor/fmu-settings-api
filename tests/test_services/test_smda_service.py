@@ -299,8 +299,8 @@ async def test_get_stratigraphic_units_success() -> None:
             "data": {
                 "results": [
                     {
-                        "strat_surface_name_identifier": "VIKING GP. Top",
-                        "strat_surface_name_uuid": str(top_horizon_uuid),
+                        "identifier": "VIKING GP. Top",
+                        "uuid": str(top_horizon_uuid),
                     }
                 ]
             }
@@ -309,8 +309,8 @@ async def test_get_stratigraphic_units_success() -> None:
             "data": {
                 "results": [
                     {
-                        "strat_surface_name_identifier": "VIKING GP. Base",
-                        "strat_surface_name_uuid": str(base_horizon_uuid),
+                        "identifier": "VIKING GP. Base",
+                        "uuid": str(base_horizon_uuid),
                     }
                 ]
             }
@@ -430,8 +430,8 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
             "data": {
                 "results": [
                     {
-                        "strat_surface_name_identifier": identifier,
-                        "strat_surface_name_uuid": str(
+                        "identifier": identifier,
+                        "uuid": str(
                             top_horizon_uuid
                             if identifier == "VIKING GP. Top"
                             else base_horizon_uuid
