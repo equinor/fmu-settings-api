@@ -269,8 +269,8 @@ async def test_get_stratigraphic_units_success() -> None:
     expected_horizon_lookup_count = 2
     mock_smda = AsyncMock()
     strat_unit_resp = MagicMock()
-    top_horizon_uuid = gen_uuid("VIKING GP. Top")
-    base_horizon_uuid = gen_uuid("VIKING GP. Base")
+    top_uuid = gen_uuid("VIKING GP. Top")
+    base_uuid = gen_uuid("VIKING GP. Base")
     strat_unit_resp.json.return_value = {
         "data": {
             "results": [
@@ -301,7 +301,7 @@ async def test_get_stratigraphic_units_success() -> None:
                 "results": [
                     {
                         "identifier": "VIKING GP. Top",
-                        "uuid": str(top_horizon_uuid),
+                        "uuid": str(top_uuid),
                     }
                 ]
             }
@@ -311,7 +311,7 @@ async def test_get_stratigraphic_units_success() -> None:
                 "results": [
                     {
                         "identifier": "VIKING GP. Base",
-                        "uuid": str(base_horizon_uuid),
+                        "uuid": str(base_uuid),
                     }
                 ]
             }
@@ -353,8 +353,8 @@ async def test_get_stratigraphic_units_success() -> None:
     assert len(result.stratigraphic_units) == 1
     assert result.stratigraphic_units[0].identifier == "VIKING GP."
     assert result.stratigraphic_units[0].strat_unit_type == "group"
-    assert result.stratigraphic_units[0].top_horizon_uuid == top_horizon_uuid
-    assert result.stratigraphic_units[0].base_horizon_uuid == base_horizon_uuid
+    assert result.stratigraphic_units[0].top_uuid == top_uuid
+    assert result.stratigraphic_units[0].base_uuid == base_uuid
 
 
 async def test_get_stratigraphic_units_empty_identifier() -> None:
@@ -383,8 +383,8 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     """Tests duplicate stratigraphic units are filtered out."""
     mock_smda = AsyncMock()
     strat_unit_resp = MagicMock()
-    top_horizon_uuid = gen_uuid("VIKING GP. Top")
-    base_horizon_uuid = gen_uuid("VIKING GP. Base")
+    top_uuid = gen_uuid("VIKING GP. Top")
+    base_uuid = gen_uuid("VIKING GP. Base")
     strat_unit_resp.json.return_value = {
         "data": {
             "results": [
@@ -433,9 +433,7 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
                     {
                         "identifier": identifier,
                         "uuid": str(
-                            top_horizon_uuid
-                            if identifier == "VIKING GP. Top"
-                            else base_horizon_uuid
+                            top_uuid if identifier == "VIKING GP. Top" else base_uuid
                         ),
                     }
                 ]
@@ -449,8 +447,8 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     result = await service.get_stratigraphic_units("LITHO_DROGON")
 
     assert len(result.stratigraphic_units) == 1
-    assert result.stratigraphic_units[0].top_horizon_uuid == top_horizon_uuid
-    assert result.stratigraphic_units[0].base_horizon_uuid == base_horizon_uuid
+    assert result.stratigraphic_units[0].top_uuid == top_uuid
+    assert result.stratigraphic_units[0].base_uuid == base_uuid
 
 
 async def test_get_stratigraphic_units_horizon_http_error_returns_null_uuids() -> None:
@@ -493,8 +491,8 @@ async def test_get_stratigraphic_units_horizon_http_error_returns_null_uuids() -
     result = await service.get_stratigraphic_units("LITHO_DROGON")
 
     assert len(result.stratigraphic_units) == 1
-    assert result.stratigraphic_units[0].top_horizon_uuid is None
-    assert result.stratigraphic_units[0].base_horizon_uuid is None
+    assert result.stratigraphic_units[0].top_uuid is None
+    assert result.stratigraphic_units[0].base_uuid is None
 
 
 async def test_get_masterdata_no_fields_found() -> None:

@@ -194,21 +194,21 @@ class SmdaService:
                 f"{strat_column_identifier}"
             )
 
-        horizon_identifiers: set[str] = set()
+        surface_identifiers: set[str] = set()
         for strat_unit_data in strat_unit_results:
             for identifier in (strat_unit_data["top"], strat_unit_data["base"]):
                 if identifier:
-                    horizon_identifiers.add(identifier)
+                    surface_identifiers.add(identifier)
 
-        horizon_uuids = await self._get_horizon_uuids(horizon_identifiers)
+        horizon_uuids = await self._get_horizon_uuids(surface_identifiers)
 
         strat_unit_items = []
         for strat_unit_data in strat_unit_results:
             strat_unit_item = StratigraphicUnit.model_validate(
                 {
                     **strat_unit_data,
-                    "top_horizon_uuid": horizon_uuids.get(strat_unit_data["top"]),
-                    "base_horizon_uuid": horizon_uuids.get(strat_unit_data["base"]),
+                    "top_uuid": horizon_uuids.get(strat_unit_data["top"]),
+                    "base_uuid": horizon_uuids.get(strat_unit_data["base"]),
                 }
             )
             if strat_unit_item not in strat_unit_items:

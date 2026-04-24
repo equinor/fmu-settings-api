@@ -108,13 +108,13 @@ class StratigraphicUnit(BaseResponseModel):
     top: str = Field(examples=["VIKING GP. Top"])
     """The identifier (name) of the stratigraphic unit top pick (horizon)."""
 
-    top_horizon_uuid: UUID | None
+    top_uuid: UUID | None
     """The SMDA UUID identifier corresponding to the top horizon."""
 
     base: str = Field(examples=["VIKING GP. Base"])
     """The identifier (name) of the stratigraphic unit base pick (horizon)."""
 
-    base_horizon_uuid: UUID | None
+    base_uuid: UUID | None
     """The SMDA UUID identifier corresponding to the base horizon."""
 
     top_age: float = Field(ge=0, allow_inf_nan=False)
