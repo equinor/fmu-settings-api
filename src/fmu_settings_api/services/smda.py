@@ -285,11 +285,9 @@ class SmdaService:
                 crs_items.append(crs_item)
         return crs_items
 
-    async def _get_horizon_uuids(
-        self, strat_surface_name_identifiers: set[str]
-    ) -> dict[str, str]:
+    async def _get_horizon_uuids(self, identifiers: set[str]) -> dict[str, str]:
         """Queries horizon UUIDs keyed by strat surface name identifier."""
-        unique_identifiers = sorted(set(strat_surface_name_identifiers))
+        unique_identifiers = sorted(set(identifiers))
 
         if not unique_identifiers:
             return {}
@@ -306,7 +304,7 @@ class SmdaService:
             if not horizon_results:
                 continue
 
-            horizon_uuid = horizon_results[0].get("strat_surface_name_uuid")
+            horizon_uuid = horizon_results[0].get("uuid")
             if horizon_uuid is not None:
                 horizon_uuids[identifier] = horizon_uuid
 
