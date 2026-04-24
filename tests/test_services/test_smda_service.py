@@ -4,6 +4,7 @@ from functools import cache
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
@@ -450,6 +451,50 @@ async def test_get_stratigraphic_units_deduplicates() -> None:
     assert len(result.stratigraphic_units) == 1
     assert result.stratigraphic_units[0].top_horizon_uuid == top_horizon_uuid
     assert result.stratigraphic_units[0].base_horizon_uuid == base_horizon_uuid
+
+
+async def test_get_stratigraphic_units_horizon_http_error_returns_null_uuids() -> None:
+    """Tests horizon lookup errors do not fail stratigraphic units response."""
+    mock_smda = AsyncMock()
+    strat_unit_resp = MagicMock()
+    strat_unit_resp.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "identifier": "VIKING GP.",
+                    "uuid": gen_uuid("VIKING GP."),
+                    "strat_unit_type": "group",
+                    "strat_unit_level": 2,
+                    "top": "VIKING GP. Top",
+                    "base": "VIKING GP. Base",
+                    "top_age": 2.58,
+                    "base_age": 5.33,
+                    "strat_unit_parent": None,
+                    "strat_column_type": "lithostratigraphy",
+                    "color_html": "#FFD700",
+                    "color_r": 255,
+                    "color_g": 215,
+                    "color_b": 0,
+                }
+            ]
+        }
+    }
+    mock_smda.strat_units.return_value = strat_unit_resp
+
+    mock_request = httpx.Request(method="POST", url="https://smda/strat-surface-names")
+    mock_response = httpx.Response(status_code=503, request=mock_request)
+    mock_smda.horizon.side_effect = httpx.HTTPStatusError(
+        "503 Service Unavailable",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    service = SmdaService(mock_smda)
+    result = await service.get_stratigraphic_units("LITHO_DROGON")
+
+    assert len(result.stratigraphic_units) == 1
+    assert result.stratigraphic_units[0].top_horizon_uuid is None
+    assert result.stratigraphic_units[0].base_horizon_uuid is None
 
 
 async def test_get_masterdata_no_fields_found() -> None:
