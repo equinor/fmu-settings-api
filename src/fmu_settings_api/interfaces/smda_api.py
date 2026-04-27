@@ -20,7 +20,7 @@ class SmdaRoutes:
     STRAT_COLUMN_AREAS_SEARCH: Final[str] = "smda-api/strat-column-areas/search"
     STRAT_UNITS_SEARCH: Final[str] = "smda-api/strat-units/search"
     COORDINATE_SYSTEM_SEARCH: Final[str] = "smda-api/crs/search"
-    HORIZON_SEARCH: Final[str] = "smda-api/strat-surface-names/search"
+    SURFACE_SEARCH: Final[str] = "smda-api/strat-surface-names/search"
 
 
 class SmdaAPI:
@@ -157,15 +157,15 @@ class SmdaAPI:
 
         return await self.post(SmdaRoutes.COORDINATE_SYSTEM_SEARCH, json=json)
 
-    async def horizon(
+    async def surface(
         self,
         identifier: str,
         columns: Sequence[str] | None = None,
     ) -> httpx.Response:
-        """Searches for the horizon related data using strat surface name identifier."""
+        """Searches for the surface related data using strat surface name identifier."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
         return await self.post(
-            SmdaRoutes.HORIZON_SEARCH,
+            SmdaRoutes.SURFACE_SEARCH,
             json={
                 "_projection": _projection,
                 "identifier": identifier,

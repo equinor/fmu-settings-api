@@ -133,10 +133,10 @@ async def test_strat_units_with_columns(mock_httpx_post: MagicMock) -> None:
 async def test_horizon_with_identifier(mock_httpx_post: MagicMock) -> None:
     """Tests horizon method sends correct payload with identifier."""
     api = SmdaAPI("token", "key")
-    res = await api.horizon("VIKING GP. Top")
+    res = await api.surface("VIKING GP. Top")
 
     mock_httpx_post.assert_called_with(
-        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.HORIZON_SEARCH}",
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.SURFACE_SEARCH}",
         headers={
             HttpHeader.CONTENT_TYPE_KEY: HttpHeader.CONTENT_TYPE_JSON,
             HttpHeader.AUTHORIZATION_KEY: "Bearer token",

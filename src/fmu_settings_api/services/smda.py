@@ -200,15 +200,15 @@ class SmdaService:
                 if identifier:
                     surface_identifiers.add(identifier)
 
-        horizon_uuids = await self._get_horizon_uuids(surface_identifiers)
+        surface_uuids = await self._get_surface_uuids(surface_identifiers)
 
         strat_unit_items = []
         for strat_unit_data in strat_unit_results:
             strat_unit_item = StratigraphicUnit.model_validate(
                 {
                     **strat_unit_data,
-                    "top_uuid": horizon_uuids.get(strat_unit_data["top"]),
-                    "base_uuid": horizon_uuids.get(strat_unit_data["base"]),
+                    "top_uuid": surface_uuids.get(strat_unit_data["top"]),
+                    "base_uuid": surface_uuids.get(strat_unit_data["base"]),
                 }
             )
             if strat_unit_item not in strat_unit_items:
@@ -289,25 +289,25 @@ class SmdaService:
                 crs_items.append(crs_item)
         return crs_items
 
-    async def _get_horizon_uuids(self, identifiers: set[str]) -> dict[str, str]:
-        """Queries horizon UUIDs keyed by strat surface name identifier."""
+    async def _get_surface_uuids(self, identifiers: set[str]) -> dict[str, str]:
+        """Queries surface UUIDs keyed by strat surface name identifier."""
         unique_identifiers = sorted(set(identifiers))
 
         if not unique_identifiers:
             return {}
 
-        horizon_uuids: dict[str, str] = {}
-        horizon_responses = await asyncio.gather(
-            *(self._smda.horizon(identifier) for identifier in unique_identifiers),
+        surface_uuids: dict[str, str] = {}
+        surface_responses = await asyncio.gather(
+            *(self._smda.surface(identifier) for identifier in unique_identifiers),
             return_exceptions=True,
         )
 
         for identifier, response in zip(
-            unique_identifiers, horizon_responses, strict=True
+            unique_identifiers, surface_responses, strict=True
         ):
             if isinstance(response, httpx.HTTPError | TimeoutError):
                 logger.warning(
-                    "smda_horizon_lookup_failed",
+                    "smda_surface_lookup_failed",
                     identifier=identifier,
                     error=str(response),
                 )
@@ -316,12 +316,12 @@ class SmdaService:
             if isinstance(response, BaseException):
                 raise response
 
-            horizon_results = response.json()["data"]["results"]
-            if not horizon_results:
+            surface_results = response.json()["data"]["results"]
+            if not surface_results:
                 continue
 
-            horizon_uuid = horizon_results[0].get("uuid")
-            if horizon_uuid is not None:
-                horizon_uuids[identifier] = horizon_uuid
+            surface_uuid = surface_results[0].get("uuid")
+            if surface_uuid is not None:
+                surface_uuids[identifier] = surface_uuid
 
-        return horizon_uuids
+        return surface_uuids
