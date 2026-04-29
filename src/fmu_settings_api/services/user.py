@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings import UserFMUDirectory
 
 
 def add_to_user_recent_projects(

@@ -7,14 +7,18 @@ from unittest.mock import patch
 
 import pytest
 from fmu.datamodels.context.mappings import (
+    DataSystem,
     RelationType,
-    StratigraphyIdentifierMapping,
-    StratigraphyMappings,
 )
-from fmu.settings import CacheResource, ProjectFMUDirectory
+from fmu.settings import (
+    CacheResource,
+    InternalMappings,
+    InternalStratigraphyIdentifierMapping,
+    InternalStratigraphyMappings,
+    ProjectFMUDirectory,
+)
 from fmu.settings.models import ListFieldDiff
 from fmu.settings.models.diff import ScalarFieldDiff
-from fmu.settings.models.mappings import Mappings
 
 from fmu_settings_api.services.resource import ResourceService
 
@@ -60,31 +64,34 @@ def test_get_cache_diff_returns_structured_scalar_diff(
 
 def test_get_cache_diff_returns_mappings_list_diff(
     fmu_dir: ProjectFMUDirectory,
-    make_stratigraphy_mapping: Callable[
-        [str, str, RelationType], StratigraphyIdentifierMapping
-    ],
-    make_stratigraphy_mappings: Callable[[], StratigraphyMappings],
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
+    make_stratigraphy_mappings: Callable[[], InternalStratigraphyMappings],
 ) -> None:
     """Test cache diff returns added/removed changes for stratigraphy mappings."""
     service = ResourceService(fmu_dir)
     current_stratigraphy = make_stratigraphy_mappings()
-    fmu_dir.mappings.update_stratigraphy_mappings(current_stratigraphy)
+    fmu_dir.mappings.update_internal_stratigraphy_mappings(current_stratigraphy)
 
-    incoming_stratigraphy = StratigraphyMappings(
+    incoming_stratigraphy = InternalStratigraphyMappings(
         root=[
             current_stratigraphy[0],
             current_stratigraphy[2],
             current_stratigraphy[3],
+            current_stratigraphy[4],
             make_stratigraphy_mapping(
                 "TopNew",
-                "NEW GP. Top",
-                RelationType.primary,
+                "TopViking",
+                RelationType.alias,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
             ),
         ]
     )
     revision_path = fmu_dir.cache.store_revision(
         Path("mappings.json"),
-        Mappings(stratigraphy=incoming_stratigraphy).model_dump_json(by_alias=True),
+        InternalMappings(stratigraphy=incoming_stratigraphy).model_dump_json(
+            by_alias=True
+        ),
     )
     assert revision_path is not None
 

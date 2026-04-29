@@ -1,18 +1,20 @@
 """Tests for the MappingsService."""
 
 from collections.abc import Callable
-from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 from fmu.datamodels.context.mappings import (
     DataSystem,
     MappingType,
-    RelationType,
-    StratigraphyIdentifierMapping,
-    StratigraphyMappings,
 )
-from fmu.settings._fmu_dir import ProjectFMUDirectory
-from pydantic import ValidationError
+from fmu.settings import (
+    InternalMappings,
+    InternalRelationType,
+    InternalStratigraphyIdentifierMapping,
+    InternalStratigraphyMappings,
+    ProjectFMUDirectory,
+)
 
 from fmu_settings_api.services.mappings import MappingsService
 
@@ -23,140 +25,107 @@ def mappings_service(fmu_dir: ProjectFMUDirectory) -> MappingsService:
     return MappingsService(fmu_dir)
 
 
-def test_update_mappings_by_systems_mapping_type_mismatch(
+def test_get_internal_mappings_by_source_system_unsupported_type(
     mappings_service: MappingsService,
-    fmu_dir: ProjectFMUDirectory,
 ) -> None:
-    """Test that mapping type mismatch in body raises ValueError."""
-    fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
-
-    wrong_type_mapping = Mock()
-    wrong_type_mapping.mapping_type = "wells"
-    wrong_type_mapping.source_system = DataSystem.rms
-    wrong_type_mapping.target_system = DataSystem.smda
-
-    with pytest.raises(ValueError, match="Mapping type mismatch"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
+    """Test unsupported mapping types raise ValueError on filtered read."""
+    with pytest.raises(ValueError, match="not yet supported"):
+        mappings_service.get_internal_mappings_by_source_system(
+            MappingType.wellbore,
             DataSystem.rms,
-            DataSystem.smda,
-            [wrong_type_mapping],
         )
 
 
-def test_update_mappings_by_systems_source_system_mismatch(
+def test_get_internal_mappings_by_source_system_returns_empty_when_missing(
     mappings_service: MappingsService,
-    fmu_dir: ProjectFMUDirectory,
 ) -> None:
-    """Test that source system mismatch in body raises ValueError."""
-    fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
-
-    wrong_target_mapping = Mock()
-    wrong_target_mapping.mapping_type = MappingType.stratigraphy
-    wrong_target_mapping.source_system = DataSystem.rms
-    wrong_target_mapping.target_system = DataSystem.fmu
-
-    with pytest.raises(ValueError, match="Source system mismatch"):
-        mappings_service.update_mappings_by_systems(
+    """Test missing mappings file returns an empty mappings model."""
+    with patch.object(
+        mappings_service,
+        "list_internal_stratigraphy_mappings",
+        side_effect=FileNotFoundError("Mappings file not found"),
+    ):
+        assert mappings_service.get_internal_mappings_by_source_system(
             MappingType.stratigraphy,
-            DataSystem.fmu,
-            DataSystem.smda,
-            [wrong_target_mapping],
-        )
+            DataSystem.rms,
+        ) == InternalMappings(stratigraphy=InternalStratigraphyMappings(root=[]))
 
 
-def test_update_mappings_by_systems_target_system_mismatch(
+def test_update_internal_mappings_by_source_system_replaces_existing_stratigraphy(
     mappings_service: MappingsService,
     fmu_dir: ProjectFMUDirectory,
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
 ) -> None:
-    """Test that target system mismatch in body raises ValueError."""
-    fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
+    """Test updates replace only the stored stratigraphy source partition."""
+    initial_mappings = InternalStratigraphyMappings(
+        root=[
+            make_stratigraphy_mapping(
+                "TopVolantis",
+                "TopVolantis",
+                InternalRelationType.primary,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_stratigraphy_mapping(
+                "TopHugin",
+                "TopHugin",
+                InternalRelationType.primary,
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.simulator,
+            ),
+            make_stratigraphy_mapping(
+                "TopHugin",
+                "HUGIN GP. Top",
+                InternalRelationType.primary,
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.smda,
+            ),
+        ]
+    )
+    replacement_mappings = InternalStratigraphyMappings(
+        root=[
+            make_stratigraphy_mapping(
+                "TopViking",
+                "TopViking",
+                InternalRelationType.primary,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_stratigraphy_mapping(
+                "TopViking",
+                "VIKING GP. Top",
+                InternalRelationType.primary,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.smda,
+            ),
+        ]
+    )
 
-    wrong_target_mapping = Mock()
-    wrong_target_mapping.mapping_type = MappingType.stratigraphy
-    wrong_target_mapping.source_system = DataSystem.rms
-    wrong_target_mapping.target_system = DataSystem.fmu
+    fmu_dir.mappings.update_internal_stratigraphy_mappings(initial_mappings)
 
-    with pytest.raises(ValueError, match="Target system mismatch"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
-            DataSystem.rms,
-            DataSystem.smda,
-            [wrong_target_mapping],
+    mappings_service.update_internal_mappings_by_source_system(
+        MappingType.stratigraphy,
+        DataSystem.rms,
+        replacement_mappings,
+    )
+
+    assert (
+        fmu_dir.mappings.internal_stratigraphy_mappings
+        == InternalStratigraphyMappings(
+            root=[
+                replacement_mappings[0],
+                replacement_mappings[1],
+                initial_mappings[1],
+                initial_mappings[2],
+            ]
         )
+    )
 
 
-def test_update_mappings_by_systems_mapping_group_validation_error(
+def test_update_internal_mappings_by_source_system_creates_mappings_file_if_missing(
     mappings_service: MappingsService,
     fmu_dir: ProjectFMUDirectory,
-    make_stratigraphy_mapping: Callable[
-        [str, str, RelationType], StratigraphyIdentifierMapping
-    ],
-) -> None:
-    """Test that invalid mapping combinations raises ValidationError."""
-    fmu_dir.mappings.update_stratigraphy_mappings(StratigraphyMappings(root=[]))
-
-    target_id = "Viking GP."
-    source_id = "Viking Gp."
-
-    # More than one primary mapping is an invalid combination
-    primary = make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
-    primary_two = make_stratigraphy_mapping(
-        "VIKING GP", target_id, RelationType.primary
-    )
-    with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
-            DataSystem.rms,
-            DataSystem.smda,
-            [primary, primary_two],
-        )
-
-    # More than one equivalent mapping is an invalid combination
-    equivalent = make_stratigraphy_mapping(
-        source_id, source_id, RelationType.equivalent
-    )
-    equivalent_two = make_stratigraphy_mapping(
-        source_id, source_id, RelationType.equivalent
-    )
-    with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
-            DataSystem.rms,
-            DataSystem.smda,
-            [equivalent, equivalent_two],
-        )
-
-    # Alias mapping without primary mapping is an invalid combination
-    alias = make_stratigraphy_mapping("Viking gp", target_id, RelationType.alias)
-    with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
-            DataSystem.rms,
-            DataSystem.smda,
-            [alias],
-        )
-
-    # Duplicate mappings is an invalid combination
-    primary = make_stratigraphy_mapping(source_id, target_id, RelationType.primary)
-    alias_to_duplicate = make_stratigraphy_mapping(
-        "Viking gp", target_id, RelationType.alias
-    )
-    with pytest.raises(ValidationError, match="1 validation error for MappingGroup"):
-        mappings_service.update_mappings_by_systems(
-            MappingType.stratigraphy,
-            DataSystem.rms,
-            DataSystem.smda,
-            [primary, alias, alias_to_duplicate],
-        )
-
-
-def test_update_mappings_by_systems_creates_mappings_file_if_missing(
-    mappings_service: MappingsService,
-    fmu_dir: ProjectFMUDirectory,
-    make_stratigraphy_mapping: Callable[
-        [str, str, RelationType], StratigraphyIdentifierMapping
-    ],
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
 ) -> None:
     """Test first-time mapping updates create mappings.json instead of failing."""
     mappings_path = fmu_dir.mappings.path
@@ -164,18 +133,96 @@ def test_update_mappings_by_systems_creates_mappings_file_if_missing(
 
     primary = make_stratigraphy_mapping(
         "TopVolantis",
-        "VOLANTIS GP. Top",
-        RelationType.primary,
+        "TopVolantis",
+        InternalRelationType.primary,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.rms,
     )
+    cross_system = make_stratigraphy_mapping(
+        "TopVolantis",
+        "VOLANTIS GP. Top",
+        InternalRelationType.primary,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.smda,
+    )
+    mappings = InternalStratigraphyMappings(root=[primary, cross_system])
 
-    mappings_service.update_mappings_by_systems(
+    mappings_service.update_internal_mappings_by_source_system(
         MappingType.stratigraphy,
         DataSystem.rms,
-        DataSystem.smda,
-        [primary],
+        mappings,
     )
 
     assert mappings_path.exists()
-    assert fmu_dir.mappings.stratigraphy_mappings == StratigraphyMappings(
-        root=[primary]
+    assert fmu_dir.mappings.internal_stratigraphy_mappings == mappings
+
+
+def test_update_internal_mappings_by_source_system_supports_unmappable(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
+) -> None:
+    """Test source partition updates support unmappable cross-system mappings."""
+    primary = make_stratigraphy_mapping(
+        "TopUnmapped",
+        "TopUnmapped",
+        InternalRelationType.primary,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.rms,
     )
+    unmappable = make_stratigraphy_mapping(
+        "TopUnmapped",
+        None,
+        InternalRelationType.unmappable,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.smda,
+    )
+    mappings = InternalStratigraphyMappings(root=[primary, unmappable])
+
+    mappings_service.update_internal_mappings_by_source_system(
+        MappingType.stratigraphy,
+        DataSystem.rms,
+        mappings,
+    )
+
+    assert fmu_dir.mappings.internal_stratigraphy_mappings == mappings
+    assert mappings_service.get_internal_mappings_by_source_system(
+        MappingType.stratigraphy, DataSystem.rms
+    ) == InternalMappings(stratigraphy=mappings)
+
+
+def test_update_internal_mappings_by_source_system_unsupported_type(
+    mappings_service: MappingsService,
+) -> None:
+    """Test unsupported mapping types raise ValueError on write."""
+    with pytest.raises(ValueError, match="not yet supported"):
+        mappings_service.update_internal_mappings_by_source_system(
+            MappingType.wellbore,
+            DataSystem.rms,
+            InternalStratigraphyMappings(root=[]),
+        )
+
+
+def test_update_internal_mappings_by_source_system_rejects_mismatched_source_system(
+    mappings_service: MappingsService,
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
+) -> None:
+    """Test updates reject mappings outside the requested source partition."""
+    mismatched_mappings = InternalStratigraphyMappings(
+        root=[
+            make_stratigraphy_mapping(
+                "TopHugin",
+                "TopHugin",
+                InternalRelationType.primary,
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.simulator,
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="requested source system 'rms'"):
+        mappings_service.update_internal_mappings_by_source_system(
+            MappingType.stratigraphy,
+            DataSystem.rms,
+            mismatched_mappings,
+        )

@@ -9,8 +9,7 @@ from uuid import uuid4
 import pytest
 from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.settings import ProjectFMUDirectory
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import ProjectFMUDirectory, init_user_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 

@@ -14,8 +14,7 @@ from fastapi.exception_handlers import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from fmu.settings._fmu_dir import UserFMUDirectory
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import UserFMUDirectory, init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 from starlette.exceptions import HTTPException as StarletteHTTPException

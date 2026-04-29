@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import init_user_fmu_directory
 
 from fmu_settings_api.services.user import (
     add_to_user_recent_projects,

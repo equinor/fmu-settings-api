@@ -5,8 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Self
 from uuid import uuid4
 
-from fmu.settings import ProjectFMUDirectory
-from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings import ProjectFMUDirectory, UserFMUDirectory
 from pydantic import BaseModel, SecretStr
 from runrms.api import RmsApiProxy
 from runrms.executor import ApiExecutor

@@ -8,17 +8,19 @@ from typing import Final
 from fastapi import APIRouter, HTTPException
 from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.context.mappings import (
-    AnyIdentifierMapping,
     DataSystem,
     MappingType,
 )
 from fmu.datamodels.fmu_results.fields import Model
-from fmu.settings import CacheResource, ProjectFMUDirectory
-from fmu.settings._global_config import InvalidGlobalConfigurationError
-from fmu.settings._init import (
+from fmu.settings import (
     REQUIRED_FMU_PROJECT_SUBDIRS,
+    CacheResource,
+    InternalMappings,
+    InternalStratigraphyMappings,
     InvalidFMUProjectPathError,
+    ProjectFMUDirectory,
 )
+from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
@@ -43,7 +45,6 @@ from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import (
     FMUDirPath,
     FMUProject,
-    MappingGroupResponse,
     Message,
     RestorableFilesResponse,
 )
@@ -241,32 +242,22 @@ MappingsResponses: Final[Responses] = {
             {"detail": "Mapping type '{mapping_type}' is not yet supported"},
             {
                 "detail": (
-                    "Mapping type mismatch: expected '{expected}' but found '{actual}'"
+                    "Mappings could not be loaded because the project contains "
+                    "invalid saved mappings."
                 )
             },
             {
                 "detail": (
-                    "Source system mismatch: expected '{expected}' but found '{actual}'"
-                )
-            },
-            {
-                "detail": (
-                    "Target system mismatch: expected '{expected}' but found '{actual}'"
-                )
-            },
-            {
-                "detail": (
-                    "Duplicate mapping found: source_id='{source_id}', "
-                    "source_uuid='{source_uuid}', target_id='{target_id}', "
-                    "target_uuid='{target_uuid}', relation_type='{relation_type}'"
+                    "Mappings were not updated because the project contains "
+                    "invalid saved mappings."
                 )
             },
         ],
     ),
     **inline_add_response(
         404,
-        "Mappings resource file not found",
-        [{"detail": "No mappings file found at {path}"}],
+        "Project mappings could not be updated because the project path was missing",
+        [{"detail": "Project .fmu directory not found. It may have been deleted."}],
     ),
     **inline_add_response(
         422,
@@ -290,39 +281,77 @@ MappingsResponses: Final[Responses] = {
 
 GetMappingsResponses: Final[Responses] = {
     200: {
-        "description": "Mappings grouped by target context.",
+        "description": "Mappings for the requested mapping type.",
         "content": {
             "application/json": {
-                "example": [
-                    {
-                        "official_name": "VOLANTIS GP. Top",
-                        "target_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af10",
-                        "mapping_type": "stratigraphy",
-                        "target_system": "smda",
-                        "source_system": "rms",
-                        "mappings": [
-                            {
-                                "relation_type": "primary",
-                                "source_id": "TopVolantis",
-                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66afa9",
-                            },
-                            {
-                                "relation_type": "alias",
-                                "source_id": "Top_Volantis",
-                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af11",
-                            },
-                            {
-                                "relation_type": "equivalent",
-                                "source_id": "VOLANTIS GP. Top",
-                                "source_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af10",
-                            },
-                        ],
-                    }
-                ],
+                "example": {
+                    "stratigraphy": [
+                        {
+                            "source_system": "rms",
+                            "target_system": "rms",
+                            "mapping_type": "stratigraphy",
+                            "relation_type": "primary",
+                            "source_id": "TopVolantis",
+                            "source_uuid": None,
+                            "target_id": "TopVolantis",
+                            "target_uuid": None,
+                        },
+                        {
+                            "source_system": "rms",
+                            "target_system": "rms",
+                            "mapping_type": "stratigraphy",
+                            "relation_type": "alias",
+                            "source_id": "TOP_VOLANTIS",
+                            "source_uuid": None,
+                            "target_id": "TopVolantis",
+                            "target_uuid": None,
+                        },
+                        {
+                            "source_system": "rms",
+                            "target_system": "smda",
+                            "mapping_type": "stratigraphy",
+                            "relation_type": "primary",
+                            "source_id": "TopVolantis",
+                            "source_uuid": None,
+                            "target_id": "VOLANTIS GP. Top",
+                            "target_uuid": "3fa85f64-5717-4562-b3fc-2c963f66af10",
+                        },
+                    ],
+                    "wellbore": [],
+                },
             },
         },
     },
-    **MappingsResponses,
+    **inline_add_response(
+        400,
+        "Invalid mapping data or unsupported mapping type",
+        [
+            {"detail": "Mapping type '{mapping_type}' is not yet supported"},
+            {
+                "detail": (
+                    "Mappings could not be loaded because the project contains "
+                    "invalid saved mappings."
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            Mappings resource contains invalid content or corrupted JSON.
+            """
+        ),
+        [
+            {"detail": "Invalid mappings in existing file: {error_message}"},
+            {
+                "detail": (
+                    "The mappings resource file contains invalid JSON "
+                    "and cannot be parsed. Error: {error}"
+                )
+            },
+        ],
+    ),
 }
 
 
@@ -1266,18 +1295,16 @@ async def post_restore(
 
 
 @router.get(
-    "/mappings/{mapping_type}/{source_system}/{target_system}",
-    response_model=list[MappingGroupResponse],
-    summary="Returns mappings for a specific mapping type and system combination.",
+    "/mappings/{mapping_type}/{source_system}",
+    response_model=InternalMappings,
+    summary="Returns internal mappings for a specific mapping type and source system.",
     description=dedent(
         """
-        Retrieves mappings for the specified mapping_type, source_system, and
-        target_system from the project's .fmu directory.
+        Retrieves internal mappings for the specified mapping_type and source_system
+        from the project's .fmu directory.
 
-        Mappings are returned grouped by target context (target_id/target_uuid).
-
-        Example: GET /project/mappings/stratigraphy/rms/smda returns all
-        stratigraphy mappings from RMS to SMDA.
+        Example: GET /project/mappings/stratigraphy/rms returns the
+        internal stratigraphy mappings whose source system is RMS.
         """
     ),
     responses={
@@ -1290,18 +1317,13 @@ async def get_mappings(
     mappings_service: MappingsServiceDep,
     mapping_type: MappingType,
     source_system: DataSystem,
-    target_system: DataSystem,
-) -> list[MappingGroupResponse]:
-    """Returns mappings for specific mapping type and system combination."""
+) -> InternalMappings:
+    """Returns internal mappings for a specific mapping type and source system."""
     try:
-        return [
-            MappingGroupResponse.from_mapping_group(mapping_group)
-            for mapping_group in mappings_service.get_mappings_by_systems(
-                mapping_type, source_system, target_system
-            )
-        ]
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        return mappings_service.get_internal_mappings_by_source_system(
+            mapping_type,
+            source_system,
+        )
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
@@ -1316,33 +1338,32 @@ async def get_mappings(
             detail=f"Invalid mappings in existing file: {'; '.join(errors)}",
         ) from e
     except ValueError as e:
+        if str(e).startswith("Invalid content in resource file for 'MappingsManager:"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Mappings could not be loaded because the project contains "
+                    "invalid saved mappings."
+                ),
+            ) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.put(
-    "/mappings/{mapping_type}/{source_system}/{target_system}",
+    "/mappings/{mapping_type}/{source_system}",
     response_model=Message,
     dependencies=[WritePermissionDep, RefreshLockDep],
-    summary="Updates mappings for a specific mapping type and system combination",
+    summary="Updates internal mappings for a specific mapping type and source system",
     description=dedent(
         """
-        Replaces mappings for the specified mapping_type, source_system, and
-        target_system in the project's .fmu directory.
+        Replaces internal mappings for the specified mapping_type and source system in
+        the project's .fmu directory.
 
-        This operation only affects mappings for the specified system combination.
-        Mappings for other source/target combinations are preserved.
+        The request body should contain the internal mappings collection for the
+        specified source system.
 
-        The request body should contain a list of mapping objects.
-        The mappings will be validated for:
-        - Correct mapping_type, source_system, and target_system matching URL parameters
-        - No duplicate mappings (same source_id, source_uuid, target_id, target_uuid,
-        and relation_type)
-        - Valid group structure (at most one primary per target, all mappings share
-        the same target context)
-        - Valid data according to the mapping schema
-
-        Example: PUT /project/mappings/stratigraphy/rms/smda updates only the
-        stratigraphy mappings from RMS to SMDA, leaving other mappings unchanged.
+        Example: PUT /project/mappings/stratigraphy/rms replaces the stored
+        internal stratigraphy mappings whose source system is RMS.
         """
     ),
     responses={
@@ -1356,20 +1377,14 @@ async def put_mappings(
     mappings_service: MappingsServiceDep,
     mapping_type: MappingType,
     source_system: DataSystem,
-    target_system: DataSystem,
-    mappings: list[AnyIdentifierMapping],
+    mappings: InternalStratigraphyMappings,
 ) -> Message:
-    """Updates mappings for specific mapping type and system combination."""
+    """Updates internal mappings for a specific mapping type and source system."""
     try:
-        mappings_service.update_mappings_by_systems(
-            mapping_type, source_system, target_system, mappings
+        mappings_service.update_internal_mappings_by_source_system(
+            mapping_type, source_system, mappings
         )
-        return Message(
-            message=(
-                f"Saved {mapping_type.value} mappings from {source_system.value} to "
-                f"{target_system.value}"
-            )
-        )
+        return Message(message=f"Saved {mapping_type.value} mappings")
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
@@ -1384,6 +1399,14 @@ async def put_mappings(
             detail=f"Invalid mappings: {'; '.join(errors)}",
         ) from e
     except ValueError as e:
+        if str(e).startswith("Invalid content in resource file for 'MappingsManager:"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Mappings were not updated because the project contains "
+                    "invalid saved mappings."
+                ),
+            ) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
