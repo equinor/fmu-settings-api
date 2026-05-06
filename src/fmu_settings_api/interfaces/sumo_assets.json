@@ -158,5 +158,10 @@
         "name": "Garantiana",
         "code": "032",
         "roleprefix": "GARANTIANA"
+    },
+    {
+        "name": "Eirin",
+        "code": "033",
+        "roleprefix": "EIRIN"
     }
 ]
