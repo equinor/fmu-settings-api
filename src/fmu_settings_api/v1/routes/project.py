@@ -240,18 +240,6 @@ MappingsResponses: Final[Responses] = {
         "Invalid mapping data or unsupported mapping type",
         [
             {"detail": "Mapping type '{mapping_type}' is not yet supported"},
-            {
-                "detail": (
-                    "Mappings could not be loaded because the project contains "
-                    "invalid saved mappings."
-                )
-            },
-            {
-                "detail": (
-                    "Mappings were not updated because the project contains "
-                    "invalid saved mappings."
-                )
-            },
         ],
     ),
     **inline_add_response(
@@ -270,8 +258,8 @@ MappingsResponses: Final[Responses] = {
             {"detail": "Invalid mappings in existing file: {error_message}"},
             {
                 "detail": (
-                    "The mappings resource file contains invalid JSON "
-                    "and cannot be parsed. Error: {error}"
+                    "Mappings were not updated because the project contains "
+                    "invalid saved mappings."
                 )
             },
             {"detail": "Invalid mappings: {error_message}"},
@@ -327,12 +315,6 @@ GetMappingsResponses: Final[Responses] = {
         "Invalid mapping data or unsupported mapping type",
         [
             {"detail": "Mapping type '{mapping_type}' is not yet supported"},
-            {
-                "detail": (
-                    "Mappings could not be loaded because the project contains "
-                    "invalid saved mappings."
-                )
-            },
         ],
     ),
     **inline_add_response(
@@ -346,14 +328,13 @@ GetMappingsResponses: Final[Responses] = {
             {"detail": "Invalid mappings in existing file: {error_message}"},
             {
                 "detail": (
-                    "The mappings resource file contains invalid JSON "
-                    "and cannot be parsed. Error: {error}"
+                    "Mappings could not be loaded because the project contains "
+                    "invalid saved mappings."
                 )
             },
         ],
     ),
 }
-
 
 CacheResponses: Final[Responses] = {
     **inline_add_response(
@@ -1338,9 +1319,14 @@ async def get_mappings(
             detail=f"Invalid mappings in existing file: {'; '.join(errors)}",
         ) from e
     except ValueError as e:
-        if str(e).startswith("Invalid content in resource file for 'MappingsManager:"):
+        if str(e).startswith(
+            (
+                "Invalid content in resource file for 'MappingsManager:",
+                "Invalid JSON in resource file for 'MappingsManager':",
+            )
+        ):
             raise HTTPException(
-                status_code=400,
+                status_code=422,
                 detail=(
                     "Mappings could not be loaded because the project contains "
                     "invalid saved mappings."
@@ -1399,9 +1385,14 @@ async def put_mappings(
             detail=f"Invalid mappings: {'; '.join(errors)}",
         ) from e
     except ValueError as e:
-        if str(e).startswith("Invalid content in resource file for 'MappingsManager:"):
+        if str(e).startswith(
+            (
+                "Invalid content in resource file for 'MappingsManager:",
+                "Invalid JSON in resource file for 'MappingsManager':",
+            )
+        ):
             raise HTTPException(
-                status_code=400,
+                status_code=422,
                 detail=(
                     "Mappings were not updated because the project contains "
                     "invalid saved mappings."

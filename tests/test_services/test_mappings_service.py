@@ -25,6 +25,59 @@ def mappings_service(fmu_dir: ProjectFMUDirectory) -> MappingsService:
     return MappingsService(fmu_dir)
 
 
+def test_get_internal_mappings_by_source_system_returns_filtered_stratigraphy(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
+) -> None:
+    """Test filtered read returns mappings for the requested source system."""
+    stratigraphy_mappings = InternalStratigraphyMappings(
+        root=[
+            make_stratigraphy_mapping(
+                "TopVolantis",
+                "TopVolantis",
+                InternalRelationType.primary,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_stratigraphy_mapping(
+                "TopVolantis",
+                "VOLANTIS GP. Top",
+                InternalRelationType.primary,
+                source_system=DataSystem.rms,
+                target_system=DataSystem.smda,
+            ),
+            make_stratigraphy_mapping(
+                "TopHugin",
+                "TopHugin",
+                InternalRelationType.primary,
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.simulator,
+            ),
+            make_stratigraphy_mapping(
+                "TopHugin",
+                "HUGIN GP. Top",
+                InternalRelationType.primary,
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.smda,
+            ),
+        ]
+    )
+    fmu_dir.mappings.update_internal_stratigraphy_mappings(stratigraphy_mappings)
+
+    assert mappings_service.get_internal_mappings_by_source_system(
+        MappingType.stratigraphy,
+        DataSystem.rms,
+    ) == InternalMappings(
+        stratigraphy=InternalStratigraphyMappings(
+            root=[
+                stratigraphy_mappings[0],
+                stratigraphy_mappings[1],
+            ]
+        )
+    )
+
+
 def test_get_internal_mappings_by_source_system_unsupported_type(
     mappings_service: MappingsService,
 ) -> None:

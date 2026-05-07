@@ -6,13 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from fmu.datamodels.context.mappings import (
-    DataSystem,
-    RelationType,
-)
+from fmu.datamodels.context.mappings import DataSystem
 from fmu.settings import (
     CacheResource,
     InternalMappings,
+    InternalRelationType,
     InternalStratigraphyIdentifierMapping,
     InternalStratigraphyMappings,
     ProjectFMUDirectory,
@@ -81,7 +79,7 @@ def test_get_cache_diff_returns_mappings_list_diff(
             make_stratigraphy_mapping(
                 "TopNew",
                 "TopViking",
-                RelationType.alias,
+                InternalRelationType.alias,
                 source_system=DataSystem.rms,
                 target_system=DataSystem.rms,
             ),
