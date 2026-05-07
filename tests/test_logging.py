@@ -7,7 +7,7 @@ from typing import Any, Final
 from unittest.mock import MagicMock, patch
 
 import structlog
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 

@@ -7,8 +7,8 @@ from fmu.settings import (
     ProjectFMUDirectory,
     find_nearest_fmu_directory,
     get_fmu_directory,
+    init_fmu_directory,
 )
-from fmu.settings._init import init_fmu_directory
 from runrms.api import RmsApiProxy
 from runrms.executor import ApiExecutor
 

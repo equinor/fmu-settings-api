@@ -2,7 +2,7 @@
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.settings._fmu_dir import UserFMUDirectory
+from fmu.settings import UserFMUDirectory
 from fmu.settings.models.user_config import UserConfig
 
 from fmu_settings_api.__main__ import app

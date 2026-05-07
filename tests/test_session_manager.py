@@ -7,8 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from fmu.settings import ProjectFMUDirectory
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import ProjectFMUDirectory, init_user_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 

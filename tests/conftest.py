@@ -11,16 +11,14 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from fmu.datamodels.context.mappings import (
-    DataSystem,
-    RelationType,
-    StratigraphyIdentifierMapping,
-    StratigraphyMappings,
-)
-from fmu.settings import ProjectFMUDirectory
-from fmu.settings._fmu_dir import UserFMUDirectory
-from fmu.settings._init import (
+from fmu.datamodels.context.mappings import DataSystem
+from fmu.settings import (
     REQUIRED_FMU_PROJECT_SUBDIRS,
+    InternalRelationType,
+    InternalStratigraphyIdentifierMapping,
+    InternalStratigraphyMappings,
+    ProjectFMUDirectory,
+    UserFMUDirectory,
     init_fmu_directory,
     init_user_fmu_directory,
 )
@@ -113,18 +111,18 @@ def create_stratigraphic_unit() -> Callable[..., StratigraphicUnit]:
 
 
 @pytest.fixture
-def make_stratigraphy_mapping() -> Callable[..., StratigraphyIdentifierMapping]:
+def make_stratigraphy_mapping() -> Callable[..., InternalStratigraphyIdentifierMapping]:
     """Fixture that returns a helper function to create stratigraphy mappings."""
 
     def _make_stratigraphy_mapping(  # noqa: PLR0913
         source_id: str,
-        target_id: str,
-        relation_type: RelationType,
+        target_id: str | None,
+        relation_type: InternalRelationType,
         source_system: DataSystem = DataSystem.rms,
         target_system: DataSystem = DataSystem.smda,
         target_uuid: UUID | None = None,
-    ) -> StratigraphyIdentifierMapping:
-        return StratigraphyIdentifierMapping(
+    ) -> InternalStratigraphyIdentifierMapping:
+        return InternalStratigraphyIdentifierMapping(
             source_system=source_system,
             target_system=target_system,
             relation_type=relation_type,
@@ -138,32 +136,47 @@ def make_stratigraphy_mapping() -> Callable[..., StratigraphyIdentifierMapping]:
 
 @pytest.fixture
 def make_stratigraphy_mappings(
-    make_stratigraphy_mapping: Callable[..., StratigraphyIdentifierMapping],
-) -> Callable[[], StratigraphyMappings]:
+    make_stratigraphy_mapping: Callable[..., InternalStratigraphyIdentifierMapping],
+) -> Callable[[], InternalStratigraphyMappings]:
     """Fixture that returns a helper function creating default stratigraphy mappings."""
 
-    def _make_stratigraphy_mappings() -> StratigraphyMappings:
-        return StratigraphyMappings(
+    def _make_stratigraphy_mappings() -> InternalStratigraphyMappings:
+        return InternalStratigraphyMappings(
             root=[
                 make_stratigraphy_mapping(
                     "TopVolantis",
-                    "VOLANTIS GP. Top",
-                    RelationType.primary,
+                    "TopVolantis",
+                    InternalRelationType.primary,
+                    source_system=DataSystem.rms,
+                    target_system=DataSystem.rms,
                 ),
                 make_stratigraphy_mapping(
                     "TopVOLANTIS",
-                    "VOLANTIS GP. Top",
-                    RelationType.alias,
+                    "TopVolantis",
+                    InternalRelationType.alias,
+                    source_system=DataSystem.rms,
+                    target_system=DataSystem.rms,
                 ),
                 make_stratigraphy_mapping(
+                    "TopVolantis",
                     "VOLANTIS GP. Top",
-                    "VOLANTIS GP. Top",
-                    RelationType.equivalent,
+                    InternalRelationType.primary,
+                    source_system=DataSystem.rms,
+                    target_system=DataSystem.smda,
+                ),
+                make_stratigraphy_mapping(
+                    "TopViking",
+                    "TopViking",
+                    InternalRelationType.primary,
+                    source_system=DataSystem.rms,
+                    target_system=DataSystem.rms,
                 ),
                 make_stratigraphy_mapping(
                     "TopViking",
                     "VIKING GP. Top",
-                    RelationType.primary,
+                    InternalRelationType.primary,
+                    source_system=DataSystem.rms,
+                    target_system=DataSystem.smda,
                 ),
             ]
         )

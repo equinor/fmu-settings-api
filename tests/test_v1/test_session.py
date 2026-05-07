@@ -10,8 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from fmu.settings._fmu_dir import UserFMUDirectory
-from fmu.settings._init import init_fmu_directory, init_user_fmu_directory
+from fmu.settings import UserFMUDirectory, init_fmu_directory, init_user_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
 from pydantic import SecretStr
 from pytest import MonkeyPatch

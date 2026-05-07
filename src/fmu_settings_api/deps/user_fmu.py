@@ -3,8 +3,7 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
-from fmu.settings._fmu_dir import UserFMUDirectory
-from fmu.settings._init import init_user_fmu_directory
+from fmu.settings import UserFMUDirectory, init_user_fmu_directory
 
 
 async def ensure_user_fmu_directory() -> UserFMUDirectory:
