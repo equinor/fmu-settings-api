@@ -1,18 +1,18 @@
 """Tests for the MappingsService."""
 
 from collections.abc import Callable
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import PropertyMock, patch
 
 import pytest
-from fmu.datamodels.context.mappings import (
-    DataSystem,
-    MappingType,
-)
+from fmu.datamodels.context.mappings import DataSystem, MappingType
 from fmu.settings import (
     InternalMappings,
     InternalRelationType,
     InternalStratigraphyIdentifierMapping,
     InternalStratigraphyMappings,
+    InternalWellboreIdentifierMapping,
+    InternalWellboreMappings,
     ProjectFMUDirectory,
 )
 
@@ -279,3 +279,136 @@ def test_update_internal_mappings_by_source_system_rejects_mismatched_source_sys
             DataSystem.rms,
             mismatched_mappings,
         )
+
+
+def test_import_rms_eclipse_csv_updates_wellbore_mappings(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test importing delegates to file IO and persists the returned mappings."""
+    csv_relative_path = Path("data/custom/rms_eclipse.csv")
+    imported_mappings = make_rms_simulator_mappings()
+    stored_mappings = InternalWellboreMappings(root=list(imported_mappings.root))
+
+    with (
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "read_rms_eclipse_csv",
+            return_value=imported_mappings,
+        ) as read_mock,
+        patch.object(
+            fmu_dir.mappings,
+            "update_internal_wellbore_mappings",
+            return_value=stored_mappings,
+        ) as update_mock,
+    ):
+        assert (
+            mappings_service.import_rms_eclipse_csv(csv_relative_path)
+            == stored_mappings
+        )
+
+    read_mock.assert_called_once_with(csv_relative_path)
+    update_mock.assert_called_once_with(imported_mappings)
+
+
+def test_export_rms_eclipse_csv_returns_exported_path(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test CSV export forwards stored mappings and path to the file interface."""
+    expected_path = Path("data/custom/rms_eclipse.csv")
+    stored_mappings = make_rms_simulator_mappings()
+
+    with (
+        patch.object(
+            type(fmu_dir.mappings),
+            "internal_wellbore_mappings",
+            new_callable=PropertyMock,
+        ) as mappings_mock,
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "write_rms_eclipse_csv",
+            return_value=expected_path,
+        ) as write_mock,
+    ):
+        mappings_mock.return_value = stored_mappings
+        assert mappings_service.export_rms_eclipse_csv(expected_path) == expected_path
+
+    write_mock.assert_called_once_with(stored_mappings, expected_path)
+
+
+def test_export_rms_eclipse_renaming_table_returns_exported_path(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test RMS renaming-table export forwards stored mappings and path."""
+    expected_path = Path("data/custom/rms_eclipse.renaming_table")
+    stored_mappings = make_rms_simulator_mappings()
+
+    with (
+        patch.object(
+            type(fmu_dir.mappings),
+            "internal_wellbore_mappings",
+            new_callable=PropertyMock,
+        ) as mappings_mock,
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "write_rms_eclipse_renaming_table",
+            return_value=expected_path,
+        ) as write_mock,
+    ):
+        mappings_mock.return_value = stored_mappings
+        assert (
+            mappings_service.export_rms_eclipse_renaming_table(expected_path)
+            == expected_path
+        )
+
+    write_mock.assert_called_once_with(stored_mappings, expected_path)
+
+
+def test_export_pdm_rms_renaming_table_returns_exported_path(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """Test PDM-to-RMS export forwards stored mappings and path."""
+    expected_path = Path("data/custom/pdm_rms.renaming_table")
+    stored_mappings = InternalWellboreMappings(
+        root=[
+            make_wellbore_mapping(
+                source_system=DataSystem.pdm,
+                target_system=DataSystem.pdm,
+                source_id="30/9-B-43 A",
+                target_id="30/9-B-43 A",
+            ),
+            make_wellbore_mapping(
+                source_system=DataSystem.pdm,
+                target_system=DataSystem.rms,
+                source_id="30/9-B-43 A",
+                target_id="30_9-B-43_A",
+            ),
+        ]
+    )
+
+    with (
+        patch.object(
+            type(fmu_dir.mappings),
+            "internal_wellbore_mappings",
+            new_callable=PropertyMock,
+        ) as mappings_mock,
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "write_pdm_rms_renaming_table",
+            return_value=expected_path,
+        ) as write_mock,
+    ):
+        mappings_mock.return_value = stored_mappings
+        assert (
+            mappings_service.export_pdm_rms_renaming_table(expected_path)
+            == expected_path
+        )
+
+    write_mock.assert_called_once_with(stored_mappings, expected_path)

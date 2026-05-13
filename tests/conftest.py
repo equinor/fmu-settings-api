@@ -11,12 +11,14 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from fmu.datamodels.context.mappings import DataSystem
+from fmu.datamodels.context.mappings import DataSystem, MappingType
 from fmu.settings import (
     REQUIRED_FMU_PROJECT_SUBDIRS,
     InternalRelationType,
     InternalStratigraphyIdentifierMapping,
     InternalStratigraphyMappings,
+    InternalWellboreIdentifierMapping,
+    InternalWellboreMappings,
     ProjectFMUDirectory,
     UserFMUDirectory,
     init_fmu_directory,
@@ -33,6 +35,49 @@ from fmu_settings_api.session import (
     create_fmu_session,
     get_fmu_session,
 )
+
+
+@pytest.fixture
+def make_wellbore_mapping() -> Callable[..., InternalWellboreIdentifierMapping]:
+    """Return a helper function to create wellbore mappings."""
+
+    def _make_wellbore_mapping(
+        **overrides: Any,
+    ) -> InternalWellboreIdentifierMapping:
+        mapping_data: dict[str, Any] = {
+            "source_system": DataSystem.rms,
+            "target_system": DataSystem.simulator,
+            "mapping_type": MappingType.wellbore,
+            "relation_type": InternalRelationType.primary,
+            "source_id": "30_9-B-43_A",
+            "source_uuid": None,
+            "target_id": "B43A",
+            "target_uuid": None,
+        }
+        mapping_data.update(overrides)
+        return InternalWellboreIdentifierMapping(**mapping_data)
+
+    return _make_wellbore_mapping
+
+
+@pytest.fixture
+def make_rms_simulator_mappings(
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> Callable[[], InternalWellboreMappings]:
+    """Return a helper function creating default RMS-to-simulator mappings."""
+
+    def _make_rms_simulator_mappings() -> InternalWellboreMappings:
+        return InternalWellboreMappings(
+            root=[
+                make_wellbore_mapping(
+                    target_system=DataSystem.rms,
+                    target_id="30_9-B-43_A",
+                ),
+                make_wellbore_mapping(),
+            ]
+        )
+
+    return _make_rms_simulator_mappings
 
 
 @pytest.fixture
