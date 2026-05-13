@@ -10,8 +10,11 @@ from fmu.datamodels.context.mappings import (
 from fmu.settings import (
     InternalMappings,
     InternalStratigraphyMappings,
+    InternalWellboreMappings,
     ProjectFMUDirectory,
 )
+
+from fmu_settings_api.interfaces import WellboreMappingsFileIO
 
 
 class MappingsService:
@@ -20,6 +23,7 @@ class MappingsService:
     def __init__(self, fmu_dir: ProjectFMUDirectory) -> None:
         """Initialize the service with a project FMU directory."""
         self._fmu_dir = fmu_dir
+        self._wellbore_mappings_file_io = WellboreMappingsFileIO(fmu_dir)
 
     @property
     def fmu_dir_path(self) -> Path:
@@ -39,6 +43,45 @@ class MappingsService:
         """
         return self._fmu_dir.mappings.update_internal_stratigraphy_mappings(
             stratigraphy_mappings
+        )
+
+    def import_rms_eclipse_csv(
+        self: Self, relative_path: str | Path | None = None
+    ) -> InternalWellboreMappings:
+        """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
+        self._fmu_dir._lock.ensure_can_write()
+        wellbore_mappings = self._wellbore_mappings_file_io.read_rms_eclipse_csv(
+            relative_path
+        )
+        return self._fmu_dir.mappings.update_internal_wellbore_mappings(
+            wellbore_mappings
+        )
+
+    def export_rms_eclipse_csv(
+        self: Self, relative_path: str | Path | None = None
+    ) -> Path:
+        """Export RMS-to-simulator wellbore mappings to an rms_eclipse CSV file."""
+        self._fmu_dir._lock.ensure_can_write()
+        return self._wellbore_mappings_file_io.write_rms_eclipse_csv(
+            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
+        )
+
+    def export_rms_eclipse_renaming_table(
+        self: Self, relative_path: str | Path | None = None
+    ) -> Path:
+        """Export RMS-to-simulator mappings to an rms_eclipse renaming table."""
+        self._fmu_dir._lock.ensure_can_write()
+        return self._wellbore_mappings_file_io.write_rms_eclipse_renaming_table(
+            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
+        )
+
+    def export_pdm_rms_renaming_table(
+        self: Self, relative_path: str | Path | None = None
+    ) -> Path:
+        """Export PDM-to-RMS mappings to a pdm_rms renaming table."""
+        self._fmu_dir._lock.ensure_can_write()
+        return self._wellbore_mappings_file_io.write_pdm_rms_renaming_table(
+            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
         )
 
     def get_internal_mappings_by_source_system(
