@@ -316,10 +316,12 @@ def test_export_rms_eclipse_csv_returns_exported_path(
     mappings_service: MappingsService,
     fmu_dir: ProjectFMUDirectory,
     make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
     """Test CSV export forwards stored mappings and path to the file interface."""
     expected_path = Path("data/custom/rms_eclipse.csv")
     stored_mappings = make_rms_simulator_mappings()
+    filtered_mappings = [make_wellbore_mapping()]
 
     with (
         patch.object(
@@ -336,17 +338,19 @@ def test_export_rms_eclipse_csv_returns_exported_path(
         mappings_mock.return_value = stored_mappings
         assert mappings_service.export_rms_eclipse_csv(expected_path) == expected_path
 
-    write_mock.assert_called_once_with(stored_mappings, expected_path)
+    write_mock.assert_called_once_with(filtered_mappings, expected_path)
 
 
 def test_export_rms_eclipse_renaming_table_returns_exported_path(
     mappings_service: MappingsService,
     fmu_dir: ProjectFMUDirectory,
     make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
     """Test RMS renaming-table export forwards stored mappings and path."""
     expected_path = Path("data/custom/rms_eclipse.renaming_table")
     stored_mappings = make_rms_simulator_mappings()
+    filtered_mappings = [make_wellbore_mapping()]
 
     with (
         patch.object(
@@ -366,7 +370,7 @@ def test_export_rms_eclipse_renaming_table_returns_exported_path(
             == expected_path
         )
 
-    write_mock.assert_called_once_with(stored_mappings, expected_path)
+    write_mock.assert_called_once_with(filtered_mappings, expected_path)
 
 
 def test_export_pdm_rms_renaming_table_returns_exported_path(
@@ -392,6 +396,7 @@ def test_export_pdm_rms_renaming_table_returns_exported_path(
             ),
         ]
     )
+    filtered_mappings = [stored_mappings[1]]
 
     with (
         patch.object(
@@ -411,4 +416,4 @@ def test_export_pdm_rms_renaming_table_returns_exported_path(
             == expected_path
         )
 
-    write_mock.assert_called_once_with(stored_mappings, expected_path)
+    write_mock.assert_called_once_with(filtered_mappings, expected_path)

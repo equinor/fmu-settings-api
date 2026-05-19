@@ -121,7 +121,7 @@ class WellboreMappingsFileIO:
 
     def write_rms_eclipse_csv(
         self: Self,
-        wellbore_mappings: InternalWellboreMappings,
+        wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
     ) -> Path:
         """Write wellbore mappings to an rms_eclipse.csv-format file.
@@ -131,11 +131,8 @@ class WellboreMappingsFileIO:
         two-column format with headers RMS_WELL_NAME and ECLIPSE_WELL_NAME.
         If the target CSV file already exists, it is overwritten.
 
-        Only RMS-to-simulator primary wellbore mappings are exported. Other
-        mapping systems, mapping types, and relation types are ignored.
-
         Args:
-            wellbore_mappings: ``InternalWellboreMappings`` object to export.
+            wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
                 Defaults to rms/input/well_modelling/well_info/rms_eclipse.csv.
 
@@ -154,18 +151,12 @@ class WellboreMappingsFileIO:
                 "RMS_WELL_NAME": mapping.source_id,
                 "ECLIPSE_WELL_NAME": mapping.target_id,
             }
-            for mapping in self._filter_wellbore_mappings(
-                wellbore_mappings,
-                source_system=DataSystem.rms,
-                target_system=DataSystem.simulator,
-                relation_type=InternalRelationType.primary,
-            )
+            for mapping in wellbore_mappings
         ]
 
         if not rows:
             raise ValueError(
-                "No RMS-to-simulator primary wellbore mappings available to "
-                "write to rms_eclipse.csv"
+                "No wellbore mappings available to write to rms_eclipse.csv"
             )
 
         csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -180,7 +171,7 @@ class WellboreMappingsFileIO:
 
     def write_rms_eclipse_renaming_table(
         self: Self,
-        wellbore_mappings: InternalWellboreMappings,
+        wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
     ) -> Path:
         """Write wellbore mappings to an rms_eclipse.renaming_table file.
@@ -191,11 +182,8 @@ class WellboreMappingsFileIO:
         tab characters, followed by one source and one target identifier per line.
         If the target renaming_table file already exists, it is overwritten.
 
-        Only RMS-to-simulator primary wellbore mappings are exported. Other
-        mapping systems, mapping types, and relation types are ignored.
-
         Args:
-            wellbore_mappings: ``InternalWellboreMappings`` object to export.
+            wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
                 Defaults to
                 rms/input/well_modelling/well_info/rms_eclipse.renaming_table.
@@ -210,21 +198,13 @@ class WellboreMappingsFileIO:
         renaming_table_path, resolved_relative_path = self._resolve_path(
             relative_path, self.RMS_ECLIPSE_RENAMING_TABLE_PATH
         )
-        filtered_wellbore_mappings = self._filter_wellbore_mappings(
-            wellbore_mappings,
-            source_system=DataSystem.rms,
-            target_system=DataSystem.simulator,
-            relation_type=InternalRelationType.primary,
-        )
-
-        if not filtered_wellbore_mappings:
+        if not wellbore_mappings:
             raise ValueError(
-                "No RMS-to-simulator primary wellbore mappings available to "
-                "write to rms_eclipse.renaming_table"
+                "No wellbore mappings available to write to rms_eclipse.renaming_table"
             )
 
         self._write_wellbore_renaming_table(
-            filtered_wellbore_mappings,
+            wellbore_mappings,
             renaming_table_path=renaming_table_path,
             header="SETNAMES rms\teclipse",
         )
@@ -233,7 +213,7 @@ class WellboreMappingsFileIO:
 
     def write_pdm_rms_renaming_table(
         self: Self,
-        wellbore_mappings: InternalWellboreMappings,
+        wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
     ) -> Path:
         """Write wellbore mappings to a pdm_rms.renaming_table file.
@@ -244,11 +224,8 @@ class WellboreMappingsFileIO:
         tab characters, followed by one source and one target identifier per line.
         If the target renaming_table file already exists, it is overwritten.
 
-        Only PDM-to-RMS primary wellbore mappings are exported. Other mapping
-        systems, mapping types, and relation types are ignored.
-
         Args:
-            wellbore_mappings: ``InternalWellboreMappings`` object to export.
+            wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
                 Defaults to
                 rms/input/well_modelling/well_info/pdm_rms.renaming_table.
@@ -263,21 +240,13 @@ class WellboreMappingsFileIO:
         renaming_table_path, resolved_relative_path = self._resolve_path(
             relative_path, self.PDM_RMS_RENAMING_TABLE_PATH
         )
-        filtered_wellbore_mappings = self._filter_wellbore_mappings(
-            wellbore_mappings,
-            source_system=DataSystem.pdm,
-            target_system=DataSystem.rms,
-            relation_type=InternalRelationType.primary,
-        )
-
-        if not filtered_wellbore_mappings:
+        if not wellbore_mappings:
             raise ValueError(
-                "No PDM-to-RMS primary wellbore mappings available to "
-                "write to pdm_rms.renaming_table"
+                "No wellbore mappings available to write to pdm_rms.renaming_table"
             )
 
         self._write_wellbore_renaming_table(
-            filtered_wellbore_mappings,
+            wellbore_mappings,
             renaming_table_path=renaming_table_path,
             header="SETNAMES pdm\trms",
         )
@@ -307,24 +276,3 @@ class WellboreMappingsFileIO:
             file_handle.write(f"{header}\n")
             for mapping in wellbore_mappings:
                 file_handle.write(f"{mapping.source_id}\t{mapping.target_id}\n")
-
-    def _filter_wellbore_mappings(
-        self: Self,
-        wellbore_mappings: InternalWellboreMappings,
-        *,
-        source_system: DataSystem,
-        target_system: DataSystem,
-        relation_type: InternalRelationType,
-    ) -> list[InternalWellboreIdentifierMapping]:
-        """Return wellbore mappings matching source, target, and relation."""
-        return [
-            mapping
-            for mapping in wellbore_mappings
-            if (
-                mapping.source_system == source_system
-                and mapping.target_system == target_system
-                and mapping.mapping_type == MappingType.wellbore
-                and mapping.relation_type == relation_type
-                and mapping.target_id is not None
-            )
-        ]

@@ -9,7 +9,9 @@ from fmu.datamodels.context.mappings import (
 )
 from fmu.settings import (
     InternalMappings,
+    InternalRelationType,
     InternalStratigraphyMappings,
+    InternalWellboreIdentifierMapping,
     InternalWellboreMappings,
     ProjectFMUDirectory,
 )
@@ -60,29 +62,68 @@ class MappingsService:
     def export_rms_eclipse_csv(
         self: Self, relative_path: str | Path | None = None
     ) -> Path:
-        """Export RMS-to-simulator wellbore mappings to an rms_eclipse CSV file."""
+        """Export RMS-to-simulator wellbore mappings as rms_eclipse CSV."""
         self._fmu_dir._lock.ensure_can_write()
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relation_type=InternalRelationType.primary,
+        )
         return self._wellbore_mappings_file_io.write_rms_eclipse_csv(
-            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
+            filtered_wellbore_mappings, relative_path
         )
 
     def export_rms_eclipse_renaming_table(
         self: Self, relative_path: str | Path | None = None
     ) -> Path:
-        """Export RMS-to-simulator mappings to an rms_eclipse renaming table."""
+        """Export RMS-to-simulator wellbore mappings as rms_eclipse renaming table."""
         self._fmu_dir._lock.ensure_can_write()
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relation_type=InternalRelationType.primary,
+        )
         return self._wellbore_mappings_file_io.write_rms_eclipse_renaming_table(
-            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
+            filtered_wellbore_mappings, relative_path
         )
 
     def export_pdm_rms_renaming_table(
         self: Self, relative_path: str | Path | None = None
     ) -> Path:
-        """Export PDM-to-RMS mappings to a pdm_rms renaming table."""
+        """Export PDM-to-RMS wellbore mappings as pdm_rms renaming table."""
         self._fmu_dir._lock.ensure_can_write()
-        return self._wellbore_mappings_file_io.write_pdm_rms_renaming_table(
-            self._fmu_dir.mappings.internal_wellbore_mappings, relative_path
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.pdm,
+            target_system=DataSystem.rms,
+            relation_type=InternalRelationType.primary,
         )
+        return self._wellbore_mappings_file_io.write_pdm_rms_renaming_table(
+            filtered_wellbore_mappings, relative_path
+        )
+
+    def _filter_wellbore_mappings(
+        self: Self,
+        *,
+        wellbore_mappings: InternalWellboreMappings,
+        source_system: DataSystem,
+        target_system: DataSystem,
+        relation_type: InternalRelationType,
+    ) -> list[InternalWellboreIdentifierMapping]:
+        """Return wellbore mappings matching source, target, and relation."""
+        return [
+            mapping
+            for mapping in wellbore_mappings
+            if (
+                mapping.source_system == source_system
+                and mapping.target_system == target_system
+                and mapping.mapping_type == MappingType.wellbore
+                and mapping.relation_type == relation_type
+                and mapping.target_id is not None
+            )
+        ]
 
     def get_internal_mappings_by_source_system(
         self,
