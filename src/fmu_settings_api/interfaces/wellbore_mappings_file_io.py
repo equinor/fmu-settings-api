@@ -25,11 +25,12 @@ class WellboreMappingsFileIO:
 
     WELL_INFO_DIRECTORY: Final[Path] = Path("rms/input/well_modelling/well_info")
     RMS_ECLIPSE_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_eclipse.csv"
-    RMS_ECLIPSE_RENAMING_TABLE_PATH: Final[Path] = (
-        WELL_INFO_DIRECTORY / "rms_eclipse.renaming_table"
+    RMS_SIMULATOR_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_simulator.csv"
+    RMS_SIMULATOR_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_simulator.renaming_table"
     )
-    PDM_RMS_RENAMING_TABLE_PATH: Final[Path] = (
-        WELL_INFO_DIRECTORY / "pdm_rms.renaming_table"
+    RMS_PDM_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_pdm.renaming_table"
     )
 
     def __init__(self: Self, fmu_dir: ProjectFMUDirectory) -> None:
@@ -59,7 +60,7 @@ class WellboreMappingsFileIO:
             ValueError: If the path escapes the project root, required columns are
                 missing, or a non-empty row has missing values.
         """
-        csv_path, _ = self._resolve_path(relative_path, self.RMS_ECLIPSE_CSV_PATH)
+        csv_path = self._resolve_path(relative_path, self.RMS_ECLIPSE_CSV_PATH)
 
         if not csv_path.is_file():
             raise FileNotFoundError(f"CSV file not found: '{csv_path}'")
@@ -119,66 +120,59 @@ class WellboreMappingsFileIO:
 
         return InternalWellboreMappings(root=mappings)
 
-    def write_rms_eclipse_csv(
+    def write_rms_simulator_csv(
         self: Self,
         wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
-    ) -> Path:
-        """Write wellbore mappings to an rms_eclipse.csv-format file.
+    ) -> None:
+        """Write wellbore mappings to an rms_simulator.csv-format file.
 
         Writes a CSV file relative to the project root, defaults to
-        rms/input/well_modelling/well_info/rms_eclipse.csv, using the rms_eclipse.csv
-        two-column format with headers RMS_WELL_NAME and ECLIPSE_WELL_NAME.
+        rms/input/well_modelling/well_info/rms_simulator.csv, using two-column
+        format with headers RMS_WELL_NAME and SIMULATOR_WELL_NAME.
         If the target CSV file already exists, it is overwritten.
 
         Args:
             wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
-                Defaults to rms/input/well_modelling/well_info/rms_eclipse.csv.
-
-        Returns:
-            The path to the written CSV file, relative to the project root.
+                Defaults to rms/input/well_modelling/well_info/rms_simulator.csv.
 
         Raises:
             ValueError: If the path escapes the project root or no mappings can be
-                represented in the rms_eclipse.csv format.
+                represented in the rms_simulator.csv format.
         """
-        csv_path, resolved_relative_path = self._resolve_path(
-            relative_path, self.RMS_ECLIPSE_CSV_PATH
-        )
+        csv_path = self._resolve_path(relative_path, self.RMS_SIMULATOR_CSV_PATH)
         rows = [
             {
                 "RMS_WELL_NAME": mapping.source_id,
-                "ECLIPSE_WELL_NAME": mapping.target_id,
+                "SIMULATOR_WELL_NAME": mapping.target_id,
             }
             for mapping in wellbore_mappings
         ]
 
         if not rows:
             raise ValueError(
-                "No wellbore mappings available to write to rms_eclipse.csv"
+                "No wellbore mappings available to write to rms_simulator.csv"
             )
 
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         with csv_path.open("w", encoding="utf-8", newline="") as file_handle:
             writer = csv.DictWriter(
-                file_handle, fieldnames=["RMS_WELL_NAME", "ECLIPSE_WELL_NAME"]
+                file_handle, fieldnames=["RMS_WELL_NAME", "SIMULATOR_WELL_NAME"]
             )
             writer.writeheader()
             writer.writerows(rows)
 
-        return resolved_relative_path
-
-    def write_rms_eclipse_renaming_table(
+    def write_rms_simulator_renaming_table(
         self: Self,
         wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
-    ) -> Path:
-        """Write wellbore mappings to an rms_eclipse.renaming_table file.
+    ) -> None:
+        """Write wellbore mappings to an rms_simulator.renaming_table file.
 
         Writes a renaming table file relative to the project root,
-        defaults to rms/input/well_modelling/well_info/rms_eclipse.renaming_table,
-        with the header row ``SETNAMES``, ``rms``, and ``eclipse`` separated by
+        defaults to rms/input/well_modelling/well_info/rms_simulator.renaming_table,
+        with the header row ``SETNAMES``, ``rms``, and ``simulator`` separated by
         tab characters, followed by one source and one target identifier per line.
         If the target renaming_table file already exists, it is overwritten.
 
@@ -186,41 +180,38 @@ class WellboreMappingsFileIO:
             wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
                 Defaults to
-                rms/input/well_modelling/well_info/rms_eclipse.renaming_table.
-
-        Returns:
-            The path to the written renaming table, relative to the project root.
+                rms/input/well_modelling/well_info/rms_simulator.renaming_table.
 
         Raises:
             ValueError: If the path escapes the project root or no mappings can be
-                represented in the rms_eclipse.renaming_table format.
+                represented in the rms_simulator.renaming_table format.
         """
-        renaming_table_path, resolved_relative_path = self._resolve_path(
-            relative_path, self.RMS_ECLIPSE_RENAMING_TABLE_PATH
+        renaming_table_path = self._resolve_path(
+            relative_path, self.RMS_SIMULATOR_RENAMING_TABLE_PATH
         )
         if not wellbore_mappings:
             raise ValueError(
-                "No wellbore mappings available to write to rms_eclipse.renaming_table"
+                "No wellbore mappings available to write to "
+                "rms_simulator.renaming_table"
             )
 
         self._write_wellbore_renaming_table(
             wellbore_mappings,
             renaming_table_path=renaming_table_path,
-            header="SETNAMES rms\teclipse",
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
         )
 
-        return resolved_relative_path
-
-    def write_pdm_rms_renaming_table(
+    def write_rms_pdm_renaming_table(
         self: Self,
         wellbore_mappings: list[InternalWellboreIdentifierMapping],
         relative_path: str | Path | None = None,
-    ) -> Path:
-        """Write wellbore mappings to a pdm_rms.renaming_table file.
+    ) -> None:
+        """Write wellbore mappings to a rms_pdm.renaming_table file.
 
         Writes a renaming table file relative to the project root,
-        defaults to rms/input/well_modelling/well_info/pdm_rms.renaming_table,
-        with the header row ``SETNAMES``, ``pdm``, and ``rms`` separated by
+        defaults to rms/input/well_modelling/well_info/rms_pdm.renaming_table,
+        with the header row ``SETNAMES``, ``rms``, and ``pdm`` separated by
         tab characters, followed by one source and one target identifier per line.
         If the target renaming_table file already exists, it is overwritten.
 
@@ -228,49 +219,46 @@ class WellboreMappingsFileIO:
             wellbore_mappings: Wellbore mappings to export.
             relative_path: Optional output path relative to the project root.
                 Defaults to
-                rms/input/well_modelling/well_info/pdm_rms.renaming_table.
-
-        Returns:
-            The path to the written renaming table, relative to the project root.
+                rms/input/well_modelling/well_info/rms_pdm.renaming_table.
 
         Raises:
             ValueError: If the path escapes the project root or no mappings can be
-                represented in the pdm_rms.renaming_table format.
+                represented in the rms_pdm.renaming_table format.
         """
-        renaming_table_path, resolved_relative_path = self._resolve_path(
-            relative_path, self.PDM_RMS_RENAMING_TABLE_PATH
+        renaming_table_path = self._resolve_path(
+            relative_path, self.RMS_PDM_RENAMING_TABLE_PATH
         )
         if not wellbore_mappings:
             raise ValueError(
-                "No wellbore mappings available to write to pdm_rms.renaming_table"
+                "No wellbore mappings available to write to rms_pdm.renaming_table"
             )
 
         self._write_wellbore_renaming_table(
             wellbore_mappings,
             renaming_table_path=renaming_table_path,
-            header="SETNAMES pdm\trms",
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
         )
-        return resolved_relative_path
 
     def _resolve_path(
         self: Self, relative_path: str | Path | None, default_path: Path
-    ) -> tuple[Path, Path]:
-        """Resolve an optional project-relative path and return both path forms."""
-        resolved_path = self._fmu_dir.resolve_path_inside_project(
+    ) -> Path:
+        """Resolve an optional project-relative path inside the project root."""
+        return self._fmu_dir.resolve_path_inside_project(
             Path(relative_path or default_path)
         )
-
-        return resolved_path, resolved_path.relative_to(self._fmu_dir.base_path)
 
     def _write_wellbore_renaming_table(
         self: Self,
         wellbore_mappings: list[InternalWellboreIdentifierMapping],
         *,
         renaming_table_path: Path,
-        header: str,
+        source_system: DataSystem,
+        target_system: DataSystem,
     ) -> None:
         """Write wellbore mappings to a tab-separated renaming table."""
         renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
+        header = f"SETNAMES {source_system.value}\t{target_system.value}"
 
         with renaming_table_path.open("w", encoding="utf-8", newline="") as file_handle:
             file_handle.write(f"{header}\n")

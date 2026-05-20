@@ -59,10 +59,10 @@ class MappingsService:
             wellbore_mappings
         )
 
-    def export_rms_eclipse_csv(
+    def export_rms_simulator_csv(
         self: Self, relative_path: str | Path | None = None
-    ) -> Path:
-        """Export RMS-to-simulator wellbore mappings as rms_eclipse CSV."""
+    ) -> None:
+        """Export RMS-to-simulator wellbore mappings as rms_simulator CSV."""
         self._fmu_dir._lock.ensure_can_write()
         filtered_wellbore_mappings = self._filter_wellbore_mappings(
             wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
@@ -70,14 +70,19 @@ class MappingsService:
             target_system=DataSystem.simulator,
             relation_type=InternalRelationType.primary,
         )
-        return self._wellbore_mappings_file_io.write_rms_eclipse_csv(
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-simulator primary wellbore mappings available to export "
+                "as rms_simulator.csv"
+            )
+        self._wellbore_mappings_file_io.write_rms_simulator_csv(
             filtered_wellbore_mappings, relative_path
         )
 
-    def export_rms_eclipse_renaming_table(
+    def export_rms_simulator_renaming_table(
         self: Self, relative_path: str | Path | None = None
-    ) -> Path:
-        """Export RMS-to-simulator wellbore mappings as rms_eclipse renaming table."""
+    ) -> None:
+        """Export RMS-to-simulator wellbore mappings as rms_simulator renaming table."""
         self._fmu_dir._lock.ensure_can_write()
         filtered_wellbore_mappings = self._filter_wellbore_mappings(
             wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
@@ -85,22 +90,32 @@ class MappingsService:
             target_system=DataSystem.simulator,
             relation_type=InternalRelationType.primary,
         )
-        return self._wellbore_mappings_file_io.write_rms_eclipse_renaming_table(
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-simulator primary wellbore mappings available to export "
+                "as rms_simulator.renaming_table"
+            )
+        self._wellbore_mappings_file_io.write_rms_simulator_renaming_table(
             filtered_wellbore_mappings, relative_path
         )
 
-    def export_pdm_rms_renaming_table(
+    def export_rms_pdm_renaming_table(
         self: Self, relative_path: str | Path | None = None
-    ) -> Path:
-        """Export PDM-to-RMS wellbore mappings as pdm_rms renaming table."""
+    ) -> None:
+        """Export RMS-to-PDM wellbore mappings as rms_pdm renaming table."""
         self._fmu_dir._lock.ensure_can_write()
         filtered_wellbore_mappings = self._filter_wellbore_mappings(
             wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
-            source_system=DataSystem.pdm,
-            target_system=DataSystem.rms,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
             relation_type=InternalRelationType.primary,
         )
-        return self._wellbore_mappings_file_io.write_pdm_rms_renaming_table(
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-pdm primary wellbore mappings available to export as "
+                "rms_pdm.renaming_table"
+            )
+        self._wellbore_mappings_file_io.write_rms_pdm_renaming_table(
             filtered_wellbore_mappings, relative_path
         )
 
