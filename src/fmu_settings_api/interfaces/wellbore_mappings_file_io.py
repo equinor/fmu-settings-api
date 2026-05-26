@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Self
+from typing import TYPE_CHECKING, Self
 
 from fmu.datamodels.context.mappings import (
     DataSystem,
@@ -23,34 +23,21 @@ if TYPE_CHECKING:
 class WellboreMappingsFileIO:
     """Import and export wellbore mappings from project files outside .fmu."""
 
-    WELL_INFO_DIRECTORY: Final[Path] = Path("rms/input/well_modelling/well_info")
-    RMS_ECLIPSE_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_eclipse.csv"
-    RMS_SIMULATOR_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_simulator.csv"
-    RMS_SIMULATOR_RENAMING_TABLE_PATH: Final[Path] = (
-        WELL_INFO_DIRECTORY / "rms_simulator.renaming_table"
-    )
-    RMS_PDM_RENAMING_TABLE_PATH: Final[Path] = (
-        WELL_INFO_DIRECTORY / "rms_pdm.renaming_table"
-    )
-
     def __init__(self: Self, fmu_dir: ProjectFMUDirectory) -> None:
         """Initialize the interface with the project .fmu directory."""
         self._fmu_dir = fmu_dir
 
     def read_rms_eclipse_csv(
-        self: Self, relative_path: str | Path | None = None
+        self: Self, relative_path: str | Path
     ) -> InternalWellboreMappings:
         """Read wellbore mappings from an rms_eclipse.csv-format file.
 
-        Reads a CSV file relative to the project root, defaults to
-        rms/input/well_modelling/well_info/rms_eclipse.csv, converts each
-        RMS_WELL_NAME/ECLIPSE_WELL_NAME row into an RMS-to-simulator primary
-        internal wellbore mapping, and returns the resulting InternalWellboreMappings
-        object.
+        Reads a CSV file relative to the project root, converts each RMS_WELL_NAME/
+        ECLIPSE_WELL_NAME row into an RMS-to-simulator primary internal wellbore
+        mapping, and returns the resulting InternalWellboreMappings object.
 
         Args:
-            relative_path: Optional path relative to the project root.
-                Defaults to rms/input/well_modelling/well_info/rms_eclipse.csv.
+            relative_path: Path relative to the project root.
 
         Returns:
             The parsed ``InternalWellboreMappings`` object.
@@ -60,7 +47,7 @@ class WellboreMappingsFileIO:
             ValueError: If the path escapes the project root, required columns are
                 missing, or a non-empty row has missing values.
         """
-        csv_path = self._resolve_path(relative_path, self.RMS_ECLIPSE_CSV_PATH)
+        csv_path = self._fmu_dir.resolve_path_inside_project(Path(relative_path))
 
         if not csv_path.is_file():
             raise FileNotFoundError(f"CSV file not found: '{csv_path}'")
@@ -123,140 +110,80 @@ class WellboreMappingsFileIO:
     def write_rms_simulator_csv(
         self: Self,
         wellbore_mappings: list[InternalWellboreIdentifierMapping],
-        relative_path: str | Path | None = None,
+        relative_path: str | Path,
     ) -> None:
-        """Write wellbore mappings to an rms_simulator.csv-format file.
+        """Write wellbore mappings to an rms_simulator_mappings.csv-format file.
 
-        Writes a CSV file relative to the project root, defaults to
-        rms/input/well_modelling/well_info/rms_simulator.csv, using two-column
-        format with headers RMS_WELL_NAME and SIMULATOR_WELL_NAME.
+        Writes a CSV file relative to the project root using two-column format with
+        headers rms and simulator.
         If the target CSV file already exists, it is overwritten.
 
         Args:
             wellbore_mappings: Wellbore mappings to export.
-            relative_path: Optional output path relative to the project root.
-                Defaults to rms/input/well_modelling/well_info/rms_simulator.csv.
+            relative_path: Output path relative to the project root.
 
         Raises:
             ValueError: If the path escapes the project root or no mappings can be
-                represented in the rms_simulator.csv format.
+                represented in the rms_simulator_mappings.csv format.
         """
-        csv_path = self._resolve_path(relative_path, self.RMS_SIMULATOR_CSV_PATH)
+        csv_path = self._fmu_dir.resolve_path_inside_project(Path(relative_path))
+        source_system = DataSystem.rms
+        target_system = DataSystem.simulator
         rows = [
             {
-                "RMS_WELL_NAME": mapping.source_id,
-                "SIMULATOR_WELL_NAME": mapping.target_id,
+                source_system: mapping.source_id,
+                target_system: mapping.target_id,
             }
             for mapping in wellbore_mappings
         ]
 
         if not rows:
             raise ValueError(
-                "No wellbore mappings available to write to rms_simulator.csv"
+                "No wellbore mappings available to write to rms_simulator_mappings.csv"
             )
 
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         with csv_path.open("w", encoding="utf-8", newline="") as file_handle:
             writer = csv.DictWriter(
-                file_handle, fieldnames=["RMS_WELL_NAME", "SIMULATOR_WELL_NAME"]
+                file_handle, fieldnames=[source_system, target_system]
             )
             writer.writeheader()
             writer.writerows(rows)
 
-    def write_rms_simulator_renaming_table(
+    def write_wellbore_renaming_table(
         self: Self,
-        wellbore_mappings: list[InternalWellboreIdentifierMapping],
-        relative_path: str | Path | None = None,
-    ) -> None:
-        """Write wellbore mappings to an rms_simulator.renaming_table file.
-
-        Writes a renaming table file relative to the project root,
-        defaults to rms/input/well_modelling/well_info/rms_simulator.renaming_table,
-        with the header row ``SETNAMES``, ``rms``, and ``simulator`` separated by
-        tab characters, followed by one source and one target identifier per line.
-        If the target renaming_table file already exists, it is overwritten.
-
-        Args:
-            wellbore_mappings: Wellbore mappings to export.
-            relative_path: Optional output path relative to the project root.
-                Defaults to
-                rms/input/well_modelling/well_info/rms_simulator.renaming_table.
-
-        Raises:
-            ValueError: If the path escapes the project root or no mappings can be
-                represented in the rms_simulator.renaming_table format.
-        """
-        renaming_table_path = self._resolve_path(
-            relative_path, self.RMS_SIMULATOR_RENAMING_TABLE_PATH
-        )
-        if not wellbore_mappings:
-            raise ValueError(
-                "No wellbore mappings available to write to "
-                "rms_simulator.renaming_table"
-            )
-
-        self._write_wellbore_renaming_table(
-            wellbore_mappings,
-            renaming_table_path=renaming_table_path,
-            source_system=DataSystem.rms,
-            target_system=DataSystem.simulator,
-        )
-
-    def write_rms_pdm_renaming_table(
-        self: Self,
-        wellbore_mappings: list[InternalWellboreIdentifierMapping],
-        relative_path: str | Path | None = None,
-    ) -> None:
-        """Write wellbore mappings to a rms_pdm.renaming_table file.
-
-        Writes a renaming table file relative to the project root,
-        defaults to rms/input/well_modelling/well_info/rms_pdm.renaming_table,
-        with the header row ``SETNAMES``, ``rms``, and ``pdm`` separated by
-        tab characters, followed by one source and one target identifier per line.
-        If the target renaming_table file already exists, it is overwritten.
-
-        Args:
-            wellbore_mappings: Wellbore mappings to export.
-            relative_path: Optional output path relative to the project root.
-                Defaults to
-                rms/input/well_modelling/well_info/rms_pdm.renaming_table.
-
-        Raises:
-            ValueError: If the path escapes the project root or no mappings can be
-                represented in the rms_pdm.renaming_table format.
-        """
-        renaming_table_path = self._resolve_path(
-            relative_path, self.RMS_PDM_RENAMING_TABLE_PATH
-        )
-        if not wellbore_mappings:
-            raise ValueError(
-                "No wellbore mappings available to write to rms_pdm.renaming_table"
-            )
-
-        self._write_wellbore_renaming_table(
-            wellbore_mappings,
-            renaming_table_path=renaming_table_path,
-            source_system=DataSystem.rms,
-            target_system=DataSystem.pdm,
-        )
-
-    def _resolve_path(
-        self: Self, relative_path: str | Path | None, default_path: Path
-    ) -> Path:
-        """Resolve an optional project-relative path inside the project root."""
-        return self._fmu_dir.resolve_path_inside_project(
-            Path(relative_path or default_path)
-        )
-
-    def _write_wellbore_renaming_table(
-        self: Self,
-        wellbore_mappings: list[InternalWellboreIdentifierMapping],
         *,
-        renaming_table_path: Path,
+        wellbore_mappings: list[InternalWellboreIdentifierMapping],
         source_system: DataSystem,
         target_system: DataSystem,
+        relative_path: str | Path,
     ) -> None:
-        """Write wellbore mappings to a tab-separated renaming table."""
+        """Write wellbore mappings to a renaming table file.
+
+        Writes a renaming table file relative to the project root,
+        with the header row ``SETNAMES``, the source system, and the target
+        system separated by tab characters, followed by one source and one
+        target identifier per line.
+        If the target renaming_table file already exists, it is overwritten.
+
+        Args:
+            wellbore_mappings: Wellbore mappings to export.
+            source_system: Source system to use for the first output column.
+            target_system: Target system to use for the second output column.
+            relative_path: Output path relative to the project root.
+
+        Raises:
+            ValueError: If the path escapes the project root, no mappings can be
+                represented in the renaming table format.
+        """
+        renaming_table_path = self._fmu_dir.resolve_path_inside_project(
+            Path(relative_path)
+        )
+        if not wellbore_mappings:
+            raise ValueError(
+                f"No wellbore mappings available to write to {renaming_table_path.name}"
+            )
+
         renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
         header = f"SETNAMES {source_system.value}\t{target_system.value}"
 

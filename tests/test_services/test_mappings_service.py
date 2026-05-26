@@ -319,7 +319,7 @@ def test_export_rms_simulator_csv_forwards_filtered_mappings_and_path(
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
     """Test CSV export forwards stored mappings and path to the file interface."""
-    expected_path = Path("data/custom/rms_simulator.csv")
+    expected_path = Path("data/custom/rms_simulator_mappings.csv")
     stored_mappings = make_rms_simulator_mappings()
     filtered_mappings = [make_wellbore_mapping()]
 
@@ -372,11 +372,13 @@ def test_export_rms_simulator_csv_raises_error_when_no_mappings_match(
             ValueError,
             match=(
                 "No rms-to-simulator primary wellbore mappings available to export "
-                "as rms_simulator.csv"
+                "as rms_simulator_mappings.csv"
             ),
         ),
     ):
-        mappings_service.export_rms_simulator_csv(Path("data/custom/rms_simulator.csv"))
+        mappings_service.export_rms_simulator_csv(
+            Path("data/custom/rms_simulator_mappings.csv")
+        )
 
     write_mock.assert_not_called()
 
@@ -400,13 +402,18 @@ def test_export_rms_simulator_renaming_table_forwards_filtered_mappings_and_path
         ) as mappings_mock,
         patch.object(
             mappings_service._wellbore_mappings_file_io,
-            "write_rms_simulator_renaming_table",
+            "write_wellbore_renaming_table",
         ) as write_mock,
     ):
         mappings_mock.return_value = stored_mappings
         mappings_service.export_rms_simulator_renaming_table(expected_path)
 
-    write_mock.assert_called_once_with(filtered_mappings, expected_path)
+    write_mock.assert_called_once_with(
+        wellbore_mappings=filtered_mappings,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.simulator,
+        relative_path=expected_path,
+    )
 
 
 def test_export_rms_simulator_renaming_table_raises_error_when_no_mappings_match(
@@ -437,7 +444,7 @@ def test_export_rms_simulator_renaming_table_raises_error_when_no_mappings_match
     with (
         patch.object(
             mappings_service._wellbore_mappings_file_io,
-            "write_rms_simulator_renaming_table",
+            "write_wellbore_renaming_table",
         ) as write_mock,
         pytest.raises(
             ValueError,
@@ -487,13 +494,18 @@ def test_export_rms_pdm_renaming_table_forwards_filtered_mappings_and_path(
         ) as mappings_mock,
         patch.object(
             mappings_service._wellbore_mappings_file_io,
-            "write_rms_pdm_renaming_table",
+            "write_wellbore_renaming_table",
         ) as write_mock,
     ):
         mappings_mock.return_value = stored_mappings
         mappings_service.export_rms_pdm_renaming_table(expected_path)
 
-    write_mock.assert_called_once_with(filtered_mappings, expected_path)
+    write_mock.assert_called_once_with(
+        wellbore_mappings=filtered_mappings,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.pdm,
+        relative_path=expected_path,
+    )
 
 
 def test_export_rms_pdm_renaming_table_raises_error_when_no_mappings_match(
@@ -523,7 +535,7 @@ def test_export_rms_pdm_renaming_table_raises_error_when_no_mappings_match(
     with (
         patch.object(
             mappings_service._wellbore_mappings_file_io,
-            "write_rms_pdm_renaming_table",
+            "write_wellbore_renaming_table",
         ) as write_mock,
         pytest.raises(
             ValueError,

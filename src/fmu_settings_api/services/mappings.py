@@ -1,7 +1,7 @@
 """Service for managing mappings in .fmu and business logic."""
 
 from pathlib import Path
-from typing import Self
+from typing import Final, Self
 
 from fmu.datamodels.context.mappings import (
     DataSystem,
@@ -21,6 +21,18 @@ from fmu_settings_api.interfaces import WellboreMappingsFileIO
 
 class MappingsService:
     """Service for handling mappings."""
+
+    WELL_INFO_DIRECTORY: Final[Path] = Path("rms/input/well_modelling/well_info")
+    RMS_ECLIPSE_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_eclipse.csv"
+    RMS_SIMULATOR_MAPPINGS_CSV_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_simulator_mappings.csv"
+    )
+    RMS_SIMULATOR_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_simulator.renaming_table"
+    )
+    RMS_PDM_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_pdm.renaming_table"
+    )
 
     def __init__(self, fmu_dir: ProjectFMUDirectory) -> None:
         """Initialize the service with a project FMU directory."""
@@ -53,7 +65,7 @@ class MappingsService:
         """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
         self._fmu_dir._lock.ensure_can_write()
         wellbore_mappings = self._wellbore_mappings_file_io.read_rms_eclipse_csv(
-            relative_path
+            relative_path or self.RMS_ECLIPSE_CSV_PATH
         )
         return self._fmu_dir.mappings.update_internal_wellbore_mappings(
             wellbore_mappings
@@ -62,7 +74,7 @@ class MappingsService:
     def export_rms_simulator_csv(
         self: Self, relative_path: str | Path | None = None
     ) -> None:
-        """Export RMS-to-simulator wellbore mappings as rms_simulator CSV."""
+        """Export RMS-to-simulator wellbore mappings as a CSV file."""
         self._fmu_dir._lock.ensure_can_write()
         filtered_wellbore_mappings = self._filter_wellbore_mappings(
             wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
@@ -73,10 +85,11 @@ class MappingsService:
         if not filtered_wellbore_mappings:
             raise ValueError(
                 "No rms-to-simulator primary wellbore mappings available to export "
-                "as rms_simulator.csv"
+                "as rms_simulator_mappings.csv"
             )
         self._wellbore_mappings_file_io.write_rms_simulator_csv(
-            filtered_wellbore_mappings, relative_path
+            filtered_wellbore_mappings,
+            relative_path or self.RMS_SIMULATOR_MAPPINGS_CSV_PATH,
         )
 
     def export_rms_simulator_renaming_table(
@@ -95,8 +108,11 @@ class MappingsService:
                 "No rms-to-simulator primary wellbore mappings available to export "
                 "as rms_simulator.renaming_table"
             )
-        self._wellbore_mappings_file_io.write_rms_simulator_renaming_table(
-            filtered_wellbore_mappings, relative_path
+        self._wellbore_mappings_file_io.write_wellbore_renaming_table(
+            wellbore_mappings=filtered_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=(relative_path or self.RMS_SIMULATOR_RENAMING_TABLE_PATH),
         )
 
     def export_rms_pdm_renaming_table(
@@ -115,8 +131,11 @@ class MappingsService:
                 "No rms-to-pdm primary wellbore mappings available to export as "
                 "rms_pdm.renaming_table"
             )
-        self._wellbore_mappings_file_io.write_rms_pdm_renaming_table(
-            filtered_wellbore_mappings, relative_path
+        self._wellbore_mappings_file_io.write_wellbore_renaming_table(
+            wellbore_mappings=filtered_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
+            relative_path=relative_path or self.RMS_PDM_RENAMING_TABLE_PATH,
         )
 
     def _filter_wellbore_mappings(

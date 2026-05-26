@@ -16,20 +16,21 @@ from fmu_settings_api.interfaces.wellbore_mappings_file_io import (
 )
 
 
-def test_read_rms_eclipse_csv_default_path(
+def test_read_rms_eclipse_csv_standard_path(
     fmu_dir: ProjectFMUDirectory,
     make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
 ) -> None:
-    """Default CSV path is converted to internal wellbore mappings."""
+    """Standard CSV path is converted to internal wellbore mappings."""
     file_io = WellboreMappingsFileIO(fmu_dir)
-    csv_path = fmu_dir.base_path / "rms/input/well_modelling/well_info/rms_eclipse.csv"
+    csv_relative_path = Path("rms/input/well_modelling/well_info/rms_eclipse.csv")
+    csv_path = fmu_dir.base_path / csv_relative_path
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     csv_path.write_text(
         "RMS_WELL_NAME,ECLIPSE_WELL_NAME\n30_9-B-43_A,B43A\n",
         encoding="utf-8",
     )
 
-    well_mappings = file_io.read_rms_eclipse_csv()
+    well_mappings = file_io.read_rms_eclipse_csv(csv_relative_path)
 
     assert well_mappings == make_rms_simulator_mappings()
 
@@ -135,9 +136,9 @@ def test_write_rms_simulator_csv_writes_expected_format(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
-    """Well mappings are written using the rms_simulator.csv format."""
+    """Well mappings are written using the rms_simulator_mappings.csv format."""
     file_io = WellboreMappingsFileIO(fmu_dir)
-    csv_relative_path = Path("data/custom/rms_simulator.csv")
+    csv_relative_path = Path("data/custom/rms_simulator_mappings.csv")
 
     file_io.write_rms_simulator_csv(
         [make_wellbore_mapping()],
@@ -145,27 +146,28 @@ def test_write_rms_simulator_csv_writes_expected_format(
     )
 
     assert (fmu_dir.base_path / csv_relative_path).read_text(encoding="utf-8") == (
-        "RMS_WELL_NAME,SIMULATOR_WELL_NAME\n30_9-B-43_A,B43A\n"
+        "rms,simulator\n30_9-B-43_A,B43A\n"
     )
 
 
-def test_write_rms_simulator_csv_uses_default_path(
+def test_write_rms_simulator_csv_writes_to_standard_path(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
-    """CSV export should use the default project-relative path when omitted."""
+    """CSV export should write to the provided standard path."""
     file_io = WellboreMappingsFileIO(fmu_dir)
+    csv_relative_path = Path(
+        "rms/input/well_modelling/well_info/rms_simulator_mappings.csv"
+    )
 
-    file_io.write_rms_simulator_csv([make_wellbore_mapping()])
+    file_io.write_rms_simulator_csv([make_wellbore_mapping()], csv_relative_path)
 
-    assert (
-        fmu_dir.base_path / WellboreMappingsFileIO.RMS_SIMULATOR_CSV_PATH
-    ).read_text(encoding="utf-8") == (
-        "RMS_WELL_NAME,SIMULATOR_WELL_NAME\n30_9-B-43_A,B43A\n"
+    assert (fmu_dir.base_path / csv_relative_path).read_text(encoding="utf-8") == (
+        "rms,simulator\n30_9-B-43_A,B43A\n"
     )
 
 
-def test_write_rms_simulator_renaming_table_writes_expected_format(
+def test_write_wellbore_renaming_table_writes_expected_format(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
@@ -173,8 +175,10 @@ def test_write_rms_simulator_renaming_table_writes_expected_format(
     file_io = WellboreMappingsFileIO(fmu_dir)
     relative_path = Path("data/custom/rms_simulator.renaming_table")
 
-    file_io.write_rms_simulator_renaming_table(
-        [make_wellbore_mapping()],
+    file_io.write_wellbore_renaming_table(
+        wellbore_mappings=[make_wellbore_mapping()],
+        source_system=DataSystem.rms,
+        target_system=DataSystem.simulator,
         relative_path=relative_path,
     )
 
@@ -183,21 +187,29 @@ def test_write_rms_simulator_renaming_table_writes_expected_format(
     )
 
 
-def test_write_rms_simulator_renaming_table_uses_default_path(
+def test_write_wellbore_renaming_table_writes_to_standard_path(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
-    """RMS renaming-table export should use the default project-relative path."""
+    """RMS renaming-table export writes to the provided standard path."""
     file_io = WellboreMappingsFileIO(fmu_dir)
 
-    file_io.write_rms_simulator_renaming_table([make_wellbore_mapping()])
+    file_io.write_wellbore_renaming_table(
+        wellbore_mappings=[make_wellbore_mapping()],
+        source_system=DataSystem.rms,
+        target_system=DataSystem.simulator,
+        relative_path=Path(
+            "rms/input/well_modelling/well_info/rms_simulator.renaming_table"
+        ),
+    )
 
     assert (
-        fmu_dir.base_path / WellboreMappingsFileIO.RMS_SIMULATOR_RENAMING_TABLE_PATH
+        fmu_dir.base_path
+        / "rms/input/well_modelling/well_info/rms_simulator.renaming_table"
     ).read_text(encoding="utf-8") == ("SETNAMES rms\tsimulator\n30_9-B-43_A\tB43A\n")
 
 
-def test_write_rms_simulator_renaming_table_raises_when_no_rows_match(
+def test_write_wellbore_renaming_table_raises_when_no_rows_match(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
     """RMS renaming-table export raises when no mappings match the format."""
@@ -207,10 +219,17 @@ def test_write_rms_simulator_renaming_table_raises_when_no_rows_match(
         ValueError,
         match="No wellbore mappings available to write to rms_simulator.renaming_table",
     ):
-        file_io.write_rms_simulator_renaming_table([])
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=Path(
+                "rms/input/well_modelling/well_info/rms_simulator.renaming_table"
+            ),
+        )
 
 
-def test_write_rms_pdm_renaming_table_writes_expected_format(
+def test_write_wellbore_renaming_table_writes_rms_pdm_format(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
@@ -218,8 +237,8 @@ def test_write_rms_pdm_renaming_table_writes_expected_format(
     file_io = WellboreMappingsFileIO(fmu_dir)
     relative_path = Path("data/custom/rms_pdm.renaming_table")
 
-    file_io.write_rms_pdm_renaming_table(
-        [
+    file_io.write_wellbore_renaming_table(
+        wellbore_mappings=[
             make_wellbore_mapping(
                 source_system=DataSystem.rms,
                 target_system=DataSystem.pdm,
@@ -227,6 +246,8 @@ def test_write_rms_pdm_renaming_table_writes_expected_format(
                 target_id="30/9-B-43 A",
             ),
         ],
+        source_system=DataSystem.rms,
+        target_system=DataSystem.pdm,
         relative_path=relative_path,
     )
 
@@ -235,26 +256,29 @@ def test_write_rms_pdm_renaming_table_writes_expected_format(
     )
 
 
-def test_write_rms_pdm_renaming_table_uses_default_path(
+def test_write_wellbore_renaming_table_writes_to_rms_pdm_standard_path(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
-    """RMS-to-PDM renaming-table export should use the default path."""
+    """RMS-to-PDM renaming-table export writes to the provided standard path."""
     file_io = WellboreMappingsFileIO(fmu_dir)
 
-    file_io.write_rms_pdm_renaming_table(
-        [
+    file_io.write_wellbore_renaming_table(
+        wellbore_mappings=[
             make_wellbore_mapping(
                 source_system=DataSystem.rms,
                 target_system=DataSystem.pdm,
                 source_id="30_9-B-43_A",
                 target_id="30/9-B-43 A",
             ),
-        ]
+        ],
+        source_system=DataSystem.rms,
+        target_system=DataSystem.pdm,
+        relative_path=Path("rms/input/well_modelling/well_info/rms_pdm.renaming_table"),
     )
 
     assert (
-        fmu_dir.base_path / WellboreMappingsFileIO.RMS_PDM_RENAMING_TABLE_PATH
+        fmu_dir.base_path / "rms/input/well_modelling/well_info/rms_pdm.renaming_table"
     ).read_text(encoding="utf-8") == ("SETNAMES rms\tpdm\n30_9-B-43_A\t30/9-B-43 A\n")
 
 
@@ -265,9 +289,12 @@ def test_write_rms_simulator_csv_raises_when_no_rows_match(
     file_io = WellboreMappingsFileIO(fmu_dir)
     with pytest.raises(
         ValueError,
-        match="No wellbore mappings available to write to rms_simulator.csv",
+        match="No wellbore mappings available to write to rms_simulator_mappings.csv",
     ):
-        file_io.write_rms_simulator_csv([])
+        file_io.write_rms_simulator_csv(
+            [],
+            Path("rms/input/well_modelling/well_info/rms_simulator_mappings.csv"),
+        )
 
 
 def test_write_rms_simulator_csv_raises_and_preserves_file_when_no_rows_match(
@@ -282,7 +309,7 @@ def test_write_rms_simulator_csv_raises_and_preserves_file_when_no_rows_match(
 
     with pytest.raises(
         ValueError,
-        match="No wellbore mappings available to write to rms_simulator.csv",
+        match="No wellbore mappings available to write to rms_simulator_mappings.csv",
     ):
         file_io.write_rms_simulator_csv(
             [],
@@ -292,7 +319,7 @@ def test_write_rms_simulator_csv_raises_and_preserves_file_when_no_rows_match(
     assert csv_path.read_text(encoding="utf-8") == "existing-content\n"
 
 
-def test_write_rms_pdm_renaming_table_raises_and_preserves_file_when_no_rows_match(
+def test_write_wellbore_renaming_table_raises_and_preserves_file_when_no_rows_match(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
     """Failed RMS-to-PDM renaming-table export should not overwrite a file."""
@@ -304,10 +331,14 @@ def test_write_rms_pdm_renaming_table_raises_and_preserves_file_when_no_rows_mat
 
     with pytest.raises(
         ValueError,
-        match="No wellbore mappings available to write to rms_pdm.renaming_table",
+        match=(
+            "No wellbore mappings available to write to existing_rms_pdm.renaming_table"
+        ),
     ):
-        file_io.write_rms_pdm_renaming_table(
-            [],
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
             relative_path=relative_path,
         )
 
@@ -333,7 +364,7 @@ def test_paths_must_stay_inside_project_root(
     "relative_path",
     [Path("../outside.renaming_table"), Path("/tmp/outside.renaming_table")],
 )
-def test_write_rms_simulator_renaming_table_rejects_paths_outside_project_root(
+def test_write_wellbore_renaming_table_rejects_rms_simulator_paths_outside_project_root(
     fmu_dir: ProjectFMUDirectory,
     relative_path: Path,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
@@ -342,9 +373,11 @@ def test_write_rms_simulator_renaming_table_rejects_paths_outside_project_root(
     file_io = WellboreMappingsFileIO(fmu_dir)
 
     with pytest.raises(ValueError, match="must stay within the project root"):
-        file_io.write_rms_simulator_renaming_table(
-            [make_wellbore_mapping()],
-            relative_path,
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[make_wellbore_mapping()],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=relative_path,
         )
 
 
@@ -355,7 +388,7 @@ def test_write_rms_simulator_renaming_table_rejects_paths_outside_project_root(
         Path("/tmp/outside_rms_pdm.renaming_table"),
     ],
 )
-def test_write_rms_pdm_renaming_table_rejects_paths_outside_project_root(
+def test_write_wellbore_renaming_table_rejects_rms_pdm_paths_outside_project_root(
     fmu_dir: ProjectFMUDirectory,
     relative_path: Path,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
@@ -372,7 +405,9 @@ def test_write_rms_pdm_renaming_table_rejects_paths_outside_project_root(
     ]
 
     with pytest.raises(ValueError, match="must stay within the project root"):
-        file_io.write_rms_pdm_renaming_table(
-            wellbore_mappings,
-            relative_path,
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
+            relative_path=relative_path,
         )
