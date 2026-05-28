@@ -78,15 +78,80 @@ def test_get_internal_mappings_by_source_system_returns_filtered_stratigraphy(
     )
 
 
-def test_get_internal_mappings_by_source_system_unsupported_type(
+def test_get_internal_mappings_by_source_system_returns_filtered_wellbore(
     mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
 ) -> None:
-    """Test unsupported mapping types raise ValueError on filtered read."""
-    with pytest.raises(ValueError, match="not yet supported"):
-        mappings_service.get_internal_mappings_by_source_system(
-            MappingType.wellbore,
-            DataSystem.rms,
+    """Test filtered read returns wellbore mappings for the source system."""
+    wellbore_mappings = InternalWellboreMappings(
+        root=[
+            make_wellbore_mapping(
+                source_id="30_9-B-43_A",
+                target_id="30_9-B-43_A",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_wellbore_mapping(
+                source_id="30_9-B-43_A",
+                target_id="B43A",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.simulator,
+            ),
+            make_wellbore_mapping(
+                source_id="B43A",
+                target_id="B43A",
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.simulator,
+            ),
+            make_wellbore_mapping(
+                source_id="B43A",
+                target_id="B43A",
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.rms,
+            ),
+        ]
+    )
+    fmu_dir.mappings.update_internal_wellbore_mappings(wellbore_mappings)
+
+    assert mappings_service.get_internal_mappings_by_source_system(
+        MappingType.wellbore,
+        DataSystem.rms,
+    ) == InternalMappings(
+        wellbore=InternalWellboreMappings(
+            root=[
+                wellbore_mappings[0],
+                wellbore_mappings[1],
+            ]
         )
+    )
+
+
+def test_list_internal_wellbore_mappings_returns_stored_mappings(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test wellbore mappings can be read through the service wrapper."""
+    wellbore_mappings = make_rms_simulator_mappings()
+    fmu_dir.mappings.update_internal_wellbore_mappings(wellbore_mappings)
+
+    assert mappings_service.list_internal_wellbore_mappings() == wellbore_mappings
+
+
+def test_update_internal_wellbore_mappings_overwrites_stored_mappings(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test wellbore mappings can be written through the service wrapper."""
+    wellbore_mappings = make_rms_simulator_mappings()
+
+    assert (
+        mappings_service.update_internal_wellbore_mappings(wellbore_mappings)
+        == wellbore_mappings
+    )
+    assert fmu_dir.mappings.internal_wellbore_mappings == wellbore_mappings
 
 
 def test_get_internal_mappings_by_source_system_returns_empty_when_missing(
@@ -102,6 +167,21 @@ def test_get_internal_mappings_by_source_system_returns_empty_when_missing(
             MappingType.stratigraphy,
             DataSystem.rms,
         ) == InternalMappings(stratigraphy=InternalStratigraphyMappings(root=[]))
+
+
+def test_get_internal_mappings_by_source_system_returns_empty_wellbore_when_missing(
+    mappings_service: MappingsService,
+) -> None:
+    """Test missing mappings file returns an empty wellbore mappings model."""
+    with patch.object(
+        mappings_service,
+        "list_internal_wellbore_mappings",
+        side_effect=FileNotFoundError("Mappings file not found"),
+    ):
+        assert mappings_service.get_internal_mappings_by_source_system(
+            MappingType.wellbore,
+            DataSystem.rms,
+        ) == InternalMappings(wellbore=InternalWellboreMappings(root=[]))
 
 
 def test_update_internal_mappings_by_source_system_replaces_existing_stratigraphy(
@@ -244,11 +324,82 @@ def test_update_internal_mappings_by_source_system_supports_unmappable(
     ) == InternalMappings(stratigraphy=mappings)
 
 
-def test_update_internal_mappings_by_source_system_unsupported_type(
+def test_update_internal_mappings_by_source_system_replaces_existing_wellbore(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """Test updates replace only the stored wellbore source partition."""
+    initial_mappings = InternalWellboreMappings(
+        root=[
+            make_wellbore_mapping(
+                source_id="30_9-B-43_A",
+                target_id="30_9-B-43_A",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_wellbore_mapping(
+                source_id="30_9-B-43_A",
+                target_id="B43A",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.simulator,
+            ),
+            make_wellbore_mapping(
+                source_id="B43A",
+                target_id="B43A",
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.simulator,
+            ),
+            make_wellbore_mapping(
+                source_id="B43A",
+                target_id="30_9-B-43_A",
+                source_system=DataSystem.simulator,
+                target_system=DataSystem.rms,
+            ),
+        ]
+    )
+    replacement_mappings = InternalWellboreMappings(
+        root=[
+            make_wellbore_mapping(
+                source_id="30_9-B-44",
+                target_id="30_9-B-44",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+            ),
+            make_wellbore_mapping(
+                source_id="30_9-B-44",
+                target_id="B44",
+                source_system=DataSystem.rms,
+                target_system=DataSystem.simulator,
+            ),
+        ]
+    )
+
+    fmu_dir.mappings.update_internal_wellbore_mappings(initial_mappings)
+
+    mappings_service.update_internal_mappings_by_source_system(
+        MappingType.wellbore,
+        DataSystem.rms,
+        replacement_mappings,
+    )
+
+    assert fmu_dir.mappings.internal_wellbore_mappings == InternalWellboreMappings(
+        root=[
+            replacement_mappings[0],
+            replacement_mappings[1],
+            initial_mappings[2],
+            initial_mappings[3],
+        ]
+    )
+
+
+def test_update_internal_mappings_by_source_system_rejects_wrong_payload_type(
     mappings_service: MappingsService,
 ) -> None:
-    """Test unsupported mapping types raise ValueError on write."""
-    with pytest.raises(ValueError, match="not yet supported"):
+    """Test updates reject mappings that do not match the requested mapping type."""
+    with pytest.raises(
+        ValueError, match="Invalid mappings payload for mapping type 'wellbore'"
+    ):
         mappings_service.update_internal_mappings_by_source_system(
             MappingType.wellbore,
             DataSystem.rms,
@@ -279,6 +430,65 @@ def test_update_internal_mappings_by_source_system_rejects_mismatched_source_sys
             DataSystem.rms,
             mismatched_mappings,
         )
+
+
+@pytest.mark.parametrize(
+    (
+        "mapping_type",
+        "expected_model",
+        "list_method_name",
+        "update_method_name",
+    ),
+    [
+        (
+            MappingType.stratigraphy,
+            InternalStratigraphyMappings,
+            "list_internal_stratigraphy_mappings",
+            "update_internal_stratigraphy_mappings",
+        ),
+        (
+            MappingType.wellbore,
+            InternalWellboreMappings,
+            "list_internal_wellbore_mappings",
+            "update_internal_wellbore_mappings",
+        ),
+    ],
+)
+def test_resolve_internal_mapping_implementation_returns_model_and_methods(
+    mappings_service: MappingsService,
+    mapping_type: MappingType,
+    expected_model: type[InternalStratigraphyMappings] | type[InternalWellboreMappings],
+    list_method_name: str,
+    update_method_name: str,
+) -> None:
+    """Test the internal mapping implementation resolver."""
+    mappings = expected_model.model_validate([])
+    updated_mappings = expected_model.model_validate([])
+
+    with (
+        patch.object(
+            mappings_service,
+            list_method_name,
+            return_value=mappings,
+        ) as list_mappings_mock,
+        patch.object(
+            mappings_service,
+            update_method_name,
+            return_value=updated_mappings,
+        ) as update_mappings_mock,
+    ):
+        (
+            mappings_model,
+            list_mappings,
+            update_mappings,
+        ) = mappings_service._resolve_internal_mapping_implementation(mapping_type)
+
+        assert mappings_model is expected_model
+        assert list_mappings() == mappings
+        assert update_mappings(mappings) == updated_mappings
+
+    list_mappings_mock.assert_called_once_with()
+    update_mappings_mock.assert_called_once_with(mappings)
 
 
 def test_import_rms_eclipse_csv_updates_wellbore_mappings(

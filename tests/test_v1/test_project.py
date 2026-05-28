@@ -21,6 +21,7 @@ from fmu.settings import (
     InternalRelationType,
     InternalStratigraphyIdentifierMapping,
     InternalStratigraphyMappings,
+    InternalWellboreMappings,
     ProjectFMUDirectory,
     UserFMUDirectory,
     init_fmu_directory,
@@ -3241,6 +3242,32 @@ async def test_put_mappings_stratigraphy_success(
     )
 
 
+async def test_put_mappings_wellbore_success(
+    client_with_project_session: TestClient,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test PUT parses wellbore mappings from the path mapping type."""
+    wellbore_mappings = make_rms_simulator_mappings()
+    payload = wellbore_mappings.model_dump(mode="json")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.update_internal_mappings_by_source_system",
+    ) as update_mappings_by_source_system:
+        response = client_with_project_session.put(
+            f"{ROUTE}/mappings/wellbore/rms", json=payload
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    response_data = response.json()
+    assert "message" in response_data
+    assert "wellbore" in response_data["message"]
+    update_mappings_by_source_system.assert_called_once_with(
+        MappingType.wellbore,
+        DataSystem.rms,
+        wellbore_mappings,
+    )
+
+
 async def test_put_mappings_stratigraphy_permission_error(
     client_with_project_session: TestClient,
     make_stratigraphy_mappings: Callable[[], InternalStratigraphyMappings],
@@ -3292,6 +3319,20 @@ async def test_put_mappings_stratigraphy_validation_error(
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"]
+
+
+async def test_put_mappings_invalid_json(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when mappings request body is not valid JSON."""
+    response = client_with_project_session.put(
+        f"{ROUTE}/mappings/wellbore/rms",
+        content="{",
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Invalid mappings JSON"}
 
 
 async def test_put_mappings_stratigraphy_service_validation_error(
