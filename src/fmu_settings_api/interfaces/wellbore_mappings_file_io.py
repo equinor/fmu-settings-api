@@ -131,8 +131,8 @@ class WellboreMappingsFileIO:
         target_system = DataSystem.simulator
         rows = [
             {
-                source_system: mapping.source_id,
-                target_system: mapping.target_id,
+                mapping.source_system: mapping.source_id,
+                mapping.target_system: mapping.target_id,
             }
             for mapping in wellbore_mappings
         ]
