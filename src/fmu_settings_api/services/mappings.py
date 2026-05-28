@@ -1,7 +1,7 @@
 """Service for managing mappings in .fmu and business logic."""
 
 from pathlib import Path
-from typing import Self
+from typing import Final, Self
 
 from fmu.datamodels.context.mappings import (
     DataSystem,
@@ -9,17 +9,35 @@ from fmu.datamodels.context.mappings import (
 )
 from fmu.settings import (
     InternalMappings,
+    InternalRelationType,
     InternalStratigraphyMappings,
+    InternalWellboreIdentifierMapping,
+    InternalWellboreMappings,
     ProjectFMUDirectory,
 )
+
+from fmu_settings_api.interfaces import WellboreMappingsFileIO
 
 
 class MappingsService:
     """Service for handling mappings."""
 
+    WELL_INFO_DIRECTORY: Final[Path] = Path("rms/input/well_modelling/well_info")
+    RMS_ECLIPSE_CSV_PATH: Final[Path] = WELL_INFO_DIRECTORY / "rms_eclipse.csv"
+    RMS_SIMULATOR_MAPPINGS_CSV_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_simulator_mappings.csv"
+    )
+    RMS_SIMULATOR_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_simulator.renaming_table"
+    )
+    RMS_PDM_RENAMING_TABLE_PATH: Final[Path] = (
+        WELL_INFO_DIRECTORY / "rms_pdm.renaming_table"
+    )
+
     def __init__(self, fmu_dir: ProjectFMUDirectory) -> None:
         """Initialize the service with a project FMU directory."""
         self._fmu_dir = fmu_dir
+        self._wellbore_mappings_file_io = WellboreMappingsFileIO(fmu_dir)
 
     @property
     def fmu_dir_path(self) -> Path:
@@ -40,6 +58,106 @@ class MappingsService:
         return self._fmu_dir.mappings.update_internal_stratigraphy_mappings(
             stratigraphy_mappings
         )
+
+    def import_rms_eclipse_csv(
+        self: Self, relative_path: str | Path | None = None
+    ) -> InternalWellboreMappings:
+        """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
+        self._fmu_dir._lock.ensure_can_write()
+        wellbore_mappings = self._wellbore_mappings_file_io.read_rms_eclipse_csv(
+            relative_path or self.RMS_ECLIPSE_CSV_PATH
+        )
+        return self._fmu_dir.mappings.update_internal_wellbore_mappings(
+            wellbore_mappings
+        )
+
+    def export_rms_simulator_csv(
+        self: Self, relative_path: str | Path | None = None
+    ) -> None:
+        """Export RMS-to-simulator wellbore mappings as a CSV file."""
+        self._fmu_dir._lock.ensure_can_write()
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relation_type=InternalRelationType.primary,
+        )
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-simulator primary wellbore mappings available to export "
+                "as rms_simulator_mappings.csv"
+            )
+        self._wellbore_mappings_file_io.write_rms_simulator_csv(
+            filtered_wellbore_mappings,
+            relative_path or self.RMS_SIMULATOR_MAPPINGS_CSV_PATH,
+        )
+
+    def export_rms_simulator_renaming_table(
+        self: Self, relative_path: str | Path | None = None
+    ) -> None:
+        """Export RMS-to-simulator wellbore mappings as rms_simulator renaming table."""
+        self._fmu_dir._lock.ensure_can_write()
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relation_type=InternalRelationType.primary,
+        )
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-simulator primary wellbore mappings available to export "
+                "as rms_simulator.renaming_table"
+            )
+        self._wellbore_mappings_file_io.write_wellbore_renaming_table(
+            wellbore_mappings=filtered_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=(relative_path or self.RMS_SIMULATOR_RENAMING_TABLE_PATH),
+        )
+
+    def export_rms_pdm_renaming_table(
+        self: Self, relative_path: str | Path | None = None
+    ) -> None:
+        """Export RMS-to-PDM wellbore mappings as rms_pdm renaming table."""
+        self._fmu_dir._lock.ensure_can_write()
+        filtered_wellbore_mappings = self._filter_wellbore_mappings(
+            wellbore_mappings=self._fmu_dir.mappings.internal_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
+            relation_type=InternalRelationType.primary,
+        )
+        if not filtered_wellbore_mappings:
+            raise ValueError(
+                "No rms-to-pdm primary wellbore mappings available to export as "
+                "rms_pdm.renaming_table"
+            )
+        self._wellbore_mappings_file_io.write_wellbore_renaming_table(
+            wellbore_mappings=filtered_wellbore_mappings,
+            source_system=DataSystem.rms,
+            target_system=DataSystem.pdm,
+            relative_path=relative_path or self.RMS_PDM_RENAMING_TABLE_PATH,
+        )
+
+    def _filter_wellbore_mappings(
+        self: Self,
+        *,
+        wellbore_mappings: InternalWellboreMappings,
+        source_system: DataSystem,
+        target_system: DataSystem,
+        relation_type: InternalRelationType,
+    ) -> list[InternalWellboreIdentifierMapping]:
+        """Return wellbore mappings matching source, target, and relation."""
+        return [
+            mapping
+            for mapping in wellbore_mappings
+            if (
+                mapping.source_system == source_system
+                and mapping.target_system == target_system
+                and mapping.mapping_type == MappingType.wellbore
+                and mapping.relation_type == relation_type
+                and mapping.target_id is not None
+            )
+        ]
 
     def get_internal_mappings_by_source_system(
         self,
