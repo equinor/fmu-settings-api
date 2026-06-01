@@ -163,5 +163,15 @@
         "name": "Eirin",
         "code": "033",
         "roleprefix": "EIRIN"
+    },
+    {
+        "name": "Sigrun",
+        "code": "034",
+        "roleprefix": "SIGRUN"
+    },
+    {
+        "name": "Sigrun Øst",
+        "code": "035",
+        "roleprefix": "SIGRUN-OST"
     }
 ]
