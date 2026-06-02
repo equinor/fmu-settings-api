@@ -12,6 +12,7 @@ from fmu.datamodels.common.masterdata import (
     DiscoveryItem,
     StratigraphicColumn,
 )
+from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
 
 from fmu_settings_api.models.smda import SmdaField, SmdaSelectedField
 from fmu_settings_api.services.smda import SmdaService
@@ -357,6 +358,26 @@ async def test_get_stratigraphic_units_success() -> None:
     assert result.stratigraphic_units[0].base_uuid == base_uuid
 
 
+async def test_get_drogon_stratigraphic_units_uses_drogon_data() -> None:
+    """Tests that Drogon stratigraphic units do not call SMDA and use Drogon data."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    result = await service.get_stratigraphic_units("DROGON_HAS_NO_STRATCOLUMN")
+
+    mock_smda.strat_units.assert_not_awaited()
+    mock_smda.surface.assert_not_awaited()
+    assert [unit.identifier for unit in result.stratigraphic_units] == [
+        "Valysar Fm.",
+        "Therys Fm.",
+        "Volon Fm.",
+    ]
+    assert result.stratigraphic_units[0].top == "VOLANTIS GP. Top"
+    assert result.stratigraphic_units[0].base == "Therys Fm. Top"
+    assert result.stratigraphic_units[0].strat_unit_type == "formation"
+    assert result.stratigraphic_units[0].top_age == 0.0
+
+
 async def test_get_stratigraphic_units_empty_identifier() -> None:
     """Tests ValueError raised when empty identifier provided."""
     mock_smda = AsyncMock()
@@ -522,7 +543,7 @@ async def test_search_field_adds_country_to_results() -> None:
             "results": [
                 {
                     "country_identifier": "Norway",
-                    "identifier": "DROGON",
+                    "identifier": "TROLL",
                     "uuid": field_uuid,
                 }
             ],
@@ -531,12 +552,26 @@ async def test_search_field_adds_country_to_results() -> None:
     mock_smda.field.return_value = field_resp
 
     service = SmdaService(mock_smda)
-    result = await service.search_field(SmdaField(identifier="DROGON"))
+    result = await service.search_field(SmdaField(identifier="TROLL"))
 
     mock_smda.field.assert_called_once_with(
-        ["DROGON"],
+        ["TROLL"],
         columns=["country_identifier", "identifier", "uuid"],
     )
+    assert result.results[0].country == "Norway"
+
+
+async def test_search_drogon_field_uses_drogon_data() -> None:
+    """Tests that Drogon field searches do not call SMDA and use Drogon data."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    result = await service.search_field(SmdaField(identifier="Drogon"))
+
+    mock_smda.field.assert_not_called()
+    assert result.hits == 1
+    assert result.pages == 1
+    assert result.results[0].identifier == "DROGON"
     assert result.results[0].country == "Norway"
 
 
@@ -550,7 +585,7 @@ async def test_get_masterdata_uses_selected_field_uuid_for_lookup() -> None:
             "results": [
                 {
                     "country_identifier": "Norway",
-                    "identifier": "DROGON",
+                    "identifier": "TROLL",
                     "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
                     "uuid": selected_uuid,
                 },
@@ -596,7 +631,7 @@ async def test_get_masterdata_uses_selected_field_uuid_for_lookup() -> None:
 
     service = SmdaService(mock_smda)
     result = await service.get_masterdata(
-        [SmdaSelectedField(identifier="DROGON", uuid=selected_uuid)]
+        [SmdaSelectedField(identifier="TROLL", uuid=selected_uuid)]
     )
 
     mock_smda.field.assert_called_once_with(
@@ -610,3 +645,29 @@ async def test_get_masterdata_uses_selected_field_uuid_for_lookup() -> None:
     )
     assert len(result.field) == 1
     assert result.field[0].uuid == selected_uuid
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        SmdaSelectedField(identifier="Drogon"),
+        SmdaSelectedField(
+            identifier="any field but with Drogon uuid",
+            uuid=DROGON_MASTERDATA["smda"]["field"][0]["uuid"],
+        ),
+    ],
+)
+async def test_get_drogon_masterdata_uses_drogon_data(
+    field: SmdaSelectedField,
+) -> None:
+    """Tests that Drogon masterdata requests do not call SMDA and use Drogon data."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    result = await service.get_masterdata([field])
+
+    mock_smda.field.assert_not_called()
+    assert result.field[0].identifier == "DROGON"
+    assert result.country[0].identifier == "Norway"
+    assert result.field_coordinate_system.identifier == "ST_WGS84_UTM37N_P32637"
+    assert result.stratigraphic_columns[0].identifier == "DROGON_HAS_NO_STRATCOLUMN"

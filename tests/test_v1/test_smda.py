@@ -15,6 +15,7 @@ from fmu.datamodels.common.masterdata import (
     DiscoveryItem,
     StratigraphicColumn,
 )
+from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
 
 from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.models.smda import (
@@ -184,7 +185,7 @@ async def test_post_field_succeeds_with_none(
     mock_SmdaAPI_post.return_value = mock_response
 
     response = client_with_smda_session.post(
-        f"{ROUTE}/field", json={"identifier": "DROGON"}
+        f"{ROUTE}/field", json={"identifier": "NONEXISTENT"}
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
@@ -199,6 +200,56 @@ async def test_post_field_succeeds_with_none(
         pages=0,
         results=[],
     )
+
+
+async def test_post_field_drogon_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests that Drogon field searches do not call SMDA and use Drogon data."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/field", json={"identifier": "Drogon"}
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {
+        "hits": 1,
+        "pages": 1,
+        "results": [
+            {
+                "identifier": "DROGON",
+                "uuid": "00000000-0000-0000-0000-000000000000",
+                "country": "Norway",
+            }
+        ],
+    }
+    mock_SmdaAPI_post.assert_not_awaited()
+
+
+async def test_post_field_drogon_wildcard_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests that Drogon wildcard searches use Drogon data."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/field", json={"identifier": "DRO*"}
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {
+        "hits": 1,
+        "pages": 1,
+        "results": [
+            {
+                "identifier": "DROGON",
+                "uuid": "00000000-0000-0000-0000-000000000000",
+                "country": "Norway",
+            }
+        ],
+    }
+    mock_SmdaAPI_post.assert_not_awaited()
 
 
 async def test_post_field_with_no_identifier_raises(
@@ -295,7 +346,7 @@ async def test_post_masterdata_success(
             "results": [
                 {
                     "country_identifier": "Norway",
-                    "identifier": "DROGON",
+                    "identifier": "TROLL",
                     "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
                     "uuid": uuid4(),
                 }
@@ -348,7 +399,7 @@ async def test_post_masterdata_success(
             StratigraphicColumn(identifier="LITHO_VISERION", uuid=uuid4()),
         ]
         response = client_with_smda_session.post(
-            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+            f"{ROUTE}/masterdata", json=[{"identifier": "TROLL"}]
         )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
@@ -358,14 +409,14 @@ async def test_post_masterdata_success(
     )
     response_data = response.json()
     assert len(response_data["field"]) == 1
-    assert response_data["field"][0]["identifier"] == "DROGON"
+    assert response_data["field"][0]["identifier"] == "TROLL"
     assert (
         response_data["field_coordinate_system"]["identifier"]
         == "ST_WGS84_UTM37N_P32637"
     )
 
     mock_smda_instance.field.assert_called_once_with(
-        ["DROGON"],
+        ["TROLL"],
         columns=[
             "country_identifier",
             "identifier",
@@ -390,7 +441,7 @@ async def test_post_masterdata_uses_selected_field_uuid_for_lookup(
             "results": [
                 {
                     "country_identifier": "Norway",
-                    "identifier": "DROGON",
+                    "identifier": "TROLL",
                     "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
                     "uuid": selected_uuid,
                 },
@@ -438,7 +489,7 @@ async def test_post_masterdata_uses_selected_field_uuid_for_lookup(
         mock_get_strat_column_areas.return_value = []
         response = client_with_smda_session.post(
             f"{ROUTE}/masterdata",
-            json=[{"identifier": "DROGON", "uuid": str(selected_uuid)}],
+            json=[{"identifier": "TROLL", "uuid": str(selected_uuid)}],
         )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
@@ -458,6 +509,36 @@ async def test_post_masterdata_uses_selected_field_uuid_for_lookup(
     )
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        {"identifier": "Drogon"},
+        {
+            "identifier": "any field but with Drogon uuid",
+            "uuid": DROGON_MASTERDATA["smda"]["field"][0]["uuid"],
+        },
+    ],
+)
+async def test_post_masterdata_drogon_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+    field: dict[str, str],
+) -> None:
+    """Tests that Drogon masterdata requests do not call SMDA and use Drogon data."""
+    response = client_with_smda_session.post(f"{ROUTE}/masterdata", json=[field])
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    response_data = response.json()
+    assert response_data["field"] == DROGON_MASTERDATA["smda"]["field"]
+    assert response_data["country"] == DROGON_MASTERDATA["smda"]["country"]
+    assert (
+        response_data["field_coordinate_system"]
+        == DROGON_MASTERDATA["smda"]["coordinate_system"]
+    )
+    mock_SmdaAPI_post.assert_not_awaited()
+
+
 async def test_post_masterdata_missing_coordinate_system(
     client_with_smda_session: TestClient,
     session_tmp_path: Path,
@@ -472,7 +553,7 @@ async def test_post_masterdata_missing_coordinate_system(
             "results": [
                 {
                     "country_identifier": "Norway",
-                    "identifier": "DROGON",
+                    "identifier": "TROLL",
                     "projected_coordinate_system": "UNKNOWN_CRS",
                     "uuid": uuid4(),
                 }
@@ -515,7 +596,7 @@ async def test_post_masterdata_missing_coordinate_system(
         mock_get_discoveries.return_value = []
         mock_get_strat_column_areas.return_value = []
         response = client_with_smda_session.post(
-            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+            f"{ROUTE}/masterdata", json=[{"identifier": "TROLL"}]
         )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()
@@ -524,8 +605,7 @@ async def test_post_masterdata_missing_coordinate_system(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     expected_msg = (
-        "Coordinate system 'UNKNOWN_CRS' referenced by field 'DROGON' "
-        "not found in SMDA."
+        "Coordinate system 'UNKNOWN_CRS' referenced by field 'TROLL' not found in SMDA."
     )
     assert expected_msg in response.json()["detail"]
 
@@ -547,7 +627,7 @@ async def test_post_masterdata_malformed_response(
         mock_smda_class.return_value = mock_smda_instance
 
         response = client_with_smda_session.post(
-            f"{ROUTE}/masterdata", json=[{"identifier": "DROGON"}]
+            f"{ROUTE}/masterdata", json=[{"identifier": "TROLL"}]
         )
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
@@ -919,7 +999,7 @@ async def test_post_masterdata_request_fails(
 
     response = client_with_smda_session.post(
         f"{ROUTE}/masterdata",
-        json=[{"identifier": "DROGON"}],
+        json=[{"identifier": "TROLL"}],
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
@@ -942,7 +1022,7 @@ async def test_post_masterdata_request_timeout(
 
         response = client_with_smda_session.post(
             f"{ROUTE}/masterdata",
-            json=[{"identifier": "DROGON"}],
+            json=[{"identifier": "TROLL"}],
         )
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
@@ -1001,6 +1081,26 @@ async def test_post_strat_units_success(
     assert len(response_data["stratigraphic_units"]) == 1
     assert response_data["stratigraphic_units"][0]["identifier"] == "VIKING GP."
     assert response_data["stratigraphic_units"][0]["strat_unit_type"] == "group"
+
+
+async def test_post_strat_units_drogon_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests that Drogon stratigraphic units do not call SMDA and use Drogon data."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/strat_units",
+        json={"strat_column_identifier": "DROGON_HAS_NO_STRATCOLUMN"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert [unit["identifier"] for unit in response.json()["stratigraphic_units"]] == [
+        "Valysar Fm.",
+        "Therys Fm.",
+        "Volon Fm.",
+    ]
+    mock_SmdaAPI_post.assert_not_awaited()
 
 
 async def test_post_strat_units_empty_results(

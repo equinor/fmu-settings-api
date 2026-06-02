@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Sequence
+from typing import Any, Final
 
 import httpx
 from fmu.datamodels.common.masterdata import (
@@ -11,12 +12,18 @@ from fmu.datamodels.common.masterdata import (
     FieldItem,
     StratigraphicColumn,
 )
+from fmu.settings._drogon import (
+    MASTERDATA as DROGON_MASTERDATA,
+    RMS_ZONES as DROGON_RMS_ZONES,
+    STRATIGRAPHY_MAPPINGS as DROGON_STRATIGRAPHY_MAPPINGS,
+)
 
 from fmu_settings_api.interfaces import SmdaAPI
 from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models.smda import (
     SmdaField,
     SmdaFieldSearchResult,
+    SmdaFieldUUID,
     SmdaMasterdataResult,
     SmdaSelectedField,
     SmdaStratigraphicUnitsResult,
@@ -24,6 +31,90 @@ from fmu_settings_api.models.smda import (
 )
 
 logger = get_logger(__name__)
+
+DROGON_SMDA_MASTERDATA: Final[dict[str, Any]] = DROGON_MASTERDATA["smda"]
+DROGON_FIELD: Final[dict[str, Any]] = DROGON_SMDA_MASTERDATA["field"][0]
+DROGON_STRAT_COLUMN: Final[dict[str, Any]] = DROGON_SMDA_MASTERDATA[
+    "stratigraphic_column"
+]
+DROGON_STRATIGRAPHY_BY_SOURCE_ID: Final[dict[str, dict[str, Any]]] = {
+    mapping["source_id"]: mapping
+    for mapping in DROGON_STRATIGRAPHY_MAPPINGS
+    if mapping["relation_type"] == "primary"
+}
+DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
+    StratigraphicUnit(
+        identifier=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["name"]]["target_id"],
+        uuid=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["name"]]["target_uuid"],
+        strat_unit_type="formation",
+        strat_unit_level=3,
+        top=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["top_horizon_name"]]["target_id"],
+        top_uuid=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["top_horizon_name"]][
+            "target_uuid"
+        ],
+        base=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["base_horizon_name"]]["target_id"],
+        base_uuid=DROGON_STRATIGRAPHY_BY_SOURCE_ID[zone["base_horizon_name"]][
+            "target_uuid"
+        ],
+        top_age=0.0,
+        base_age=0.0,
+        strat_unit_parent=None,
+        strat_column_type="lithostratigraphy",
+        color_html=None,
+        color_r=None,
+        color_g=None,
+        color_b=None,
+    )
+    for zone in DROGON_RMS_ZONES
+    if zone["name"] in DROGON_STRATIGRAPHY_BY_SOURCE_ID
+]
+
+
+def _is_drogon_identifier(identifier: str) -> bool:
+    """Returns whether an identifier refers to the Drogon field."""
+    search_identifier = identifier.casefold()
+    drogon_identifier = DROGON_FIELD["identifier"].casefold()
+
+    if search_identifier.endswith("*"):
+        return drogon_identifier.startswith(search_identifier.removesuffix("*"))
+
+    return search_identifier == drogon_identifier
+
+
+def _is_drogon_masterdata_request(smda_fields: list[SmdaSelectedField]) -> bool:
+    """Returns whether all selected fields refer to the Drogon field."""
+    return bool(smda_fields) and all(
+        _is_drogon_identifier(field.identifier)
+        or str(field.uuid) == DROGON_FIELD["uuid"]
+        for field in smda_fields
+    )
+
+
+def _get_drogon_masterdata() -> SmdaMasterdataResult:
+    """Returns Drogon masterdata from fmu-settings."""
+    coordinate_system = CoordinateSystem.model_validate(
+        DROGON_SMDA_MASTERDATA["coordinate_system"]
+    )
+    return SmdaMasterdataResult(
+        field=[
+            FieldItem.model_validate(field) for field in DROGON_SMDA_MASTERDATA["field"]
+        ],
+        country=[
+            CountryItem.model_validate(country)
+            for country in DROGON_SMDA_MASTERDATA["country"]
+        ],
+        discovery=[
+            DiscoveryItem.model_validate(discovery)
+            for discovery in DROGON_SMDA_MASTERDATA["discovery"]
+        ],
+        stratigraphic_columns=[
+            StratigraphicColumn.model_validate(
+                DROGON_SMDA_MASTERDATA["stratigraphic_column"]
+            )
+        ],
+        field_coordinate_system=coordinate_system,
+        coordinate_systems=[coordinate_system],
+    )
 
 
 class SmdaService:
@@ -40,6 +131,22 @@ class SmdaService:
 
     async def search_field(self, field: SmdaField) -> SmdaFieldSearchResult:
         """Search for a field identifier in SMDA."""
+        if _is_drogon_identifier(field.identifier):
+            return SmdaFieldSearchResult(
+                hits=1,
+                pages=1,
+                results=[
+                    SmdaFieldUUID.model_validate(
+                        {
+                            **DROGON_FIELD,
+                            "country": DROGON_SMDA_MASTERDATA["country"][0][
+                                "identifier"
+                            ],
+                        }
+                    )
+                ],
+            )
+
         res = await self._smda.field(
             [field.identifier],
             columns=["country_identifier", "identifier", "uuid"],
@@ -61,6 +168,9 @@ class SmdaService:
         """Retrieve masterdata for fields to be confirmed in the GUI."""
         if not smda_fields:
             raise ValueError("At least one SMDA field must be provided")
+
+        if _is_drogon_masterdata_request(smda_fields):
+            return _get_drogon_masterdata()
 
         if smda_fields[0].uuid is not None:
             field_res = await self._smda.field(
@@ -166,6 +276,11 @@ class SmdaService:
         """Queries stratigraphic units for a stratigraphic column identifier."""
         if not strat_column_identifier:
             raise ValueError("A stratigraphic column identifier must be provided")
+
+        if strat_column_identifier == DROGON_STRAT_COLUMN["identifier"]:
+            return SmdaStratigraphicUnitsResult(
+                stratigraphic_units=DROGON_STRATIGRAPHIC_UNITS
+            )
 
         strat_unit_res = await self._smda.strat_units(
             strat_column_identifier,
