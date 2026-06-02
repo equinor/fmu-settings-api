@@ -191,12 +191,16 @@ class MappingsService:
             self._resolve_internal_mapping_implementation(mapping_type)
         )
         try:
-            mappings = list_mappings()
+            mappings_for_mapping_type = list_mappings()
         except FileNotFoundError:
-            mappings = mappings_model.model_validate([])
+            mappings_for_mapping_type = mappings_model.model_validate([])
 
         filtered_mappings = mappings_model.model_validate(
-            [mapping for mapping in mappings if mapping.source_system == source_system]
+            [
+                mapping
+                for mapping in mappings_for_mapping_type
+                if mapping.source_system == source_system
+            ]
         )
         return InternalMappings(
             **{mapping_type.value: filtered_mappings}  # type: ignore[arg-type]
@@ -230,17 +234,19 @@ class MappingsService:
             )
 
         try:
-            existing_mappings = list_mappings()
+            existing_mappings_for_mapping_type = list_mappings()
         except FileNotFoundError:
-            existing_mappings = mappings_model.model_validate([])
+            existing_mappings_for_mapping_type = mappings_model.model_validate([])
 
-        other_mappings = [
+        existing_mappings_for_other_source_systems = [
             mapping
-            for mapping in existing_mappings
+            for mapping in existing_mappings_for_mapping_type
             if mapping.source_system != source_system
         ]
-        updated_mappings = mappings_model.model_validate([*mappings, *other_mappings])
-        update_mappings(updated_mappings)
+        updated_mappings_for_mapping_type = mappings_model.model_validate(
+            [*mappings, *existing_mappings_for_other_source_systems]
+        )
+        update_mappings(updated_mappings_for_mapping_type)
 
     def _resolve_internal_mapping_implementation(
         self,

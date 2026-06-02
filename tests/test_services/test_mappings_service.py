@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 from unittest.mock import PropertyMock, patch
 
 import pytest
@@ -489,6 +490,18 @@ def test_resolve_internal_mapping_implementation_returns_model_and_methods(
 
     list_mappings_mock.assert_called_once_with()
     update_mappings_mock.assert_called_once_with(mappings)
+
+
+def test_resolve_internal_mapping_implementation_rejects_unsupported_type(
+    mappings_service: MappingsService,
+) -> None:
+    """Test the internal mapping implementation resolver rejects unknown types."""
+    with pytest.raises(
+        ValueError, match="Mapping type 'unsupported' is not yet supported"
+    ):
+        mappings_service._resolve_internal_mapping_implementation(
+            cast("MappingType", "unsupported")
+        )
 
 
 def test_import_rms_eclipse_csv_updates_wellbore_mappings(

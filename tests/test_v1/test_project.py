@@ -3268,6 +3268,25 @@ async def test_put_mappings_wellbore_success(
     )
 
 
+async def test_put_mappings_rejects_payload_for_different_mapping_type(
+    client_with_project_session: TestClient,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test PUT rejects a payload that does not match the URL mapping type."""
+    payload = make_rms_simulator_mappings().model_dump(mode="json")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.update_internal_mappings_by_source_system",
+    ) as update_mappings_by_source_system:
+        response = client_with_project_session.put(
+            f"{ROUTE}/mappings/stratigraphy/rms", json=payload
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid mappings:" in response.json()["detail"]
+    update_mappings_by_source_system.assert_not_called()
+
+
 async def test_put_mappings_stratigraphy_permission_error(
     client_with_project_session: TestClient,
     make_stratigraphy_mappings: Callable[[], InternalStratigraphyMappings],

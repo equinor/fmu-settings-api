@@ -1385,7 +1385,12 @@ async def put_mappings(
     source_system: DataSystem,
     mappings: Request,
 ) -> Message:
-    """Updates internal mappings for a specific mapping type and source system."""
+    """Updates internal mappings for a specific mapping type and source system.
+
+    The mapping type is extracted from the URL and used to parse the body
+    explicitly. This avoids ambiguous union validation when a payload, such as
+    an empty list, is valid for both mapping types.
+    """
     try:
         mappings_payload: object = await mappings.json()
         parsed_mappings = _parse_internal_mappings_payload(
@@ -1492,12 +1497,11 @@ def _parse_internal_mappings_payload(
     mapping_type: MappingType,
     payload: object,
 ) -> InternalStratigraphyMappings | InternalWellboreMappings:
-    """Parse the request body as the mappings type from the URL.
+    """Parse the request body as the given mapping type.
 
-    The URL says whether this is stratigraphy or wellbore. Use that instead of
-    letting a union guess from the body shape. A union would make validation
-    depend on which mappings list Pydantic can match first, while the path already
-    gives us the intended type.
+    Use the selected mapping type instead of letting a union guess from the body
+    shape. A union would make validation depend on which mappings list Pydantic
+    can match first.
     """
     if mapping_type == MappingType.stratigraphy:
         return TypeAdapter(InternalStratigraphyMappings).validate_python(payload)
