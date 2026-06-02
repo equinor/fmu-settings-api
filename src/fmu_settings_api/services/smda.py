@@ -72,7 +72,13 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
 
 def _is_drogon_identifier(identifier: str) -> bool:
     """Returns whether an identifier refers to the Drogon field."""
-    return identifier.casefold() == DROGON_FIELD["identifier"].casefold()
+    search_identifier = identifier.casefold()
+    drogon_identifier = DROGON_FIELD["identifier"].casefold()
+
+    if search_identifier.endswith("*"):
+        return drogon_identifier.startswith(search_identifier.removesuffix("*"))
+
+    return search_identifier == drogon_identifier
 
 
 def _is_drogon_masterdata_request(smda_fields: list[SmdaSelectedField]) -> bool:

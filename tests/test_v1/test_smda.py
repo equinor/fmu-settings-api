@@ -227,6 +227,31 @@ async def test_post_field_drogon_uses_drogon_data(
     mock_SmdaAPI_post.assert_not_awaited()
 
 
+async def test_post_field_drogon_wildcard_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests that Drogon wildcard searches use Drogon data."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/field", json={"identifier": "DRO*"}
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {
+        "hits": 1,
+        "pages": 1,
+        "results": [
+            {
+                "identifier": "DROGON",
+                "uuid": "00000000-0000-0000-0000-000000000000",
+                "country": "Norway",
+            }
+        ],
+    }
+    mock_SmdaAPI_post.assert_not_awaited()
+
+
 async def test_post_field_with_no_identifier_raises(
     client_with_smda_session: TestClient,
     session_tmp_path: Path,
