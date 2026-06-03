@@ -72,13 +72,29 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
 
 def _is_drogon_identifier(identifier: str) -> bool:
     """Returns whether an identifier refers to the Drogon field."""
-    search_identifier = identifier.casefold()
-    drogon_identifier = DROGON_FIELD["identifier"].casefold()
+    return identifier.casefold() == DROGON_FIELD["identifier"].casefold()
 
-    if search_identifier.endswith("*"):
-        return drogon_identifier.startswith(search_identifier.removesuffix("*"))
 
-    return search_identifier == drogon_identifier
+def _field_search_includes_drogon(identifier: str) -> bool:
+    """Returns whether a field search pattern would include the Drogon field.
+
+    Examples: ``DRO*`` and ``Drogon`` include Drogon, ``OSEBERG*`` does not.
+    """
+    if not identifier.endswith("*"):
+        return _is_drogon_identifier(identifier)
+
+    search_prefix = identifier.removesuffix("*").casefold()
+    return DROGON_FIELD["identifier"].casefold().startswith(search_prefix)
+
+
+def _get_drogon_field_uuid() -> SmdaFieldUUID:
+    """Returns the Drogon field search result item."""
+    return SmdaFieldUUID.model_validate(
+        {
+            **DROGON_FIELD,
+            "country": DROGON_SMDA_MASTERDATA["country"][0]["identifier"],
+        }
+    )
 
 
 def _is_drogon_masterdata_request(smda_fields: list[SmdaSelectedField]) -> bool:
@@ -135,16 +151,7 @@ class SmdaService:
             return SmdaFieldSearchResult(
                 hits=1,
                 pages=1,
-                results=[
-                    SmdaFieldUUID.model_validate(
-                        {
-                            **DROGON_FIELD,
-                            "country": DROGON_SMDA_MASTERDATA["country"][0][
-                                "identifier"
-                            ],
-                        }
-                    )
-                ],
+                results=[_get_drogon_field_uuid()],
             )
 
         res = await self._smda.field(
@@ -160,6 +167,11 @@ class SmdaService:
             }
             for result in data["results"]
         ]
+        if _field_search_includes_drogon(field.identifier):
+            drogon_field = _get_drogon_field_uuid()
+            data["hits"] += 1
+            data["results"].append(drogon_field.model_dump(mode="json"))
+
         return SmdaFieldSearchResult(**data)
 
     async def get_masterdata(

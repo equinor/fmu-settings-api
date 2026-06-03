@@ -227,29 +227,61 @@ async def test_post_field_drogon_uses_drogon_data(
     mock_SmdaAPI_post.assert_not_awaited()
 
 
-async def test_post_field_drogon_wildcard_uses_drogon_data(
+@pytest.mark.parametrize(
+    ("identifier", "smda_identifier"),
+    [
+        ("D*", "DRAKE"),
+        ("DRO*", "DROSHKY"),
+    ],
+)
+async def test_post_field_drogon_wildcard_adds_drogon_to_smda_results(
     client_with_smda_session: TestClient,
     session_tmp_path: Path,
     mock_SmdaAPI_post: AsyncMock,
+    identifier: str,
+    smda_identifier: str,
 ) -> None:
-    """Tests that Drogon wildcard searches use Drogon data."""
+    """Tests that Drogon wildcard searches keep SMDA results."""
+    uuid = uuid4()
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "hits": 1,
+            "pages": 1,
+            "results": [
+                {
+                    "country_identifier": "Norway",
+                    "identifier": smda_identifier,
+                    "uuid": str(uuid),
+                }
+            ],
+        }
+    }
+    mock_SmdaAPI_post.return_value = mock_response
+
     response = client_with_smda_session.post(
-        f"{ROUTE}/field", json={"identifier": "DRO*"}
+        f"{ROUTE}/field", json={"identifier": identifier}
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {
-        "hits": 1,
+        "hits": 2,
         "pages": 1,
         "results": [
+            {
+                "identifier": smda_identifier,
+                "uuid": str(uuid),
+                "country": "Norway",
+            },
             {
                 "identifier": "DROGON",
                 "uuid": "00000000-0000-0000-0000-000000000000",
                 "country": "Norway",
-            }
+            },
         ],
     }
-    mock_SmdaAPI_post.assert_not_awaited()
+    mock_SmdaAPI_post.assert_awaited_once()
 
 
 async def test_post_field_with_no_identifier_raises(
