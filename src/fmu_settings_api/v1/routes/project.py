@@ -19,9 +19,9 @@ from fmu.settings import (
     InternalStratigraphyMappings,
     InternalWellboreMappings,
     InvalidFMUProjectPathError,
+    InvalidGlobalConfigurationError,
     ProjectFMUDirectory,
 )
-from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
