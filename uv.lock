@@ -14,7 +14,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-05-19T19:50:30.088253Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P1W"
 
 [options.exclude-newer-package]
@@ -348,7 +348,7 @@ wheels = [
 
 [[package]]
 name = "fmu-settings"
-version = "0.31.0"
+version = "0.32.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
@@ -358,9 +358,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/70/9a5910411b8ae0cb55fb9cfc4f51e05b874c7b26cd9ac6e86a50d91bc272/fmu_settings-0.31.0.tar.gz", hash = "sha256:bf211c865b6738c697c6f00cc285cd504bd6ecdd2b5ce84f2bd44afd85ace9bc", size = 773182, upload-time = "2026-05-13T06:37:47.754Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/84/db33f98a4708ad3bd4598234bd22513a3cabb9f4a49af7b9bf19b7dddf57/fmu_settings-0.32.1.tar.gz", hash = "sha256:0c052eed3ba2391ec37085993fea48a3ca1b67250e841ae64a4b26a24d398614", size = 777755, upload-time = "2026-06-02T11:51:02.623Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/d9/3e274b64d02101dda2e67be9f212ac10ef4ef4f392e501325d3b919a166d/fmu_settings-0.31.0-py3-none-any.whl", hash = "sha256:03c809223e24c2aec471c47b7b4866379258d3449799d21be73c27d19c732f11", size = 60259, upload-time = "2026-05-13T06:37:45.851Z" },
+    { url = "https://files.pythonhosted.org/packages/45/d5/337712b17a0726e1fb24b40fec3b908dce4c4fa670d2fa1fdf342cc2aa45/fmu_settings-0.32.1-py3-none-any.whl", hash = "sha256:60dc8955b5ef1a3a5708f1d693879dcfe23a686b818ce9507135f443c3458501", size = 61091, upload-time = "2026-06-02T11:51:01.079Z" },
 ]
 
 [[package]]
@@ -400,7 +400,7 @@ dev = [
 requires-dist = [
     { name = "fastapi" },
     { name = "fmu-datamodels", specifier = ">=0.21.4" },
-    { name = "fmu-settings", specifier = ">=0.30.0" },
+    { name = "fmu-settings", specifier = ">=0.32.1" },
     { name = "fmu-settings-cli", marker = "extra == 'dev'" },
     { name = "httpx" },
     { name = "mypy", marker = "extra == 'dev'" },

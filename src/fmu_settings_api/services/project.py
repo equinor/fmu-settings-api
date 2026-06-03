@@ -4,8 +4,7 @@ from pathlib import Path
 
 from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.fmu_results.fields import Model
-from fmu.settings import ProjectFMUDirectory
-from fmu.settings._global_config import find_global_config
+from fmu.settings import ProjectFMUDirectory, find_global_config
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
     RmsHorizon,

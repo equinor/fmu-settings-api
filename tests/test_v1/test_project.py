@@ -22,11 +22,11 @@ from fmu.settings import (
     InternalStratigraphyIdentifierMapping,
     InternalStratigraphyMappings,
     InternalWellboreMappings,
+    InvalidGlobalConfigurationError,
     ProjectFMUDirectory,
     UserFMUDirectory,
     init_fmu_directory,
 )
-from fmu.settings._global_config import InvalidGlobalConfigurationError
 from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
 from pydantic import ValidationError
