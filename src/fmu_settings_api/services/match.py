@@ -1,261 +1,144 @@
-"""Service for matching two different entities."""
+"""Service for matching names."""
 
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-from fmu.datamodels.common.masterdata import CoordinateSystem
-from fmu.settings.models.project_config import RmsCoordinateSystem, RmsStratigraphicZone
 from rapidfuzz import fuzz
 
 from fmu_settings_api.models.match import (
-    RmsCoordinateSystemMatch,
-    RmsStratigraphyMatch,
+    MatchCandidate,
+    MatchReplacementRule,
+    MatchResult,
 )
-from fmu_settings_api.models.smda import StratigraphicUnit
-
-if TYPE_CHECKING:
-    from fmu_settings_api.services.smda import SmdaService
-    from fmu_settings_api.session import ProjectSession
 
 HIGH_CONFIDENCE_THRESHOLD = 80
 MEDIUM_CONFIDENCE_THRESHOLD = 50
+TOP_MATCHES_PER_SOURCE = 3
 
 
 class MatchService:
-    """Service for matching two different entities."""
+    """Service for matching names."""
 
-    async def match_stratigraphy_from_config_to_smda(
+    def match_names(
         self,
-        project_session: "ProjectSession",
-        smda_service: "SmdaService",
-    ) -> list[RmsStratigraphyMatch]:
-        """Match RMS zones from project config to SMDA stratigraphic units.
+        sources: list[str],
+        targets: list[str],
+        replacements: list[MatchReplacementRule] | None = None,
+    ) -> list[MatchResult]:
+        """Match source names to target names using strict name similarity.
 
-        This is a convenience method that:
-        1. Fetches RMS zones from project config (rms.zones)
-        2. Fetches stratigraphic column identifier from masterdata
-        3. Queries SMDA for stratigraphic units
-        4. Performs the matching using match_stratigraphy()
+        For each source name, finds the three highest-scoring target names
+        using strict ratio matching after normalization.
 
         Args:
-            project_session: Session service with project configuration access
-            smda_service: SMDA service for querying stratigraphic units
+            sources: Names to match from.
+            targets: Names to match against.
+            replacements: Optional string replacements to apply before matching.
 
         Returns:
-            List of RmsStratigraphyMatch objects
-
-        Raises:
-            ValueError: If config values are missing or invalid
-            httpx.HTTPStatusError: If SMDA API request fails
-            KeyError: If SMDA response is malformed
-            TimeoutError: If SMDA API request times out
-        """
-        rms_zones_config = project_session.project_fmu_directory.get_config_value(
-            "rms.zones", None
-        )
-
-        if not rms_zones_config:
-            raise ValueError(
-                "No RMS zones found in project config. "
-                "Please configure rms.zones in the project config."
-            )
-
-        rms_zones = [RmsStratigraphicZone.model_validate(z) for z in rms_zones_config]
-
-        strat_column_identifier = (
-            project_session.project_fmu_directory.get_config_value(
-                "masterdata.smda.stratigraphic_column.identifier", None
-            )
-        )
-
-        if not strat_column_identifier:
-            raise ValueError(
-                "No stratigraphic column identifier found in project masterdata. "
-                "Please configure masterdata.smda.stratigraphic_column.identifier "
-                "in the project config."
-            )
-
-        smda_units_result = await smda_service.get_stratigraphic_units(
-            strat_column_identifier
-        )
-
-        return self.match_stratigraphy(rms_zones, smda_units_result.stratigraphic_units)
-
-    def match_coordinate_system_from_config_to_smda(
-        self,
-        project_session: "ProjectSession",
-    ) -> RmsCoordinateSystemMatch:
-        """Match RMS coordinate system to SMDA coordinate system from project config.
-
-        This is a convenience method that:
-        1. Fetches RMS coordinate system from project config (rms.coordinate_system)
-        2. Fetches SMDA coordinate system from masterdata
-        3. Performs the matching using match_coordinate_system()
-
-        Args:
-            project_session: Session service with project configuration access
-
-        Returns:
-            RmsCoordinateSystemMatch object
-
-        Raises:
-            ValueError: If config values are missing or invalid
-        """
-        rms_crs_config = project_session.project_fmu_directory.get_config_value(
-            "rms.coordinate_system", None
-        )
-
-        if not rms_crs_config:
-            raise ValueError(
-                "No RMS coordinate system found in project config. "
-                "Please configure rms.coordinate_system in the project config."
-            )
-
-        rms_crs = RmsCoordinateSystem.model_validate(rms_crs_config)
-
-        smda_crs_config = project_session.project_fmu_directory.get_config_value(
-            "masterdata.smda.coordinate_system", None
-        )
-
-        if not smda_crs_config:
-            raise ValueError(
-                "No SMDA coordinate system found in project masterdata. "
-                "Please configure masterdata.smda.coordinate_system "
-                "in the project config."
-            )
-
-        smda_crs = CoordinateSystem.model_validate(smda_crs_config)
-
-        return self.match_coordinate_system(rms_crs, smda_crs)
-
-    def match_stratigraphy(
-        self,
-        rms_zones: list[RmsStratigraphicZone],
-        smda_units: list[StratigraphicUnit],
-    ) -> list[RmsStratigraphyMatch]:
-        """Match RMS zones to SMDA stratigraphic units using greedy algorithm.
-
-        For each zone, finds the best-matching unit based on name similarity
-        using token-sort ratio for flexible matching.
-
-        Args:
-            rms_zones: List of RMS stratigraphic zones to match
-            smda_units: List of SMDA stratigraphic units to match against
-
-        Returns:
-            List of RmsStratigraphyMatch objects in the original zone order.
-            Each zone is matched to its highest-scoring unit.
+            Match results in the original source order. Each source result
+            includes up to three targets, ordered from highest to lowest score.
         """
         matches = []
 
-        for zone in rms_zones:
-            best_unit = None
-            best_score = -1.0
-
-            for unit in smda_units:
-                score = self._calculate_name_score(zone.name, unit.identifier)
-
-                if score > best_score:
-                    best_score = score
-                    best_unit = unit
-
-            if best_unit is not None:
-                confidence = self._determine_confidence(best_score)
-                matches.append(
-                    RmsStratigraphyMatch(
-                        rms_zone=zone,
-                        smda_unit=best_unit,
-                        score=best_score,
-                        confidence=confidence,
+        for source in sources:
+            target_scores = sorted(
+                (
+                    (
+                        target,
+                        self._calculate_name_score(source, target, replacements),
                     )
+                    for target in targets
+                ),
+                key=lambda target_score: target_score[1],
+                reverse=True,
+            )
+
+            matches.append(
+                MatchResult(
+                    source=source,
+                    matches=[
+                        MatchCandidate(
+                            target=target,
+                            score=score,
+                            confidence=self._determine_confidence(score),
+                        )
+                        for target, score in target_scores[:TOP_MATCHES_PER_SOURCE]
+                    ],
                 )
+            )
 
         return matches
 
-    def match_coordinate_system(
+    def _calculate_name_score(
         self,
-        rms_crs_sys: RmsCoordinateSystem,
-        smda_crs_sys: CoordinateSystem,
-    ) -> RmsCoordinateSystemMatch:
-        """Match RMS coordinate system to SMDA coordinate system.
-
-        Args:
-            rms_crs_sys: The RMS coordinate system to be matched
-            smda_crs_sys: The SMDA coordinate system to match against
-
-        Returns:
-            The CoordinateSystemMatch object with score and confidence.
-        """
-        score = self._calculate_name_score_strict(
-            rms_crs_sys.name, smda_crs_sys.identifier
-        )
-
-        confidence = self._determine_confidence(score)
-        return RmsCoordinateSystemMatch(
-            rms_crs_sys=rms_crs_sys,
-            smda_crs_sys=smda_crs_sys,
-            score=score,
-            confidence=confidence,
-        )
-
-    def _normalize_name(self, name: str) -> list[str]:
-        """Normalize a name for comparison.
-
-        Converts to lowercase, replaces underscores and dots with spaces,
-        and returns list of tokens.
-
-        Example:
-            "Eiriksson Fm 2.1" -> ["eiriksson", "fm", "2", "1"]
-
-        Args:
-            name: The name to normalize
-
-        Returns:
-            List of normalized tokens
-        """
-        return re.sub(r"[_.]", " ", name.lower()).split()
-
-    def _calculate_name_score_strict(self, name1: str, name2: str) -> float:
+        name1: str,
+        name2: str,
+        replacements: list[MatchReplacementRule] | None = None,
+    ) -> float:
         """Calculate strict similarity score for two names.
 
-        Uses simple ratio matching for exact word order.
-
         Args:
-            name1: First name to compare
-            name2: Second name to compare
+            name1: First name to compare.
+            name2: Second name to compare.
+            replacements: Optional string replacements to apply.
 
         Returns:
-            Similarity score from 0 to 100
+            Similarity score from 0 to 100.
         """
-        tokens1 = self._normalize_name(name1)
-        tokens2 = self._normalize_name(name2)
-        return fuzz.ratio(" ".join(tokens1), " ".join(tokens2))
+        return fuzz.ratio(
+            self._normalize_name(name1, replacements),
+            self._normalize_name(name2, replacements),
+        )
 
-    def _calculate_name_score(self, name1: str, name2: str) -> float:
-        """Calculate similarity score for two names.
+    def _normalize_name(
+        self,
+        name: str,
+        replacements: list[MatchReplacementRule] | None = None,
+    ) -> str:
+        """Normalize a name for comparison.
 
-        Uses token-sort ratio for flexible matching that allows different
-        word ordering (e.g., "VIKING GP" matches "GP VIKING").
+        Converts to lowercase, replaces underscores, dots, dashes, and slashes
+        with spaces, collapses whitespace, and applies replacement rules to
+        whole normalized token sequences only.
+
+        Example:
+            With replacement {"original": "fm", "replacement": "formation"}:
+            "Eiriksson_Fm-2/1.1" -> "eiriksson formation 2 1 1"
+            With replacement {"original": "top", "replacement": ""}:
+            "Stop Viking" -> "stop viking", because "top" is not a whole token.
 
         Args:
-            name1: First name to compare
-            name2: Second name to compare
+            name: The name to normalize.
+            replacements: Optional string replacements to apply.
 
         Returns:
-            Similarity score from 0 to 100
+            Normalized name.
         """
-        tokens1 = self._normalize_name(name1)
-        tokens2 = self._normalize_name(name2)
-        return fuzz.token_sort_ratio(" ".join(tokens1), " ".join(tokens2))
+        normalized_name = " ".join(re.sub(r"[_.\-/]", " ", name.lower()).split())
+
+        for replacement in replacements or []:
+            original = " ".join(
+                re.sub(r"[_.\-/]", " ", replacement.original.lower()).split()
+            )
+            replacement_value = " ".join(
+                re.sub(r"[_.\-/]", " ", replacement.replacement.lower()).split()
+            )
+            pattern = rf"(?<!\S){re.escape(original)}(?!\S)"
+
+            normalized_name = re.sub(pattern, replacement_value, normalized_name)
+            normalized_name = " ".join(normalized_name.split())
+
+        return normalized_name
 
     def _determine_confidence(self, score: float) -> Literal["high", "medium", "low"]:
         """Determine confidence level based on total score.
 
         Args:
-            score: Total similarity score (0-100)
+            score: Total similarity score (0-100).
 
         Returns:
-            Confidence level: 'high' (>80), 'medium' (50-80), 'low' (<50)
+            Confidence level: 'high' (>80), 'medium' (50-80), 'low' (<50).
         """
         if score > HIGH_CONFIDENCE_THRESHOLD:
             return "high"
