@@ -61,7 +61,7 @@ FailedOpeningRmsProjectResponses: Final[Responses] = {
     ),
     **inline_add_response(
         404,
-        dedent("RMS project or its .master file was not found."),
+        dedent("RMS project was not found or its version could not be determined."),
         [
             {
                 "detail": (
@@ -71,8 +71,8 @@ FailedOpeningRmsProjectResponses: Final[Responses] = {
             },
             {
                 "detail": (
-                    "RMS project .master file not found at "
-                    "'{rms_project_path}': {string content of exception}"
+                    "RMS version cannot be determined because the RMS project "
+                    ".master file is not found at {rms_project_path}."
                 )
             },
         ],

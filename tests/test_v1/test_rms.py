@@ -208,7 +208,10 @@ async def test_open_rms_project_master_file_not_found(
     """Test opening an RMS project when its .master file does not exist."""
     mock_service = MagicMock()
     rms_path = Path("/path/to/rms/project")
-    error_message = f"RMS project .master file not found at '{rms_path}'."
+    error_message = (
+        "RMS version cannot be determined because the RMS project "
+        f".master file is not found at {rms_path}."
+    )
     mock_service.get_rms_version.side_effect = FileNotFoundError(error_message)
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service

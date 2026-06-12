@@ -77,8 +77,10 @@ def test_get_rms_version_master_file_not_found(rms_service: RmsService) -> None:
     ):
         rms_service.get_rms_version(rms_project_path)
 
-    assert "RMS project .master file not found at" in str(exc_info.value)
-    assert str(rms_project_path) in str(exc_info.value)
+    assert str(exc_info.value) == (
+        "RMS version cannot be determined because the RMS project "
+        f".master file is not found at {rms_project_path}."
+    )
 
 
 def test_get_rms_version_unsupported_version(rms_service: RmsService) -> None:
