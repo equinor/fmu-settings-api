@@ -43,7 +43,8 @@ class RmsService:
             ) from e
         except FileNotFoundError as e:
             raise FileNotFoundError(
-                f"RMS project .master file not found at '{rms_project_path}': {str(e)}"
+                "RMS version cannot be determined because the RMS project "
+                f".master file is not found at {rms_project_path}."
             ) from e
         except RmsVersionError as e:
             raise RmsVersionError(

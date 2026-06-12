@@ -2745,17 +2745,21 @@ async def test_patch_rms_path_not_found(
 ) -> None:
     """Test 404 returns when RMS path does not exist."""
     rms_path = session_tmp_path / "missing_project.rms14.2.2"
+    error_message = (
+        "RMS version cannot be determined because the RMS project "
+        f".master file is not found at {rms_path}."
+    )
 
     with patch(
         "fmu_settings_api.services.rms.RmsService.get_rms_version",
-        side_effect=FileNotFoundError("master file not found"),
+        side_effect=FileNotFoundError(error_message),
     ):
         response = client_with_project_session.patch(
             f"{ROUTE}/rms",
             json={"path": str(rms_path)},
         )
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json() == {"detail": "master file not found"}
+    assert response.json() == {"detail": error_message}
 
 
 async def test_patch_rms_unsupported_version(
