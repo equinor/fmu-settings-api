@@ -61,12 +61,18 @@ FailedOpeningRmsProjectResponses: Final[Responses] = {
     ),
     **inline_add_response(
         404,
-        dedent("RMS project does not exist at the configured path."),
+        dedent("RMS project or its .master file was not found."),
         [
             {
                 "detail": (
                     "RMS project does not exist at the "
                     "configured path: {rms_project_path}."
+                )
+            },
+            {
+                "detail": (
+                    "RMS project .master file not found at "
+                    "'{rms_project_path}': {string content of exception}"
                 )
             },
         ],
@@ -121,12 +127,15 @@ async def post_rms_project(
     rms_version: RmsVersion | None = None,
 ) -> Message:
     """Open an RMS project and store it in the session."""
-    try:
-        version = (
-            rms_version.version
-            if rms_version is not None
-            else rms_service.get_rms_version(rms_project_path)
+    version = rms_version.version if rms_version is not None else None
+    if version is not None and not rms_project_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"RMS project not found at '{rms_project_path}'.",
         )
+    try:
+        if version is None:
+            version = rms_service.get_rms_version(rms_project_path)
         executor, project = rms_service.open_rms_project(rms_project_path, version)
         await session_service.add_rms_session(executor, project)
         return Message(
@@ -142,6 +151,8 @@ async def post_rms_project(
                 f"configured path: {rms_project_path}."
             ),
         ) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except RmsVersionError as e:
         raise HTTPException(
             status_code=422,

@@ -39,7 +39,7 @@ class RmsService:
             rms_config = RmsConfig(project=str(rms_project_path))
         except RmsProjectNotFoundError as e:
             raise FileNotFoundError(
-                f"RMS project not found at '{rms_project_path}': {str(e)}"
+                f"RMS project not found at '{rms_project_path}'."
             ) from e
         except FileNotFoundError as e:
             raise FileNotFoundError(

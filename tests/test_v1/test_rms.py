@@ -45,6 +45,7 @@ async def test_open_rms_project_success(
 
 async def test_open_rms_project_with_specified_version(
     client_with_project_session: TestClient,
+    tmp_path: Path,
 ) -> None:
     """Test opening an RMS project with a specified RMS version."""
     default_rms_version = "14.2.2"
@@ -54,7 +55,8 @@ async def test_open_rms_project_with_specified_version(
     mock_service.open_rms_project.return_value = (MagicMock(), MagicMock())
     mock_service.get_rms_version.return_value = default_rms_version
 
-    rms_path = Path("/path/to/rms/project")
+    rms_path = tmp_path / "project.rms15.1.0.0"
+    rms_path.mkdir()
 
     app.dependency_overrides[get_rms_service] = lambda: mock_service
     app.dependency_overrides[get_rms_project_path] = lambda: rms_path
@@ -158,13 +160,77 @@ async def test_open_rms_project_not_found(
     }
 
 
+async def test_open_rms_project_not_found_without_specified_version(
+    client_with_project_session: TestClient,
+    tmp_path: Path,
+) -> None:
+    """Test project not found while detecting the RMS version."""
+    mock_service = MagicMock()
+    rms_path = tmp_path / "missing-project.rms15.0.1.0"
+    error_message = f"RMS project not found at '{rms_path}'."
+    mock_service.get_rms_version.side_effect = FileNotFoundError(error_message)
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    mock_service.get_rms_version.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_not_called()
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": error_message}
+
+
+async def test_open_rms_project_with_specified_version_not_found(
+    client_with_project_session: TestClient,
+    tmp_path: Path,
+) -> None:
+    """Test explicit RMS version does not start RMS when project path is missing."""
+    mock_service = MagicMock()
+    rms_path = tmp_path / "missing-project.rms15.0.1.0"
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(ROUTE, json={"version": "15.0.1.0"})
+
+    mock_service.get_rms_version.assert_not_called()
+    mock_service.open_rms_project.assert_not_called()
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "detail": f"RMS project not found at '{rms_path}'.",
+    }
+
+
+async def test_open_rms_project_master_file_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test opening an RMS project when its .master file does not exist."""
+    mock_service = MagicMock()
+    rms_path = Path("/path/to/rms/project")
+    error_message = f"RMS project .master file not found at '{rms_path}'."
+    mock_service.get_rms_version.side_effect = FileNotFoundError(error_message)
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    mock_service.get_rms_version.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_not_called()
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": error_message}
+
+
 async def test_open_rms_project_unsupported_version(
     client_with_project_session: TestClient,
+    tmp_path: Path,
 ) -> None:
     """Tests opening an RMS project with an unsupported RMS version."""
     mock_service = MagicMock()
     specified_rms_version = "15.0.1.0"
-    rms_path = Path("/path/to/rms/project")
+    rms_path = tmp_path / "project.rms15.0.1.0"
+    rms_path.mkdir()
 
     mock_service.open_rms_project.side_effect = RmsVersionError(
         f"RMS version {specified_rms_version} is not supported."
@@ -188,13 +254,42 @@ async def test_open_rms_project_unsupported_version(
     }
 
 
+async def test_open_rms_project_detected_version_unsupported(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test unsupported RMS version found while reading project metadata."""
+    mock_service = MagicMock()
+    rms_path = Path("/path/to/rms/project")
+    error_message = f"RMS version error for project at '{rms_path}'."
+    mock_service.get_rms_version.side_effect = RmsVersionError(error_message)
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    mock_service.get_rms_version.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_not_called()
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": (
+            f"Failed to open RMS project {rms_path}: Failed setting up RMS "
+            "API proxy: The requested RMS version None is not supported. "
+            "Try specifying another RMS version "
+            "or upgrading the RMS project."
+        )
+    }
+
+
 async def test_open_rms_project_version_out_of_sync(
     client_with_project_session: TestClient,
+    tmp_path: Path,
 ) -> None:
     """Tests opening an RMS project with a version out of sync with the project."""
     mock_service = MagicMock()
     specified_rms_version = "15.0.1.0"
-    rms_path = Path("/path/to/old/rms/project")
+    rms_path = tmp_path / "old-project.rms13.1.0"
+    rms_path.mkdir()
 
     remote_exception = RemoteException(
         message="File version xxxx.xxxx is not supported."
