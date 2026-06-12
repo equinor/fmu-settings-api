@@ -160,6 +160,27 @@ async def test_open_rms_project_not_found(
     }
 
 
+async def test_open_rms_project_not_found_without_specified_version(
+    client_with_project_session: TestClient,
+    tmp_path: Path,
+) -> None:
+    """Test project not found while detecting the RMS version."""
+    mock_service = MagicMock()
+    rms_path = tmp_path / "missing-project.rms15.0.1.0"
+    error_message = f"RMS project not found at '{rms_path}'."
+    mock_service.get_rms_version.side_effect = FileNotFoundError(error_message)
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+
+    response = client_with_project_session.post(f"{ROUTE}/")
+
+    mock_service.get_rms_version.assert_called_once_with(rms_path)
+    mock_service.open_rms_project.assert_not_called()
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": error_message}
+
+
 async def test_open_rms_project_with_specified_version_not_found(
     client_with_project_session: TestClient,
     tmp_path: Path,
