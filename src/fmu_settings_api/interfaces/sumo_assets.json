@@ -173,5 +173,10 @@
         "name": "Sigrun Øst",
         "code": "035",
         "roleprefix": "SIGRUN-OST"
+    },
+    {
+        "name": "Peon",
+        "code": "036",
+        "roleprefix": "PEON"
     }
 ]
