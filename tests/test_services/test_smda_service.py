@@ -369,6 +369,7 @@ async def test_get_drogon_stratigraphic_units_uses_drogon_data() -> None:
     mock_smda.surface.assert_not_awaited()
     assert [unit.identifier for unit in result.stratigraphic_units] == [
         "Valysar Fm.",
+        "VOLANTIS GP.",
         "Therys Fm.",
         "Volon Fm.",
     ]

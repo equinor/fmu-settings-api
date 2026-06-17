@@ -1129,6 +1129,7 @@ async def test_post_strat_units_drogon_uses_drogon_data(
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert [unit["identifier"] for unit in response.json()["stratigraphic_units"]] == [
         "Valysar Fm.",
+        "VOLANTIS GP.",
         "Therys Fm.",
         "Volon Fm.",
     ]
