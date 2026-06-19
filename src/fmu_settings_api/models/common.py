@@ -1,7 +1,7 @@
 """Common response models from the API."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr
 
@@ -43,3 +43,21 @@ class AccessToken(BaseResponseModel):
 
     id: str
     key: SecretStr
+
+
+class ValidationErrorDetail(BaseResponseModel):
+    """Details for validation errors returned in HTTP exceptions."""
+
+    message: str
+    """Error message describing the validation failure."""
+    validation_errors: Any
+    """List of validation errors from Pydantic, typically list[dict[str, Any]]."""
+
+
+class ConfigurationErrorDetail(BaseResponseModel):
+    """Details for configuration errors returned in HTTP exceptions."""
+
+    message: str
+    """Error message describing the configuration issue."""
+    error: str
+    """Additional error details or context."""
