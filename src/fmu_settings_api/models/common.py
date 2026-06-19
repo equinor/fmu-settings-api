@@ -1,9 +1,10 @@
 """Common response models from the API."""
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic_core import ErrorDetails
 
 
 class BaseResponseModel(BaseModel):
@@ -50,7 +51,7 @@ class ValidationErrorDetail(BaseResponseModel):
 
     message: str
     """Error message describing the validation failure."""
-    validation_errors: list[dict[str, Any]]
+    validation_errors: list[ErrorDetails]
     """List of validation errors from Pydantic."""
 
 

@@ -515,10 +515,7 @@ async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
             status_code=422,
             detail=ValidationErrorDetail(
                 message="The global config file is not valid.",
-                validation_errors=[
-                    {str(key): value for key, value in error.items()}
-                    for error in e.errors()
-                ],
+                validation_errors=e.errors(),
             ).model_dump(),
         ) from e
 
@@ -666,10 +663,7 @@ async def post_global_config(
             status_code=422,
             detail=ValidationErrorDetail(
                 message="The global config file is not valid.",
-                validation_errors=[
-                    {str(key): value for key, value in error.items()}
-                    for error in e.errors()
-                ],
+                validation_errors=e.errors(),
             ).model_dump(),
         ) from e
 
