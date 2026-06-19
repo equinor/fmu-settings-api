@@ -44,10 +44,12 @@ from fmu_settings_api.deps import (
 from fmu_settings_api.deps.changelog import ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import (
+    ConfigurationErrorDetail,
     FMUDirPath,
     FMUProject,
     Message,
     RestorableFilesResponse,
+    ValidationErrorDetail,
 )
 from fmu_settings_api.models.common import Ok
 from fmu_settings_api.models.project import (
@@ -503,18 +505,18 @@ async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
     except InvalidGlobalConfigurationError as e:
         raise HTTPException(
             status_code=422,
-            detail={
-                "message": "The global config contains invalid or disallowed content.",
-                "error": str(e),
-            },
+            detail=ConfigurationErrorDetail(
+                message="The global config contains invalid or disallowed content.",
+                error=str(e),
+            ).model_dump(),
         ) from e
     except ValidationError as e:
         raise HTTPException(
             status_code=422,
-            detail={
-                "message": "The global config file is not valid.",
-                "validation_errors": e.errors(),
-            },
+            detail=ValidationErrorDetail(
+                message="The global config file is not valid.",
+                validation_errors=e.errors(),
+            ).model_dump(),
         ) from e
 
 
@@ -651,18 +653,18 @@ async def post_global_config(
     except InvalidGlobalConfigurationError as e:
         raise HTTPException(
             status_code=422,
-            detail={
-                "message": "The global config contains invalid or disallowed content.",
-                "error": str(e),
-            },
+            detail=ConfigurationErrorDetail(
+                message="The global config contains invalid or disallowed content.",
+                error=str(e),
+            ).model_dump(),
         ) from e
     except ValidationError as e:
         raise HTTPException(
             status_code=422,
-            detail={
-                "message": "The global config file is not valid.",
-                "validation_errors": e.errors(),
-            },
+            detail=ValidationErrorDetail(
+                message="The global config file is not valid.",
+                validation_errors=e.errors(),
+            ).model_dump(),
         ) from e
 
 

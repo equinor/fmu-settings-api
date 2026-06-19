@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic_core import ErrorDetails
 
 
 class BaseResponseModel(BaseModel):
@@ -43,3 +44,21 @@ class AccessToken(BaseResponseModel):
 
     id: str
     key: SecretStr
+
+
+class ValidationErrorDetail(BaseResponseModel):
+    """Details for validation errors returned in HTTP exceptions."""
+
+    message: str
+    """Error message describing the validation failure."""
+    validation_errors: list[ErrorDetails]
+    """List of validation errors from Pydantic."""
+
+
+class ConfigurationErrorDetail(BaseResponseModel):
+    """Details for configuration errors returned in HTTP exceptions."""
+
+    message: str
+    """Error message describing the configuration issue."""
+    error: str
+    """Additional error details or context."""
