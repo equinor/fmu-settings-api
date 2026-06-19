@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Final, cast
+from typing import Final
 
 from fastapi import APIRouter, HTTPException, Request
 from fmu.datamodels.common import Access, Smda
@@ -515,7 +515,10 @@ async def get_global_config_status(project_service: ProjectServiceDep) -> Ok:
             status_code=422,
             detail=ValidationErrorDetail(
                 message="The global config file is not valid.",
-                validation_errors=cast("list[dict[str, Any]]", e.errors()),
+                validation_errors=[
+                    {str(key): value for key, value in error.items()}
+                    for error in e.errors()
+                ],
             ).model_dump(),
         ) from e
 
@@ -663,7 +666,10 @@ async def post_global_config(
             status_code=422,
             detail=ValidationErrorDetail(
                 message="The global config file is not valid.",
-                validation_errors=cast("list[dict[str, Any]]", e.errors()),
+                validation_errors=[
+                    {str(key): value for key, value in error.items()}
+                    for error in e.errors()
+                ],
             ).model_dump(),
         ) from e
 

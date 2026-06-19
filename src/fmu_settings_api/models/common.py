@@ -50,8 +50,8 @@ class ValidationErrorDetail(BaseResponseModel):
 
     message: str
     """Error message describing the validation failure."""
-    validation_errors: Any
-    """List of validation errors from Pydantic, typically list[dict[str, Any]]."""
+    validation_errors: list[dict[str, Any]]
+    """List of validation errors from Pydantic."""
 
 
 class ConfigurationErrorDetail(BaseResponseModel):
