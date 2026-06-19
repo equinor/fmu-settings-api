@@ -1,8 +1,9 @@
 """Tests for ChangelogService."""
 
 from fmu.settings import ProjectFMUDirectory
-from fmu.settings.models._enums import ChangeType
+from fmu.settings.models._enums import ChangeType, FilterType
 from fmu.settings.models.change_info import ChangeInfo
+from fmu.settings.models.log import Filter
 
 from fmu_settings_api.services.changelog import ChangelogService
 
@@ -62,8 +63,73 @@ def test_get_changelog_filtered_by_change_type(
         )
     )
 
-    result = service.get_changelog(filtertype=ChangeType.update)
+    result = service.get_changelog(change_type=ChangeType.update)
 
     assert len(result) == 1
     assert result[0].change_type == ChangeType.update
     assert result[0].key == "changelog_update"
+
+
+def test_get_changelog_filtered_by_generic_filter(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test get_changelog applies the upstream generic Filter."""
+    service = ChangelogService(fmu_dir)
+    fmu_dir.changelog.add_log_entry(
+        ChangeInfo(
+            change_type=ChangeType.update,
+            user="test_user",
+            path=fmu_dir.path,
+            change="Updated field names",
+            hostname="localhost",
+            file="config.json",
+            key="changelog_update",
+        )
+    )
+    fmu_dir.changelog.add_log_entry(
+        ChangeInfo(
+            change_type=ChangeType.remove,
+            user="test_user",
+            path=fmu_dir.path,
+            change="Removed field",
+            hostname="localhost",
+            file="config.json",
+            key="changelog_remove",
+        )
+    )
+
+    result = service.get_changelog(
+        filter_=Filter(
+            field_name="key",
+            filter_value="changelog_update",
+            filter_type=FilterType.text,
+            operator="==",
+        )
+    )
+
+    assert len(result) == 1
+    assert result[0].key == "changelog_update"
+
+
+def test_get_changelog_max_entries_returns_latest_entries(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test get_changelog limits entries to the latest max_entries items."""
+    service = ChangelogService(fmu_dir)
+    for key in ("entry_1", "entry_2", "entry_3"):
+        fmu_dir.changelog.add_log_entry(
+            ChangeInfo(
+                change_type=ChangeType.update,
+                user="test_user",
+                path=fmu_dir.path,
+                change="Updated field names",
+                hostname="localhost",
+                file="config.json",
+                key=key,
+            )
+        )
+
+    result = service.get_changelog(max_entries=2)
+
+    assert len(result) == 2
+    assert [entry.key for entry in result] == ["entry_2", "entry_3"]

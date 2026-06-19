@@ -5,7 +5,7 @@ from pathlib import Path
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
-from fmu.settings.models.log import Log
+from fmu.settings.models.log import Filter, Log
 
 
 class ChangelogService:
@@ -20,18 +20,25 @@ class ChangelogService:
         """Returns the path to the .fmu directory."""
         return self._fmu_dir.path
 
-    def get_changelog(self, filtertype: ChangeType | None = None) -> Log[ChangeInfo]:
-        """Get changelog entries, optionally filtered by change type."""
-        changelog = self._fmu_dir.changelog.load()
-        return self._filter_by_change_type(changelog, filtertype)
-
-    @staticmethod
-    def _filter_by_change_type(
-        changelog: Log[ChangeInfo],
-        filtertype: ChangeType | None,
+    def get_changelog(
+        self,
+        change_type: ChangeType | None = None,
+        filter_: Filter | None = None,
+        max_entries: int | None = None,
     ) -> Log[ChangeInfo]:
-        """Filter changelog entries by change type when provided."""
-        if filtertype is None:
-            return changelog
+        """Get changelog entries with optional filtering and entry limit."""
+        changelog = (
+            self._fmu_dir.changelog.filter_log(filter_)
+            if filter_ is not None
+            else self._fmu_dir.changelog.load()
+        )
 
-        return Log([entry for entry in changelog if entry.change_type == filtertype])
+        if change_type is not None:
+            changelog = Log(
+                [entry for entry in changelog if entry.change_type == change_type]
+            )
+
+        if max_entries is not None:
+            changelog = Log(list(changelog)[-max_entries:])
+
+        return changelog

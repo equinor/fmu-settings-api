@@ -22,7 +22,6 @@ from fmu.settings import (
     InvalidGlobalConfigurationError,
     ProjectFMUDirectory,
 )
-from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
@@ -42,7 +41,7 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     WritePermissionDep,
 )
-from fmu_settings_api.deps.changelog import ChangelogServiceDep
+from fmu_settings_api.deps.changelog import ChangelogFiltersDep, ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import (
     ConfigurationErrorDetail,
@@ -1452,11 +1451,15 @@ async def put_mappings(
 )
 async def get_changelog(
     changelog_service: ChangelogServiceDep,
-    filtertype: ChangeType | None = None,
+    changelog_filters: ChangelogFiltersDep,
 ) -> Log[ChangeInfo]:
     """Returns changelog for the project."""
     try:
-        return changelog_service.get_changelog(filtertype)
+        return changelog_service.get_changelog(
+            change_type=changelog_filters.change_type,
+            filter_=changelog_filters.filter_,
+            max_entries=changelog_filters.max_entries,
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
