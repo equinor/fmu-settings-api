@@ -335,6 +335,51 @@ async def test_get_changelog_success(
     assert response_data[0]["key"] == "changelog_test"
 
 
+async def test_get_changelog_success_with_filtertype(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test changelog can be filtered by the filtertype query parameter."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await get_fmu_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    fmu_dir.changelog.add_log_entry(
+        ChangeInfo(
+            change_type=ChangeType.update,
+            user="test_user",
+            path=fmu_dir.path,
+            change="Updated field names",
+            hostname="localhost",
+            file="config.json",
+            key="changelog_update",
+        )
+    )
+    fmu_dir.changelog.add_log_entry(
+        ChangeInfo(
+            change_type=ChangeType.remove,
+            user="test_user",
+            path=fmu_dir.path,
+            change="Removed field",
+            hostname="localhost",
+            file="config.json",
+            key="changelog_remove",
+        )
+    )
+
+    response = client_with_project_session.get(f"{ROUTE}/changelog?filtertype=update")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_data = response.json()
+    assert len(response_data) == 1
+    assert response_data[0]["change_type"] == "update"
+    assert response_data[0]["key"] == "changelog_update"
+
+
 async def test_get_changelog_file_not_found(
     client_with_project_session: TestClient,
 ) -> None:

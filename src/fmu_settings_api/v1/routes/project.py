@@ -22,6 +22,7 @@ from fmu.settings import (
     InvalidGlobalConfigurationError,
     ProjectFMUDirectory,
 )
+from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.diff import ResourceDiff
 from fmu.settings.models.log import Log
@@ -1451,10 +1452,11 @@ async def put_mappings(
 )
 async def get_changelog(
     changelog_service: ChangelogServiceDep,
+    filtertype: ChangeType | None = None,
 ) -> Log[ChangeInfo]:
     """Returns changelog for the project."""
     try:
-        return changelog_service.get_changelog()
+        return changelog_service.get_changelog(filtertype)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
