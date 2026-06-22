@@ -335,7 +335,7 @@ async def test_get_changelog_success(
     assert response_data[0]["key"] == "changelog_test"
 
 
-async def test_get_changelog_success_with_filtertype(
+async def test_get_changelog_success_with_change_type(
     client_with_project_session: TestClient,
     session_manager: SessionManager,
 ) -> None:
@@ -479,6 +479,65 @@ async def test_get_changelog_success_with_max_entries(
     response_data = response.json()
     assert len(response_data) == 2
     assert [entry["key"] for entry in response_data] == ["entry_2", "entry_3"]
+
+
+async def test_get_changelog_success_with_all_filters(
+    client_with_project_session: TestClient,
+    session_manager: SessionManager,
+) -> None:
+    """Test changelog can combine generic filter, change_type, and max_entries."""
+    session_id = client_with_project_session.cookies.get(
+        settings.SESSION_COOKIE_KEY, None
+    )
+    assert session_id is not None
+    session = await get_fmu_session(session_id)
+    assert isinstance(session, ProjectSession)
+
+    fmu_dir = session.project_fmu_directory
+    for change_type, key in (
+        (ChangeType.update, "entry_1"),
+        (ChangeType.update, "entry_2"),
+        (ChangeType.remove, "entry_3"),
+        (ChangeType.update, "entry_4"),
+    ):
+        fmu_dir.changelog.add_log_entry(
+            ChangeInfo(
+                change_type=change_type,
+                user="test_user",
+                path=fmu_dir.path,
+                change="Changed field names",
+                hostname="localhost",
+                file="config.json",
+                key=key,
+            )
+        )
+
+    response = client_with_project_session.get(
+        f"{ROUTE}/changelog"
+        "?change_type=update"
+        "&max_entries=2"
+        "&field_name=user"
+        "&filter_value=test_user"
+        "&filter_type=text"
+        "&operator=%3D%3D"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert [entry["key"] for entry in response_data] == ["entry_2", "entry_4"]
+
+
+async def test_get_changelog_returns_422_for_zero_max_entries(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test max_entries must be greater than or equal to 1."""
+    response = client_with_project_session.get(f"{ROUTE}/changelog?max_entries=0")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    response_detail = response.json()["detail"]
+    assert response_detail[0]["loc"] == ["query", "max_entries"]
+    assert response_detail[0]["type"] == "greater_than_equal"
 
 
 async def test_get_changelog_file_not_found(

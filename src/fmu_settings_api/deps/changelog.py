@@ -11,7 +11,7 @@ from fmu_settings_api.deps.session import ProjectSessionDep
 from fmu_settings_api.services.changelog import ChangelogService
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChangelogFilters:
     """Query filters for changelog retrieval."""
 
@@ -22,7 +22,7 @@ class ChangelogFilters:
 
 async def get_changelog_filters(
     change_type: ChangeType | None = None,
-    max_entries: Annotated[int | None, Query(ge=1)] = None,
+    max_entries: int | None = Query(default=None, ge=1),
     field_name: str | None = None,
     filter_value: str | None = None,
     filter_type: FilterType | None = None,
