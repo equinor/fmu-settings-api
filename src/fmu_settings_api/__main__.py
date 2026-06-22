@@ -33,7 +33,9 @@ from .v1.main import api_v1_router
 
 def custom_generate_unique_id(route: APIRoute) -> str:
     """Generates a unique id per route."""
-    return f"{route.tags[0]}-{route.name}"
+    # Since FastAPI 0.137.0, APIRoute still sets tags at runtime
+    # but no longer declares it.
+    return f"{route.tags[0]}-{route.name}"  # type: ignore[attr-defined]
 
 
 logger = get_logger(__name__)
