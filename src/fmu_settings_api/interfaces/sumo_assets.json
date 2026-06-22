@@ -178,5 +178,10 @@
         "name": "Peon",
         "code": "036",
         "roleprefix": "PEON"
+    },
+    {
+        "name": "Black Pearl",
+        "code": "037",
+        "roleprefix": "BLACK-PEARL"
     }
 ]
