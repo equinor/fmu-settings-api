@@ -8,7 +8,7 @@ Responses: TypeAlias = dict[int | str, dict[str, Any]]
 
 
 def add_response_example(
-    responses: Responses, http_code: int, example: dict[str, Any]
+    responses: Responses, http_code: int, example: dict[str, str]
 ) -> Responses:
     """Adds an example to an existing responses list."""
     new_responses = deepcopy(responses)
@@ -19,7 +19,7 @@ def add_response_example(
 
 
 def inline_add_response(
-    http_code: int, description: str, examples: list[dict[str, Any]]
+    http_code: int, description: str, examples: list[dict[str, str]]
 ) -> Responses:
     """Inline-adds a response with examples."""
     return {

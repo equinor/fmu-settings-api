@@ -388,22 +388,12 @@ ChangelogResponses: Final[Responses] = {
         [
             {"detail": "Invalid changelog format or data at {path}: {error}"},
             {"detail": "Invalid or corrupt JSON at {path}: {error}"},
+            {"detail": "Unknown changelog field: {field_name}."},
             {
                 "detail": (
                     "Generic changelog filter requires all of: field_name, "
                     "filter_value, filter_type, operator."
                 )
-            },
-            {
-                "detail": [
-                    {
-                        "type": "greater_than_equal",
-                        "loc": ["query", "max_entries"],
-                        "msg": "Input should be greater than or equal to 1",
-                        "input": "0",
-                        "ctx": {"ge": 1},
-                    }
-                ]
             },
         ],
     ),

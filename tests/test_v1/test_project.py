@@ -447,6 +447,22 @@ async def test_get_changelog_returns_422_for_partial_generic_filter(
     }
 
 
+async def test_get_changelog_returns_422_for_unknown_filter_field(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test generic filter field_name must be a known changelog field."""
+    response = client_with_project_session.get(
+        f"{ROUTE}/changelog"
+        "?field_name=unknown"
+        "&filter_value=value"
+        "&filter_type=text"
+        "&operator=%3D%3D"
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "Unknown changelog field: unknown."}
+
+
 async def test_get_changelog_success_with_max_entries(
     client_with_project_session: TestClient,
     session_manager: SessionManager,
@@ -494,16 +510,17 @@ async def test_get_changelog_success_with_all_filters(
     assert isinstance(session, ProjectSession)
 
     fmu_dir = session.project_fmu_directory
-    for change_type, key in (
-        (ChangeType.update, "entry_1"),
-        (ChangeType.update, "entry_2"),
-        (ChangeType.remove, "entry_3"),
-        (ChangeType.update, "entry_4"),
+    for change_type, user, key in (
+        (ChangeType.update, "test_user", "entry_1"),
+        (ChangeType.update, "test_user", "entry_2"),
+        (ChangeType.remove, "test_user", "entry_3"),
+        (ChangeType.update, "other_user", "excluded_entry"),
+        (ChangeType.update, "test_user", "entry_4"),
     ):
         fmu_dir.changelog.add_log_entry(
             ChangeInfo(
                 change_type=change_type,
-                user="test_user",
+                user=user,
                 path=fmu_dir.path,
                 change="Changed field names",
                 hostname="localhost",

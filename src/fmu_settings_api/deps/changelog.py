@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Query
 from fmu.settings.models._enums import ChangeType, FilterType
+from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.log import Filter
 
 from fmu_settings_api.deps.session import ProjectSessionDep
@@ -48,6 +49,11 @@ async def get_changelog_filters(
         assert filter_value is not None
         assert filter_type is not None
         assert operator is not None
+        if field_name not in ChangeInfo.model_fields:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown changelog field: {field_name}.",
+            )
         filter_ = Filter(
             field_name=field_name,
             filter_value=filter_value,
