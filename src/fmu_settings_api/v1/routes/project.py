@@ -388,11 +388,10 @@ ChangelogResponses: Final[Responses] = {
         [
             {"detail": "Invalid changelog format or data at {path}: {error}"},
             {"detail": "Invalid or corrupt JSON at {path}: {error}"},
-            {"detail": "Unknown changelog field: {field_name}."},
             {
                 "detail": (
-                    "Generic changelog filter requires all of: field_name, "
-                    "filter_value, filter_type, operator."
+                    "Changelog filtering requires all of the generic log filtering "
+                    "fields: field_name, filter_value, filter_type, operator."
                 )
             },
         ],

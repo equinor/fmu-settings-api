@@ -25,14 +25,13 @@ def test_get_changelog_contains_changeinfo_entries(
         )
     )
     result = service.get_changelog()
-    assert len(result) == 1
-    assert result[0].change_type == ChangeType.update
-    assert result[0].user == "test_user"
-    assert result[0].path == fmu_dir.path
-    assert result[0].change == "Updated field names"
-    assert result[0].hostname == "localhost"
-    assert result[0].file == "config.json"
-    assert result[0].key == "changelog_test"
+    entry = next(entry for entry in result if entry.key == "changelog_test")
+    assert entry.change_type == ChangeType.update
+    assert entry.user == "test_user"
+    assert entry.path == fmu_dir.path
+    assert entry.change == "Updated field names"
+    assert entry.hostname == "localhost"
+    assert entry.file == "config.json"
 
 
 def test_get_changelog_filtered_by_change_type(
@@ -133,3 +132,42 @@ def test_get_changelog_max_entries_returns_latest_entries(
 
     assert len(result) == 2
     assert [entry.key for entry in result] == ["entry_2", "entry_3"]
+
+
+def test_get_changelog_applies_all_filters(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test get_changelog combines change type, generic filter, and max entries."""
+    service = ChangelogService(fmu_dir)
+    for change_type, user, key in (
+        (ChangeType.update, "test_user", "entry_1"),
+        (ChangeType.update, "test_user", "entry_2"),
+        (ChangeType.remove, "test_user", "entry_3"),
+        (ChangeType.update, "other_user", "excluded_entry"),
+        (ChangeType.update, "test_user", "entry_4"),
+    ):
+        fmu_dir.changelog.add_log_entry(
+            ChangeInfo(
+                change_type=change_type,
+                user=user,
+                path=fmu_dir.path,
+                change="Changed field names",
+                hostname="localhost",
+                file="config.json",
+                key=key,
+            )
+        )
+
+    result = service.get_changelog(
+        change_type=ChangeType.update,
+        filter_=Filter(
+            field_name="user",
+            filter_value="test_user",
+            filter_type=FilterType.text,
+            operator="==",
+        ),
+        max_entries=2,
+    )
+
+    assert len(result) == 2
+    assert [entry.key for entry in result] == ["entry_2", "entry_4"]

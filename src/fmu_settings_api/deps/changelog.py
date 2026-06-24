@@ -5,7 +5,6 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Query
 from fmu.settings.models._enums import ChangeType, FilterType
-from fmu.settings.models.change_info import ChangeInfo
 from fmu.settings.models.log import Filter
 
 from fmu_settings_api.deps.session import ProjectSessionDep
@@ -30,16 +29,20 @@ async def get_changelog_filters(
     operator: Literal[">", ">=", "<", "<=", "==", "!="] | None = None,
 ) -> ChangelogFilters:
     """Return parsed changelog query filters."""
-    generic_filter_values = (field_name, filter_value, filter_type, operator)
-    has_any_generic_filter = any(value is not None for value in generic_filter_values)
-    has_all_generic_filter = all(value is not None for value in generic_filter_values)
+    generic_log_filter_values = (field_name, filter_value, filter_type, operator)
+    has_any_generic_filter = any(
+        value is not None for value in generic_log_filter_values
+    )
+    has_all_generic_filter = all(
+        value is not None for value in generic_log_filter_values
+    )
 
     if has_any_generic_filter and not has_all_generic_filter:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Generic changelog filter requires all of: field_name, "
-                "filter_value, filter_type, operator."
+                "Changelog filtering requires all of the generic log filtering "
+                "fields: field_name, filter_value, filter_type, operator."
             ),
         )
 
@@ -49,11 +52,6 @@ async def get_changelog_filters(
         assert filter_value is not None
         assert filter_type is not None
         assert operator is not None
-        if field_name not in ChangeInfo.model_fields:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unknown changelog field: {field_name}.",
-            )
         filter_ = Filter(
             field_name=field_name,
             filter_value=filter_value,

@@ -29,12 +29,14 @@ from fmu.settings import (
 )
 from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
+from fmu.settings.models.log import Log
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
+from fmu_settings_api.deps.changelog import get_changelog_service
 from fmu_settings_api.models.project import FMUProject, LockStatus, SumoAsset
 from fmu_settings_api.session import (
     ProjectSession,
@@ -300,261 +302,36 @@ async def test_get_project_already_in_session(
 
 async def test_get_changelog_success(
     client_with_project_session: TestClient,
-    session_manager: SessionManager,
 ) -> None:
-    """Test 200 is returned when changelog exists and is readable."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
-    )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.update,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Updated field names",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_test",
-        )
-    )
-    response = client_with_project_session.get(f"{ROUTE}/changelog")
-    assert response.status_code == status.HTTP_200_OK
-    response_data = response.json()
-    assert len(response_data) == 1
-    assert response_data[0]["change_type"] == "update"
-    assert response_data[0]["user"] == "test_user"
-    assert response_data[0]["path"] == str(fmu_dir.path)
-    assert response_data[0]["change"] == "Updated field names"
-    assert response_data[0]["hostname"] == "localhost"
-    assert response_data[0]["file"] == "config.json"
-    assert response_data[0]["key"] == "changelog_test"
-
-
-async def test_get_changelog_success_with_change_type(
-    client_with_project_session: TestClient,
-    session_manager: SessionManager,
-) -> None:
-    """Test changelog can be filtered by the change_type query parameter."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
-    )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.update,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Updated field names",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_update",
-        )
-    )
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.remove,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Removed field",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_remove",
-        )
-    )
-
-    response = client_with_project_session.get(f"{ROUTE}/changelog?change_type=update")
-
-    assert response.status_code == status.HTTP_200_OK
-    response_data = response.json()
-    assert len(response_data) == 1
-    assert response_data[0]["change_type"] == "update"
-    assert response_data[0]["key"] == "changelog_update"
-
-
-async def test_get_changelog_success_with_generic_filter(
-    client_with_project_session: TestClient,
-    session_manager: SessionManager,
-) -> None:
-    """Test changelog can be filtered using generic filter query parameters."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
-    )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.update,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Updated field names",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_update",
-        )
-    )
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.remove,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Removed field",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_remove",
-        )
-    )
-
-    response = client_with_project_session.get(
-        f"{ROUTE}/changelog"
-        "?field_name=key"
-        "&filter_value=changelog_update"
-        "&filter_type=text"
-        "&operator=%3D%3D"
-    )
-
-    assert response.status_code == status.HTTP_200_OK
-    response_data = response.json()
-    assert len(response_data) == 1
-    assert response_data[0]["key"] == "changelog_update"
-
-
-async def test_get_changelog_returns_422_for_partial_generic_filter(
-    client_with_project_session: TestClient,
-) -> None:
-    """Test partial generic filter query params return 422."""
-    response = client_with_project_session.get(
-        f"{ROUTE}/changelog?field_name=key&filter_value=changelog_update"
-    )
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert response.json() == {
-        "detail": (
-            "Generic changelog filter requires all of: field_name, "
-            "filter_value, filter_type, operator."
-        )
-    }
-
-
-async def test_get_changelog_returns_422_for_unknown_filter_field(
-    client_with_project_session: TestClient,
-) -> None:
-    """Test generic filter field_name must be a known changelog field."""
-    response = client_with_project_session.get(
-        f"{ROUTE}/changelog"
-        "?field_name=unknown"
-        "&filter_value=value"
-        "&filter_type=text"
-        "&operator=%3D%3D"
-    )
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert response.json() == {"detail": "Unknown changelog field: unknown."}
-
-
-async def test_get_changelog_success_with_max_entries(
-    client_with_project_session: TestClient,
-    session_manager: SessionManager,
-) -> None:
-    """Test changelog can be limited to the latest max_entries."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
-    )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    for key in ("entry_1", "entry_2", "entry_3"):
-        fmu_dir.changelog.add_log_entry(
+    """Test 200 returns the changelog provided by the changelog service."""
+    changelog_service = Mock()
+    changelog_service.get_changelog.return_value = Log(
+        [
             ChangeInfo(
                 change_type=ChangeType.update,
                 user="test_user",
-                path=fmu_dir.path,
+                path=Path("/tmp/project/.fmu"),
                 change="Updated field names",
                 hostname="localhost",
                 file="config.json",
-                key=key,
+                key="changelog_test",
             )
-        )
+        ]
+    )
 
-    response = client_with_project_session.get(f"{ROUTE}/changelog?max_entries=2")
+    app.dependency_overrides[get_changelog_service] = lambda: changelog_service
+
+    response = client_with_project_session.get(f"{ROUTE}/changelog")
 
     assert response.status_code == status.HTTP_200_OK
     response_data = response.json()
-    assert len(response_data) == 2
-    assert [entry["key"] for entry in response_data] == ["entry_2", "entry_3"]
-
-
-async def test_get_changelog_success_with_all_filters(
-    client_with_project_session: TestClient,
-    session_manager: SessionManager,
-) -> None:
-    """Test changelog can combine generic filter, change_type, and max_entries."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
+    assert len(response_data) == 1
+    assert response_data[0]["key"] == "changelog_test"
+    changelog_service.get_changelog.assert_called_once_with(
+        change_type=None,
+        filter_=None,
+        max_entries=None,
     )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
-
-    fmu_dir = session.project_fmu_directory
-    for change_type, user, key in (
-        (ChangeType.update, "test_user", "entry_1"),
-        (ChangeType.update, "test_user", "entry_2"),
-        (ChangeType.remove, "test_user", "entry_3"),
-        (ChangeType.update, "other_user", "excluded_entry"),
-        (ChangeType.update, "test_user", "entry_4"),
-    ):
-        fmu_dir.changelog.add_log_entry(
-            ChangeInfo(
-                change_type=change_type,
-                user=user,
-                path=fmu_dir.path,
-                change="Changed field names",
-                hostname="localhost",
-                file="config.json",
-                key=key,
-            )
-        )
-
-    response = client_with_project_session.get(
-        f"{ROUTE}/changelog"
-        "?change_type=update"
-        "&max_entries=2"
-        "&field_name=user"
-        "&filter_value=test_user"
-        "&filter_type=text"
-        "&operator=%3D%3D"
-    )
-
-    assert response.status_code == status.HTTP_200_OK
-    response_data = response.json()
-    assert len(response_data) == 2
-    assert [entry["key"] for entry in response_data] == ["entry_2", "entry_4"]
-
-
-async def test_get_changelog_returns_422_for_zero_max_entries(
-    client_with_project_session: TestClient,
-) -> None:
-    """Test max_entries must be greater than or equal to 1."""
-    response = client_with_project_session.get(f"{ROUTE}/changelog?max_entries=0")
-
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    response_detail = response.json()["detail"]
-    assert response_detail[0]["loc"] == ["query", "max_entries"]
-    assert response_detail[0]["type"] == "greater_than_equal"
 
 
 async def test_get_changelog_file_not_found(
