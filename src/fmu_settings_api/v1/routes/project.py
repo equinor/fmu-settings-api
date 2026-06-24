@@ -41,7 +41,7 @@ from fmu_settings_api.deps import (
     SessionServiceDep,
     WritePermissionDep,
 )
-from fmu_settings_api.deps.changelog import ChangelogServiceDep
+from fmu_settings_api.deps.changelog import ChangelogFiltersDep, ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
 from fmu_settings_api.models import (
     ConfigurationErrorDetail,
@@ -384,10 +384,16 @@ ChangelogResponses: Final[Responses] = {
     ),
     **inline_add_response(
         422,
-        "Invalid changelog data",
+        "Invalid changelog data or query parameters",
         [
             {"detail": "Invalid changelog format or data at {path}: {error}"},
             {"detail": "Invalid or corrupt JSON at {path}: {error}"},
+            {
+                "detail": (
+                    "Changelog filtering requires all of the generic log filtering "
+                    "fields: field_name, filter_value, filter_type, operator."
+                )
+            },
         ],
     ),
 }
@@ -1451,10 +1457,15 @@ async def put_mappings(
 )
 async def get_changelog(
     changelog_service: ChangelogServiceDep,
+    changelog_filters: ChangelogFiltersDep,
 ) -> Log[ChangeInfo]:
     """Returns changelog for the project."""
     try:
-        return changelog_service.get_changelog()
+        return changelog_service.get_changelog(
+            change_type=changelog_filters.change_type,
+            filter_=changelog_filters.filter_,
+            max_entries=changelog_filters.max_entries,
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:

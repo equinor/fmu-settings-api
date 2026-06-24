@@ -29,12 +29,14 @@ from fmu.settings import (
 )
 from fmu.settings.models._enums import ChangeType
 from fmu.settings.models.change_info import ChangeInfo
+from fmu.settings.models.log import Log
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 from runrms.exceptions import RmsVersionError
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
+from fmu_settings_api.deps.changelog import get_changelog_service
 from fmu_settings_api.models.project import FMUProject, LockStatus, SumoAsset
 from fmu_settings_api.session import (
     ProjectSession,
@@ -300,39 +302,36 @@ async def test_get_project_already_in_session(
 
 async def test_get_changelog_success(
     client_with_project_session: TestClient,
-    session_manager: SessionManager,
 ) -> None:
-    """Test 200 is returned when changelog exists and is readable."""
-    session_id = client_with_project_session.cookies.get(
-        settings.SESSION_COOKIE_KEY, None
+    """Test 200 returns the changelog provided by the changelog service."""
+    changelog_service = Mock()
+    changelog_service.get_changelog.return_value = Log(
+        [
+            ChangeInfo(
+                change_type=ChangeType.update,
+                user="test_user",
+                path=Path("/tmp/project/.fmu"),
+                change="Updated field names",
+                hostname="localhost",
+                file="config.json",
+                key="changelog_test",
+            )
+        ]
     )
-    assert session_id is not None
-    session = await get_fmu_session(session_id)
-    assert isinstance(session, ProjectSession)
 
-    fmu_dir = session.project_fmu_directory
-    fmu_dir.changelog.add_log_entry(
-        ChangeInfo(
-            change_type=ChangeType.update,
-            user="test_user",
-            path=fmu_dir.path,
-            change="Updated field names",
-            hostname="localhost",
-            file="config.json",
-            key="changelog_test",
-        )
-    )
+    app.dependency_overrides[get_changelog_service] = lambda: changelog_service
+
     response = client_with_project_session.get(f"{ROUTE}/changelog")
+
     assert response.status_code == status.HTTP_200_OK
     response_data = response.json()
     assert len(response_data) == 1
-    assert response_data[0]["change_type"] == "update"
-    assert response_data[0]["user"] == "test_user"
-    assert response_data[0]["path"] == str(fmu_dir.path)
-    assert response_data[0]["change"] == "Updated field names"
-    assert response_data[0]["hostname"] == "localhost"
-    assert response_data[0]["file"] == "config.json"
     assert response_data[0]["key"] == "changelog_test"
+    changelog_service.get_changelog.assert_called_once_with(
+        change_type=None,
+        filter_=None,
+        max_entries=None,
+    )
 
 
 async def test_get_changelog_file_not_found(

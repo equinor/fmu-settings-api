@@ -11,10 +11,13 @@ from fastapi import Cookie, HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.settings import ProjectFMUDirectory, init_user_fmu_directory
 from fmu.settings._resources.lock_manager import LockError
+from fmu.settings.models._enums import ChangeType, FilterType
+from fmu.settings.models.log import Filter
 from pydantic import SecretStr
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.deps import ProjectSmdaSessionDep, SmdaInterfaceDep
+from fmu_settings_api.deps.changelog import get_changelog_filters
 from fmu_settings_api.deps.match import get_match_service
 from fmu_settings_api.deps.permissions import (
     check_write_permissions,
@@ -47,6 +50,48 @@ from fmu_settings_api.session import (
 )
 
 ROUTE = "/api/v1/health"
+
+
+async def test_get_changelog_filters_defaults() -> None:
+    """Test changelog filter dependency returns empty filters by default."""
+    filters = await get_changelog_filters(max_entries=None)
+
+    assert filters.change_type is None
+    assert filters.max_entries is None
+    assert filters.filter_ is None
+
+
+async def test_get_changelog_filters_with_all_values() -> None:
+    """Test changelog filter dependency parses all supported filters."""
+    filters = await get_changelog_filters(
+        change_type=ChangeType.update,
+        max_entries=2,
+        field_name="key",
+        filter_value="entry_1",
+        filter_type=FilterType.text,
+        operator="==",
+    )
+
+    assert filters.change_type == ChangeType.update
+    assert filters.max_entries == 2
+    assert filters.filter_ == Filter(
+        field_name="key",
+        filter_value="entry_1",
+        filter_type=FilterType.text,
+        operator="==",
+    )
+
+
+async def test_get_changelog_filters_returns_422_for_partial_generic_filter() -> None:
+    """Test partial generic log filter fields return 422."""
+    with pytest.raises(HTTPException) as exc_info:
+        await get_changelog_filters(field_name="key", filter_value="entry_1")
+
+    assert exc_info.value.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert exc_info.value.detail == (
+        "Changelog filtering requires all of the generic log filtering fields: "
+        "field_name, filter_value, filter_type, operator."
+    )
 
 
 async def test_get_session_dep(
