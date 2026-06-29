@@ -183,5 +183,10 @@
         "name": "Black Pearl",
         "code": "037",
         "roleprefix": "BLACK-PEARL"
+    },
+    {
+        "name": "Corvus",
+        "code": "038",
+        "roleprefix": "CORVUS"
     }
 ]
