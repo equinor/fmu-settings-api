@@ -5,6 +5,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Final
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.context.mappings import (
@@ -32,10 +33,12 @@ from fmu.settings.models.project_config import (
 from pydantic import TypeAdapter, ValidationError
 from runrms.exceptions import RmsVersionError
 
+from fmu_settings_api.config import HttpHeader
 from fmu_settings_api.deps import (
     ProjectServiceDep,
     ProjectServiceForRestoreDep,
     ProjectSessionServiceDep,
+    ProjectValidationServiceDep,
     RefreshLockDep,
     ResourceServiceDep,
     SessionServiceDep,
@@ -56,6 +59,7 @@ from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
     LockStatus,
+    MasterdataSmdaMismatchDetail,
     SumoAsset,
 )
 from fmu_settings_api.models.resource import CacheContent, CacheList
@@ -65,6 +69,9 @@ from fmu_settings_api.models.rms import (
     RmsStratigraphicFramework,
 )
 from fmu_settings_api.services.project import ProjectService
+from fmu_settings_api.services.project_validation import (
+    MasterdataSmdaMismatchError,
+)
 from fmu_settings_api.session import SessionNotFoundError
 from fmu_settings_api.v1.responses import (
     GetSessionResponses,
@@ -233,6 +240,59 @@ RmsStratigraphicFrameworkResponses: Final[Responses] = {
                 )
             },
         ],
+    ),
+}
+
+MasterdataSmdaValidationResponses: Final[Responses] = {
+    **inline_add_response(
+        422,
+        "Project masterdata is missing or does not match SMDA",
+        [
+            {
+                "detail": (
+                    "Project masterdata must be set before validating against SMDA."
+                )
+            },
+            {
+                "detail": {
+                    "message": "Project masterdata does not match SMDA",
+                    "mismatches": [
+                        {
+                            "key": "masterdata.smda.field",
+                            "saved_value": [
+                                {
+                                    "identifier": "OLD_FIELD",
+                                    "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                                }
+                            ],
+                            "source_value": [
+                                {
+                                    "identifier": "NEW_FIELD",
+                                    "uuid": "15ce3b84-766f-4c93-9050-b154861f9100",
+                                }
+                            ],
+                            "message": (
+                                "Project config masterdata 'field' is not present "
+                                "in current SMDA data"
+                            ),
+                        }
+                    ],
+                }
+            },
+        ],
+    ),
+    **inline_add_response(
+        503,
+        "An API call to SMDA times out or fails",
+        [
+            {"detail": "SMDA API request timed out. Please try again."},
+            {"detail": "SMDA error requesting {url}"},
+        ],
+    ),
+    **inline_add_response(
+        500,
+        "SMDA returns a malformed response",
+        [{"detail": "Malformed response from SMDA: {error}"}],
     ),
 }
 
@@ -849,6 +909,62 @@ async def patch_masterdata(
     """Saves SMDA masterdata to the project .fmu directory."""
     project_service.update_masterdata(smda_masterdata)
     return Message(message="Saved SMDA masterdata")
+
+
+@router.post(
+    "/validate/masterdata/smda",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Validates project masterdata against SMDA",
+    description=dedent(
+        """
+        Validates the saved project SMDA masterdata against current SMDA data.
+        If validation succeeds, validation metadata is updated in the project
+        config. If validation fails, no validation metadata is written.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+        **MasterdataSmdaValidationResponses,
+    },
+)
+async def post_validate_masterdata_smda(
+    validation_service: ProjectValidationServiceDep,
+) -> Message:
+    """Validates saved project masterdata against SMDA."""
+    try:
+        await validation_service.validate_masterdata_smda()
+        return Message(message="Validated SMDA masterdata")
+    except MasterdataSmdaMismatchError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=MasterdataSmdaMismatchDetail(
+                message="Project masterdata does not match SMDA",
+                mismatches=e.mismatches,
+            ).model_dump(),
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except KeyError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Malformed response from SMDA: {e}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except TimeoutError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="SMDA API request timed out. Please try again.",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
 
 
 @router.patch(
