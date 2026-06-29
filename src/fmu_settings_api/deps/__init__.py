@@ -21,6 +21,7 @@ from .smda import (
     SmdaServiceDep,
 )
 from .user_fmu import UserFMUDirDep
+from .validation import ProjectValidationServiceDep
 
 __all__ = [
     "AuthTokenDep",
@@ -41,4 +42,5 @@ __all__ = [
     "ProjectServiceDep",
     "ProjectServiceForRestoreDep",
     "ResourceServiceDep",
+    "ProjectValidationServiceDep",
 ]

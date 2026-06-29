@@ -19,7 +19,7 @@ def add_response_example(
 
 
 def inline_add_response(
-    http_code: int, description: str, examples: list[dict[str, str]]
+    http_code: int, description: str, examples: list[dict[str, Any]]
 ) -> Responses:
     """Inline-adds a response with examples."""
     return {
