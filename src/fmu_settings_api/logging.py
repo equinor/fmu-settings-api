@@ -90,7 +90,10 @@ def setup_logging(
         ]
     else:
         processors += [
-            structlog.dev.ConsoleRenderer(colors=True),
+            structlog.dev.ConsoleRenderer(
+                colors=True,
+                exception_formatter=structlog.dev.plain_traceback,
+            ),
         ]
 
     structlog.configure(
