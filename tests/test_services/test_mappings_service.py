@@ -504,35 +504,25 @@ def test_resolve_internal_mapping_implementation_rejects_unsupported_type(
         )
 
 
-def test_import_rms_eclipse_csv_updates_wellbore_mappings(
+def test_import_rms_eclipse_csv_returns_wellbore_mappings(
     mappings_service: MappingsService,
-    fmu_dir: ProjectFMUDirectory,
     make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
 ) -> None:
-    """Test importing delegates to file IO and persists the returned mappings."""
+    """Test importing returns mappings read from the CSV file."""
     csv_relative_path = Path("data/custom/rms_eclipse.csv")
     imported_mappings = make_rms_simulator_mappings()
-    stored_mappings = InternalWellboreMappings(root=list(imported_mappings.root))
 
-    with (
-        patch.object(
-            mappings_service._wellbore_mappings_file_io,
-            "read_rms_eclipse_csv",
-            return_value=imported_mappings,
-        ) as read_mock,
-        patch.object(
-            fmu_dir.mappings,
-            "update_internal_wellbore_mappings",
-            return_value=stored_mappings,
-        ) as update_mock,
-    ):
+    with patch.object(
+        mappings_service._wellbore_mappings_file_io,
+        "read_rms_eclipse_csv",
+        return_value=imported_mappings,
+    ) as read_mock:
         assert (
             mappings_service.import_rms_eclipse_csv(csv_relative_path)
-            == stored_mappings
+            == imported_mappings
         )
 
     read_mock.assert_called_once_with(csv_relative_path)
-    update_mock.assert_called_once_with(imported_mappings)
 
 
 def test_export_rms_simulator_csv_forwards_filtered_mappings_and_path(
