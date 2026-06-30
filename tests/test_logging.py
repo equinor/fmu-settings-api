@@ -250,7 +250,7 @@ def test_setup_logging_sets_log_levels() -> None:
     setup_logging(settings, log_manager, EventInfo)
 
     assert logging.getLogger("uvicorn.access").level == logging.WARNING
-    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpx2").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
 
 

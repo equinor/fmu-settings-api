@@ -4,7 +4,7 @@ from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
-import httpx
+import httpx2
 import pytest
 
 from fmu_settings_api.config import HttpHeader
@@ -17,7 +17,7 @@ def mock_httpx_get() -> Generator[MagicMock]:
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     with patch(
-        "fmu_settings_api.interfaces.smda_api.httpx.AsyncClient.get",
+        "fmu_settings_api.interfaces.smda_api.httpx2.AsyncClient.get",
         return_value=mock_response,
     ) as get:
         yield get
@@ -29,7 +29,7 @@ def mock_httpx_post() -> Generator[MagicMock]:
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     with patch(
-        "fmu_settings_api.interfaces.smda_api.httpx.AsyncClient.post",
+        "fmu_settings_api.interfaces.smda_api.httpx2.AsyncClient.post",
         return_value=mock_response,
     ) as post:
         yield post
@@ -222,7 +222,7 @@ async def test_smda_strat_column_areas(mock_httpx_post: MagicMock) -> None:
 async def test_smda_health_ok(mock_httpx_get: MagicMock) -> None:
     """Tests health returns True when status is OK."""
     api = SmdaAPI("token", "key")
-    mock_httpx_get.return_value.status_code = httpx.codes.OK
+    mock_httpx_get.return_value.status_code = httpx2.codes.OK
 
     res = await api.health()
 

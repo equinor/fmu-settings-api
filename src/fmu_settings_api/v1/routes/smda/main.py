@@ -4,7 +4,7 @@ from collections.abc import Generator
 from textwrap import dedent
 from typing import Final
 
-import httpx
+import httpx2
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from fmu_settings_api.config import HttpHeader
@@ -129,7 +129,7 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
     try:
         await smda_service.check_health()
         return Ok()
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
@@ -182,7 +182,7 @@ async def post_field(
     """Searches for a field identifier in SMDA."""
     try:
         return await smda_service.search_field(field)
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url!r}",
@@ -260,7 +260,7 @@ async def post_masterdata(
             detail=error_msg,
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
@@ -323,7 +323,7 @@ async def post_strat_units(
             detail=error_msg,
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",

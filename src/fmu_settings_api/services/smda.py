@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any, Final
 
-import httpx
+import httpx2
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
     CountryItem,
@@ -432,7 +432,7 @@ class SmdaService:
         for identifier, response in zip(
             unique_identifiers, surface_responses, strict=True
         ):
-            if isinstance(response, httpx.HTTPError | TimeoutError):
+            if isinstance(response, httpx2.HTTPError | TimeoutError):
                 logger.warning(
                     "smda_surface_lookup_failed",
                     identifier=identifier,
