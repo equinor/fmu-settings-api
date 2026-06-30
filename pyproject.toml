@@ -32,7 +32,7 @@ dynamic = ["version"]
 dependencies = [
     "fastapi",
     "fmu-datamodels>=0.21.4",  # no equivalent relation, no fmu data system
-    "fmu-settings>=0.32.1",  # public imports for global config
+    "fmu-settings>=1.0.0",  # validation metadata in project config
     "httpx",
     "packaging",
     "pydantic",
