@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Callable, Generator, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import Any, Literal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -24,10 +24,12 @@ from fmu.settings import (
     init_fmu_directory,
     init_user_fmu_directory,
 )
+from fmu.settings.models.event_info import EventInfo
 from pytest import MonkeyPatch
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import settings
+from fmu_settings_api.logging import setup_logging
 from fmu_settings_api.models.smda import StratigraphicUnit
 from fmu_settings_api.session import (
     SessionManager,
@@ -35,6 +37,13 @@ from fmu_settings_api.session import (
     create_fmu_session,
     get_fmu_session,
 )
+
+
+@pytest.fixture(autouse=True)
+def configure_test_logging() -> Generator[None]:
+    """Configure tests with the same logging setup path as the app."""
+    setup_logging(settings, Mock(spec_set=["add_log_entry"]), EventInfo)
+    yield
 
 
 @pytest.fixture
