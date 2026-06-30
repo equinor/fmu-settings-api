@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from fmu.datamodels.common import Smda
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -42,6 +43,26 @@ def test_update_cache_max_revisions_success(fmu_dir: ProjectFMUDirectory) -> Non
     )
 
     assert fmu_dir.config.load(force=True).cache_max_revisions == updated_value
+
+
+def test_update_masterdata_updates_validation_metadata(
+    fmu_dir: ProjectFMUDirectory,
+    smda_masterdata: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test saving SMDA masterdata also marks it as validated."""
+    service = ProjectService(fmu_dir)
+    monkeypatch.setattr(
+        "fmu_settings_api.services.project.getpass.getuser",
+        lambda: "test-user",
+    )
+
+    service.update_masterdata(Smda.model_validate(smda_masterdata))
+
+    config = fmu_dir.config.load(force=True)
+    assert config.validation.masterdata_smda is not None
+    assert config.validation.masterdata_smda.last_validated_at is not None
+    assert config.validation.masterdata_smda.last_validated_by == "test-user"
 
 
 def test_restore_fmu_files_returns_empty_without_calling_restore(

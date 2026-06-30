@@ -1,5 +1,7 @@
 """Service for managing FMU project operations and business logic."""
 
+import getpass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fmu.datamodels.common import Access, Smda
@@ -10,6 +12,7 @@ from fmu.settings.models.project_config import (
     RmsHorizon,
     RmsStratigraphicZone,
     RmsWell,
+    ValidationRecord,
 )
 
 from fmu_settings_api.interfaces import SumoApi
@@ -91,6 +94,13 @@ class ProjectService:
     def update_masterdata(self, smda_masterdata: Smda) -> None:
         """Save SMDA masterdata to the project FMU directory."""
         self._fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
+        record = ValidationRecord(
+            last_validated_at=datetime.now(UTC),
+            last_validated_by=getpass.getuser(),
+        )
+        self._fmu_dir.set_config_value(
+            "validation.masterdata_smda", record.model_dump()
+        )
 
     def update_model(self, model: Model) -> None:
         """Save model data to the project FMU directory."""
