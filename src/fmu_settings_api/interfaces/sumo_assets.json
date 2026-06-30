@@ -193,5 +193,10 @@
         "name": "Code",
         "code": "039",
         "roleprefix": "CODE"
+    },
+    {
+        "name": "Kalundborg",
+        "code": "040",
+        "roleprefix": "KALUNDBORG"
     }
 ]
