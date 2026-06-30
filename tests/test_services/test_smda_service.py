@@ -4,7 +4,7 @@ from functools import cache
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
-import httpx
+import httpx2
 import pytest
 from fmu.datamodels.common.masterdata import (
     CoordinateSystem,
@@ -501,9 +501,9 @@ async def test_get_stratigraphic_units_surface_http_error_returns_null_uuids() -
     }
     mock_smda.strat_units.return_value = strat_unit_resp
 
-    mock_request = httpx.Request(method="POST", url="https://smda/strat-surface-names")
-    mock_response = httpx.Response(status_code=503, request=mock_request)
-    mock_smda.surface.side_effect = httpx.HTTPStatusError(
+    mock_request = httpx2.Request(method="POST", url="https://smda/strat-surface-names")
+    mock_response = httpx2.Response(status_code=503, request=mock_request)
+    mock_smda.surface.side_effect = httpx2.HTTPStatusError(
         "503 Service Unavailable",
         request=mock_request,
         response=mock_response,

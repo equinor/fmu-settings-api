@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-import httpx
+import httpx2
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -81,8 +81,8 @@ async def test_get_health_has_user_api_key_and_access_token(
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
     """Test 200 returns when an API key and SMDA access token are set."""
-    mock_response = MagicMock(spec=httpx.Response)
-    mock_response.status_code = httpx.codes.OK
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = httpx2.codes.OK
     mock_response.json.return_value = {"status": "ok"}
 
     mock_SmdaAPI_get.return_value = mock_response
@@ -102,11 +102,11 @@ async def test_get_health_request_failure_raises_exception(
     mock_SmdaAPI_get: AsyncMock,
 ) -> None:
     """Tests the request to SMDA failing as a 500 error."""
-    mock_request = MagicMock(spec=httpx.Request)
+    mock_request = MagicMock(spec=httpx2.Request)
     mock_request.url = "https://smda"
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 401
-    mock_SmdaAPI_get.side_effect = httpx.HTTPStatusError(
+    mock_SmdaAPI_get.side_effect = httpx2.HTTPStatusError(
         "401 Client Error: Access Denied",
         request=mock_request,
         response=mock_response,
@@ -129,7 +129,7 @@ async def test_post_field_succeeds_with_one(
 ) -> None:
     """Tests that posting a valid search returns a valid result."""
     uuid = uuid4()
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -172,7 +172,7 @@ async def test_post_field_succeeds_with_none(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting a valid but non-existent search returns an empty result."""
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -243,7 +243,7 @@ async def test_post_field_drogon_wildcard_adds_drogon_to_smda_results(
 ) -> None:
     """Tests that Drogon wildcard searches keep SMDA results."""
     uuid = uuid4()
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -290,7 +290,7 @@ async def test_post_field_with_no_identifier_raises(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting an empty field identifier is valid but returns no data."""
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -323,7 +323,7 @@ async def test_post_field_has_bad_response_raises(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests that posting a valid response with an invalid response from SMDA fails."""
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {}
 
@@ -369,7 +369,7 @@ async def test_post_masterdata_success(
     session_tmp_path: Path,
 ) -> None:
     """Tests successful post to masterdata."""
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -464,7 +464,7 @@ async def test_post_masterdata_uses_selected_field_uuid_for_lookup(
 ) -> None:
     """Tests that masterdata requests use the selected field uuid for lookup."""
     selected_uuid = uuid4()
-    mock_identifier_field_response = MagicMock(spec=httpx.Response)
+    mock_identifier_field_response = MagicMock(spec=httpx2.Response)
     mock_identifier_field_response.status_code = 200
     mock_identifier_field_response.json.return_value = {
         "data": {
@@ -576,7 +576,7 @@ async def test_post_masterdata_missing_coordinate_system(
     session_tmp_path: Path,
 ) -> None:
     """Tests error when field coordinate system is not found."""
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -647,7 +647,7 @@ async def test_post_masterdata_malformed_response(
     session_tmp_path: Path,
 ) -> None:
     """Tests error handling for malformed SMDA response."""
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "malformed": "response",
@@ -677,7 +677,7 @@ async def test_post_masterdata_multiple_fields(
     session_tmp_path: Path,
 ) -> None:
     """Tests posting multiple fields with duplicate removal."""
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -773,7 +773,7 @@ async def test_post_masterdata_multiple_fields_different_crs(
     crs_uuid_2 = uuid4()
     crs_uuid_3 = uuid4()
 
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -878,7 +878,7 @@ async def test_post_masterdata_duplicate_field_crs(
     crs_uuid_1 = uuid4()
     crs_uuid_2 = uuid4()
 
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -968,7 +968,7 @@ async def test_post_masterdata_empty_field_list(
     session_tmp_path: Path,
 ) -> None:
     """Tests when a post with no fields is sent."""
-    mock_field_response = MagicMock(spec=httpx.Response)
+    mock_field_response = MagicMock(spec=httpx2.Response)
     mock_field_response.status_code = 200
     mock_field_response.json.return_value = {
         "data": {
@@ -1019,11 +1019,11 @@ async def test_post_masterdata_request_fails(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests when a post when the fields initial request fails."""
-    mock_request = MagicMock(spec=httpx.Request)
+    mock_request = MagicMock(spec=httpx2.Request)
     mock_request.url = "https://smda"
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 401
-    mock_SmdaAPI_post.side_effect = httpx.HTTPStatusError(
+    mock_SmdaAPI_post.side_effect = httpx2.HTTPStatusError(
         "401 Client Error: Access Denied",
         request=mock_request,
         response=mock_response,
@@ -1072,7 +1072,7 @@ async def test_post_strat_units_success(
 ) -> None:
     """Tests successful post to strat_units with valid identifier."""
     strat_unit_uuid = uuid4()
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": {
@@ -1142,7 +1142,7 @@ async def test_post_strat_units_empty_results(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests error when no stratigraphic units found for identifier."""
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {"data": {"results": []}}
 
@@ -1187,7 +1187,7 @@ async def test_post_strat_units_malformed_response(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests error handling for malformed SMDA response."""
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 200
     mock_response.json.return_value = {"malformed": "response"}
 
@@ -1237,11 +1237,11 @@ async def test_post_strat_units_http_error(
     mock_SmdaAPI_post: AsyncMock,
 ) -> None:
     """Tests when SMDA returns HTTP error."""
-    mock_request = MagicMock(spec=httpx.Request)
+    mock_request = MagicMock(spec=httpx2.Request)
     mock_request.url = "https://smda/strat-units"
-    mock_response = MagicMock(spec=httpx.Response)
+    mock_response = MagicMock(spec=httpx2.Response)
     mock_response.status_code = 401
-    mock_SmdaAPI_post.side_effect = httpx.HTTPStatusError(
+    mock_SmdaAPI_post.side_effect = httpx2.HTTPStatusError(
         "401 Client Error: Access Denied",
         request=mock_request,
         response=mock_response,
