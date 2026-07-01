@@ -1,6 +1,7 @@
 """Models pertaining to the .fmu directory."""
 
 from pathlib import Path
+from typing import Any
 
 from fmu.settings.models.lock_info import LockInfo
 from fmu.settings.models.project_config import ProjectConfig
@@ -79,3 +80,29 @@ class SumoAsset(BaseResponseModel):
 
     roleprefix: str
     """Roleprefix of the asset in Sumo."""
+
+
+class ValidationMismatch(BaseResponseModel):
+    """A project validation mismatch."""
+
+    key: str
+    """Dot-notation path to the data that does not match."""
+
+    saved_value: Any
+    """The value currently saved in the project configuration."""
+
+    source_value: Any
+    """The value found in the validation source."""
+
+    message: str
+    """Description of the mismatch."""
+
+
+class MasterdataSmdaMismatchDetail(BaseResponseModel):
+    """Details for project masterdata mismatches against SMDA."""
+
+    message: str
+    """Summary of the validation failure."""
+
+    mismatches: list[ValidationMismatch]
+    """List of project masterdata values that do not match SMDA."""
