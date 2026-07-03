@@ -81,12 +81,8 @@ class MappingsService:
         self: Self, relative_path: str | Path | None = None
     ) -> InternalWellboreMappings:
         """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
-        self._fmu_dir._lock.ensure_can_write()
-        wellbore_mappings = self._wellbore_mappings_file_io.read_rms_eclipse_csv(
+        return self._wellbore_mappings_file_io.read_rms_eclipse_csv(
             relative_path or self.RMS_ECLIPSE_CSV_PATH
-        )
-        return self._fmu_dir.mappings.update_internal_wellbore_mappings(
-            wellbore_mappings
         )
 
     def export_rms_simulator_csv(
