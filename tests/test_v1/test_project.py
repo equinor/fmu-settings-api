@@ -10,7 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID
 
-import httpx
+import httpx2
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.datamodels.common import Access, Smda
@@ -1163,11 +1163,11 @@ async def test_post_validate_masterdata_smda_smda_http_error(
     client_with_project_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps SMDA HTTP errors."""
-    request = httpx.Request("GET", "https://smda.example.test/masterdata")
-    response = httpx.Response(status.HTTP_503_SERVICE_UNAVAILABLE, request=request)
+    request = httpx2.Request("GET", "https://smda.example.test/masterdata")
+    response = httpx2.Response(status.HTTP_503_SERVICE_UNAVAILABLE, request=request)
     validation_service = Mock()
     validation_service.validate_masterdata_smda = AsyncMock(
-        side_effect=httpx.HTTPStatusError(
+        side_effect=httpx2.HTTPStatusError(
             "SMDA failed", request=request, response=response
         )
     )

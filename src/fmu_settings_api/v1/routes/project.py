@@ -5,7 +5,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Final
 
-import httpx
+import httpx2
 from fastapi import APIRouter, HTTPException, Request
 from fmu.datamodels.common import Access, Smda
 from fmu.datamodels.context.mappings import (
@@ -947,7 +947,7 @@ async def post_validate_masterdata_smda(
         ) from e
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
