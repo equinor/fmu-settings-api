@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.datamodels.common import Access, Smda
@@ -37,7 +38,16 @@ from runrms.exceptions import RmsVersionError
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.deps.changelog import get_changelog_service
-from fmu_settings_api.models.project import FMUProject, LockStatus, SumoAsset
+from fmu_settings_api.deps.validation import get_project_validation_service
+from fmu_settings_api.models.project import (
+    FMUProject,
+    LockStatus,
+    SumoAsset,
+    ValidationMismatch,
+)
+from fmu_settings_api.services.project_validation import (
+    MasterdataSmdaMismatchError,
+)
 from fmu_settings_api.session import (
     ProjectSession,
     Session,
@@ -1073,6 +1083,153 @@ async def test_patch_masterdata_general_exception(
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+# POST project/validate/masterdata/smda #
+
+
+async def test_post_validate_masterdata_smda_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata returns a success message."""
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock()
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"message": "Validated SMDA masterdata"}
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+
+
+async def test_post_validate_masterdata_smda_missing_masterdata_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata maps missing masterdata to 422."""
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock(
+        side_effect=ValueError(
+            "Project masterdata must be set before validating against SMDA."
+        )
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (
+        response.json()["detail"]
+        == "Project masterdata must be set before validating against SMDA."
+    )
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+
+
+async def test_post_validate_masterdata_smda_mismatch_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata maps mismatch details to 422."""
+    mismatch = ValidationMismatch(
+        key="masterdata.smda.field",
+        saved_value=[{"identifier": "Saved"}],
+        source_value=[{"identifier": "Current"}],
+        message=(
+            "Project config masterdata 'field' is not present in current SMDA data"
+        ),
+    )
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock(
+        side_effect=MasterdataSmdaMismatchError([mismatch])
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json()["detail"] == {
+        "message": "Project masterdata does not match SMDA",
+        "mismatches": [mismatch.model_dump(mode="json")],
+    }
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+
+
+async def test_post_validate_masterdata_smda_smda_http_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata maps SMDA HTTP errors."""
+    request = httpx.Request("GET", "https://smda.example.test/masterdata")
+    response = httpx.Response(status.HTTP_503_SERVICE_UNAVAILABLE, request=request)
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "SMDA failed", request=request, response=response
+        )
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    api_response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert api_response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert api_response.json()["detail"] == (
+        "SMDA error requesting https://smda.example.test/masterdata"
+    )
+    assert (
+        api_response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+
+
+async def test_post_validate_masterdata_smda_timeout_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata maps SMDA timeouts."""
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock(side_effect=TimeoutError())
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json()["detail"] == "SMDA API request timed out. Please try again."
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+
+
+async def test_post_validate_masterdata_smda_malformed_smda_response(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validating SMDA masterdata maps malformed SMDA responses."""
+    validation_service = Mock()
+    validation_service.validate_masterdata_smda = AsyncMock(
+        side_effect=KeyError("field")
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+
+    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Malformed response from SMDA: 'field'"
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    validation_service.validate_masterdata_smda.assert_awaited_once_with()
 
 
 async def test_load_global_config_from_default_path(
