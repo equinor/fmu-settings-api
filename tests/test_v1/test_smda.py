@@ -15,9 +15,13 @@ from fmu.datamodels.common.masterdata import (
     DiscoveryItem,
     StratigraphicColumn,
 )
-from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
+from fmu.settings._drogon import (
+    MASTERDATA as DROGON_MASTERDATA,
+    RMS_WELLS as DROGON_RMS_WELLS,
+)
 
 from fmu_settings_api.config import HttpHeader
+from fmu_settings_api.interfaces.smda_api import SmdaRoutes
 from fmu_settings_api.models.smda import (
     SmdaFieldSearchResult,
     SmdaFieldUUID,
@@ -1250,6 +1254,236 @@ async def test_post_strat_units_http_error(
     response = client_with_smda_session.post(
         f"{ROUTE}/strat_units",
         json={"strat_column_identifier": "LITHO_DROGON"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "SMDA error requesting" in response.json()["detail"]
+
+
+async def test_post_well_headers_success(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests successful post to well_headers with valid field identifier."""
+    well_uuid = uuid4()
+    wellbore_uuid = uuid4()
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "results": [
+                {
+                    "unique_well_identifier": "NO 30/9-B",
+                    "unique_wellbore_identifier": "NO 30/9-B-43 A",
+                    "official_wellbore_name": "30/9-B-43 A",
+                    "country_identifier": "Norway",
+                    "parent_wellbore": None,
+                    "wellbore_type": "initial",
+                    "wellbore_purpose": "production",
+                    "wellbore_status": "completed",
+                    "wellbore_purpose_planned": "production",
+                    "drill_year": 2024,
+                    "completion_date": "2024-10-01",
+                    "discovery_internal_identifier": "DISC-1",
+                    "multilateral": 0,
+                    "projected_coordinate_unit": "m",
+                    "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+                    "well_uuid": str(well_uuid),
+                    "wellbore_uuid": str(wellbore_uuid),
+                }
+            ]
+        }
+    }
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    response_data = response.json()
+    assert len(response_data["well_headers"]) == 1
+    assert response_data["well_headers"][0]["unique_well_identifier"] == "NO 30/9-B"
+    assert (
+        response_data["well_headers"][0]["unique_wellbore_identifier"]
+        == "NO 30/9-B-43 A"
+    )
+    mock_SmdaAPI_post.assert_awaited_once_with(
+        SmdaRoutes.WELL_HEADER_SEARCH,
+        json={
+            "_projection": (
+                "unique_well_identifier,unique_wellbore_identifier,"
+                "official_wellbore_name,country_identifier,parent_wellbore,"
+                "wellbore_type,wellbore_purpose,wellbore_status,"
+                "wellbore_purpose_planned,drill_year,completion_date,"
+                "discovery_internal_identifier,multilateral,projected_coordinate_unit,"
+                "projected_coordinate_system,well_uuid,wellbore_uuid"
+            ),
+            "field_identifier": ["TROLL"],
+        },
+    )
+
+
+async def test_post_well_headers_empty_results(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests error when no well headers are found for a field identifier."""
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": {"results": []}}
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "NONEXISTENT"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "No well headers found" in response.json()["detail"]
+
+
+async def test_post_well_headers_drogon_uses_drogon_data(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests that Drogon well header requests do not call SMDA and use Drogon data."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "Drogon"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    well_header_names = [
+        header["official_wellbore_name"] for header in response.json()["well_headers"]
+    ]
+    assert well_header_names == [well["name"] for well in DROGON_RMS_WELLS]
+    assert response.json()["well_headers"][0]["country_identifier"] == "Norway"
+    assert response.json()["well_headers"][0]["parent_wellbore"] is None
+    assert response.json()["well_headers"][0]["wellbore_purpose"] == "production"
+    assert response.json()["well_headers"][0]["wellbore_status"] == "operating"
+    assert response.json()["well_headers"][0]["multilateral"] == 0
+    mlw_header = next(
+        header
+        for header in response.json()["well_headers"]
+        if header["official_wellbore_name"] == "MLW_OP5_Y1"
+    )
+    assert mlw_header["parent_wellbore"] is None
+    assert mlw_header["multilateral"] == 1
+    assert (
+        response.json()["well_headers"][0]["projected_coordinate_system"]
+        == "ST_WGS84_UTM37N_P32637"
+    )
+    mock_SmdaAPI_post.assert_not_awaited()
+
+
+async def test_post_well_headers_empty_identifier(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests 400 error when empty field identifier is provided."""
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": ""},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "must be provided" in response.json()["detail"]
+
+
+async def test_post_well_headers_malformed_response(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests error handling for malformed SMDA well header response."""
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"malformed": "response"}
+
+    mock_SmdaAPI_post.return_value = mock_response
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "Malformed response from SMDA" in response.json()["detail"]
+
+
+async def test_post_well_headers_request_timeout(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when a well header request to SMDA times out."""
+    with patch("fmu_settings_api.deps.smda.SmdaAPI") as mock_smda_class:
+        mock_smda_instance = AsyncMock()
+        mock_smda_instance.well_headers.side_effect = TimeoutError("Request timed out")
+        mock_smda_class.return_value = mock_smda_instance
+
+        response = client_with_smda_session.post(
+            f"{ROUTE}/well_headers",
+            json={"identifier": "TROLL"},
+        )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json()["detail"] == "SMDA API request timed out. Please try again."
+
+
+async def test_post_well_headers_http_error(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+    mock_SmdaAPI_post: AsyncMock,
+) -> None:
+    """Tests when SMDA returns HTTP error for well headers."""
+    mock_request = MagicMock(spec=httpx2.Request)
+    mock_request.url = "https://smda/wellheaders"
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = 401
+    mock_SmdaAPI_post.side_effect = httpx2.HTTPStatusError(
+        "401 Client Error: Access Denied",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
