@@ -3609,6 +3609,294 @@ async def test_put_mappings_stratigraphy_invalid_existing_file_json_error(
     }
 
 
+# POST project/mappings/import/rms_eclipse_csv #
+
+
+async def test_post_import_rms_eclipse_csv_mappings_success(
+    client_with_project_session: TestClient,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test importing wellbore mappings returns the mappings model."""
+    wellbore_mappings = make_rms_simulator_mappings()
+    service_response = InternalMappings(wellbore=wellbore_mappings)
+    relative_path = Path("data/custom/rms_eclipse.csv")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        return_value=wellbore_mappings,
+    ) as import_rms_eclipse_csv:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv",
+            json={"relative_path": str(relative_path)},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == service_response.model_dump(mode="json")
+    import_rms_eclipse_csv.assert_called_once_with(relative_path)
+
+
+async def test_post_import_rms_eclipse_csv_mappings_uses_default_path(
+    client_with_project_session: TestClient,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+) -> None:
+    """Test importing without a request body uses the service default path."""
+    wellbore_mappings = make_rms_simulator_mappings()
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        return_value=wellbore_mappings,
+    ) as import_rms_eclipse_csv:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    import_rms_eclipse_csv.assert_called_once_with(None)
+
+
+async def test_post_import_rms_eclipse_csv_mappings_file_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns when the CSV file is not found."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        side_effect=FileNotFoundError("CSV file not found"),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv"
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "CSV file not found"}
+
+
+async def test_post_import_rms_eclipse_csv_mappings_permission_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 403 returns when permissions prevent importing mappings."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv"
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"].startswith("Permission denied accessing .fmu at ")
+
+
+async def test_post_import_rms_eclipse_csv_mappings_validation_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when imported mappings fail validation."""
+    try:
+        InternalStratigraphyIdentifierMapping(
+            source_system=DataSystem.rms,
+            target_system=DataSystem.smda,
+            relation_type=InternalRelationType.primary,
+            source_id="",
+            target_id="VOLANTIS GP. Top",
+        )
+        raise AssertionError("Expected ValidationError")
+    except ValidationError as exc:
+        validation_error = exc
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        side_effect=validation_error,
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv"
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid mappings:" in response.json()["detail"]
+
+
+async def test_post_import_rms_eclipse_csv_mappings_value_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when the CSV file cannot be imported."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService.import_rms_eclipse_csv",
+        side_effect=ValueError("CSV file is missing required columns: RMS_WELL_NAME"),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/import/rms_eclipse_csv"
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": "CSV file is missing required columns: RMS_WELL_NAME"
+    }
+
+
+# POST project/mappings/export/rms_simulator_renaming_table #
+
+
+async def test_post_export_rms_simulator_renaming_table_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test exporting RMS-to-simulator mappings calls the service."""
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+    ) as export_rms_simulator_renaming_table:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table",
+            json={"relative_path": str(relative_path)},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": (
+            f"Exported RMS-to-simulator mappings to renaming table at {relative_path}"
+        )
+    }
+    export_rms_simulator_renaming_table.assert_called_once_with(relative_path)
+
+
+async def test_post_export_rms_simulator_renaming_table_uses_default_path(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test exporting without a request body uses the service default path."""
+    default_path = Path(
+        "rms/input/well_modelling/well_info/rms_simulator.renaming_table"
+    )
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+    ) as export_rms_simulator_renaming_table:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": (
+            f"Exported RMS-to-simulator mappings to renaming table at {default_path}"
+        )
+    }
+    export_rms_simulator_renaming_table.assert_called_once_with(default_path)
+
+
+async def test_post_export_rms_simulator_renaming_table_file_not_found(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 404 returns when exporting cannot find the project mappings."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=FileNotFoundError("Mappings file not found"),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "Mappings file not found"}
+
+
+async def test_post_export_rms_simulator_renaming_table_permission_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 403 returns when permissions prevent exporting mappings."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=PermissionError("Permission denied"),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": "Permission denied while trying to export the mappings."
+    }
+
+
+async def test_post_export_rms_simulator_renaming_table_validation_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when stored mappings fail validation."""
+    try:
+        InternalStratigraphyIdentifierMapping(
+            source_system=DataSystem.rms,
+            target_system=DataSystem.smda,
+            relation_type=InternalRelationType.primary,
+            source_id="",
+            target_id="VOLANTIS GP. Top",
+        )
+        raise AssertionError("Expected ValidationError")
+    except ValidationError as exc:
+        validation_error = exc
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=validation_error,
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert "Invalid mappings in existing file:" in response.json()["detail"]
+
+
+async def test_post_export_rms_simulator_renaming_table_invalid_existing_file(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test export hides parser details from invalid stored mappings."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=ValueError(
+            "Invalid JSON in resource file for 'MappingsManager': "
+            "'Expecting value: line 1 column 1 (char 0)'"
+        ),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": "Mappings were not exported because the project contains "
+        "invalid saved mappings."
+    }
+
+
+async def test_post_export_rms_simulator_renaming_table_value_error(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test 422 returns when no mappings can be exported."""
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=ValueError(
+            "No rms-to-simulator primary wellbore mappings available to export "
+            "as rms_simulator.renaming_table"
+        ),
+    ):
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table"
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": (
+            "No rms-to-simulator primary wellbore mappings available to export "
+            "as rms_simulator.renaming_table"
+        )
+    }
+
+
 # GET project/cache #
 
 
