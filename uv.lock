@@ -101,7 +101,7 @@ name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz", hash = "sha256:44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529", size = 523588, upload-time = "2025-09-08T23:24:04.541Z" }
 wheels = [
@@ -405,7 +405,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "fmu-settings-cli"
-version = "0.1.1"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fmu-datamodels" },
@@ -415,9 +415,9 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/c5/255e7ccaa3350f2a6a9f67e87d9009cd73418cd0c4a1ea675868c6232394/fmu_settings_cli-0.1.1.tar.gz", hash = "sha256:a1ac0a820e8f5d6875db6e687c539a27250a0a35cfb591664f39f3f5b238185f", size = 98832, upload-time = "2026-01-06T06:57:34.515Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/fd/cac2b102f3d1caa4daf13f1d2779e8808b93121c1c91a614e74b7dcec0b2/fmu_settings_cli-1.0.0.tar.gz", hash = "sha256:8db8b026da6eae38f4db178801cee7a8fbd3456ba609cb84a2994903529f5471", size = 138022, upload-time = "2026-06-29T10:00:49.799Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/ed/a5e6f75a310d7852e5cf6c99e99b7910d7c0f0b8bbbbd92e4c44a3e68171/fmu_settings_cli-0.1.1-py3-none-any.whl", hash = "sha256:5f5d8af7bed3b59b59d455af0a91262346d5d1a849c2dce3fb804dc31fb4a7e6", size = 30512, upload-time = "2026-01-06T06:57:33.163Z" },
+    { url = "https://files.pythonhosted.org/packages/34/e3/1c0599929eb3faddd5eca963c0d52f9b278048126cf0643b47a9f55c7e40/fmu_settings_cli-1.0.0-py3-none-any.whl", hash = "sha256:f8ebac9a88630d797f7a52d51da29795c5b7be954757a4268c64964dd132926d", size = 38482, upload-time = "2026-06-29T10:00:48.567Z" },
 ]
 
 [[package]]
