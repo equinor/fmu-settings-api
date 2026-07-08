@@ -17,10 +17,13 @@ from fmu.datamodels.common.masterdata import (
 )
 from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
 
+from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader
+from fmu_settings_api.deps.smda import get_project_smda_service
 from fmu_settings_api.models.smda import (
     SmdaFieldSearchResult,
     SmdaFieldUUID,
+    SmdaWellHeadersResult,
 )
 
 ROUTE = "/api/v1/smda"
@@ -1258,3 +1261,183 @@ async def test_post_strat_units_http_error(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert "SMDA error requesting" in response.json()["detail"]
+
+
+async def test_post_well_headers_success(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests successful post to well_headers with valid field identifier."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        return_value=SmdaWellHeadersResult(well_headers=[])
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json() == {"well_headers": []}
+    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+
+
+async def test_post_well_headers_empty_results(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests error when no well headers are found for a field identifier."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        side_effect=ValueError("No well headers found for field identifier: TROLL")
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "No well headers found" in response.json()["detail"]
+    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+
+
+async def test_post_well_headers_drogon_identifier_calls_service(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests posting Drogon calls the well header service with Drogon."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        return_value=SmdaWellHeadersResult(well_headers=[])
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "Drogon"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    smda_service.get_well_headers.assert_awaited_once_with("Drogon")
+
+
+async def test_post_well_headers_empty_identifier(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests 400 error when empty field identifier is provided."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        side_effect=ValueError("A field identifier must be provided")
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": ""},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "must be provided" in response.json()["detail"]
+    smda_service.get_well_headers.assert_awaited_once_with("")
+
+
+async def test_post_well_headers_malformed_response(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests error handling for malformed SMDA well header response."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(side_effect=KeyError("data"))
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR, (
+        response.json()
+    )
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "Malformed response from SMDA" in response.json()["detail"]
+    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+
+
+async def test_post_well_headers_request_timeout(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when a well header request to SMDA times out."""
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        side_effect=TimeoutError("Request timed out")
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json()["detail"] == "SMDA API request timed out. Please try again."
+    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+
+
+async def test_post_well_headers_http_error(
+    client_with_smda_session: TestClient,
+    session_tmp_path: Path,
+) -> None:
+    """Tests when SMDA returns HTTP error for well headers."""
+    mock_request = MagicMock(spec=httpx2.Request)
+    mock_request.url = "https://smda/wellheaders"
+    mock_response = MagicMock(spec=httpx2.Response)
+    mock_response.status_code = 401
+    smda_service = MagicMock()
+    smda_service.get_well_headers = AsyncMock(
+        side_effect=httpx2.HTTPStatusError(
+            "401 Client Error: Access Denied",
+            request=mock_request,
+            response=mock_response,
+        )
+    )
+    app.dependency_overrides[get_project_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.post(
+        f"{ROUTE}/well_headers",
+        json={"identifier": "TROLL"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert "SMDA error requesting" in response.json()["detail"]
+    smda_service.get_well_headers.assert_awaited_once_with("TROLL")

@@ -63,6 +63,101 @@ class SmdaFieldSearchResult(BaseResponseModel):
     """A list of field identifier results from the search."""
 
 
+class SmdaWellHeader(BaseResponseModel):
+    """Well header data from SMDA."""
+
+    unique_well_identifier: str
+    """Unique SMDA identifier for the well."""
+
+    unique_wellbore_identifier: str
+    """Unique SMDA identifier for the wellbore."""
+
+    official_wellbore_name: str | None
+    """Official wellbore name used by the Authorities.
+
+    For Norway and UK, it will be the unique_wellbore_identifier without
+    country iso code, but for Brazil it can really differs from the Equinor
+    wellbore name.
+    """
+
+    country_identifier: str
+    """Country identifier for the wellbore."""
+
+    parent_wellbore: str | None
+    """The unique wellbore identifier this wellbore is kicked off from.
+
+    Ref. kick off depth. This is used for sidetracks. A wellbore starting at
+    the well origin has no parent.
+    """
+
+    wellbore_type: str | None
+    """Type of wellbore, values like exploration, development, other.
+
+    This attribute is automatically maintained in SMDA based on the wellbore
+    purpose. If the purpose is like wildcat or appraisal, type will be set to
+    exploration, if the purpose is like production, injection then the type is
+    set to development.
+    """
+
+    wellbore_purpose: str | None
+    """Purpose of wellbore.
+
+    Values like wildcat, appraisal, … for exploration wellbores; production,
+    injection, observation, disposal, … for development wellbores; shallow gas,
+    pilot hole for other purpose.
+    """
+
+    wellbore_status: str | None
+    """Status of the wellbore.
+
+    Value like plugged and abandoned, drilling, plugged, producing ... This
+    attribute is automatically maintained in SMDA if no good source is found
+    for it. SMDA will use the wellbore type (exploration or development), the
+    drill dates information, current_track, etc ... in order to set a plausible
+    status. If wellbore type=exploration and completed_date < current_date,
+    then status=plugged and abandoned while development wellbore would be set
+    to completed.
+    """
+
+    wellbore_purpose_planned: str | None
+    """Pre-drill purpose of the wellbore.
+
+    Legal values for exploration wellbores: wildcat, appraisal. Example of
+    legal values for development wellbores: observation, production, injection.
+    """
+
+    drill_year: int | None
+    """The year when the drilling has started."""
+
+    completion_date: str | None
+    """Date when the wellbore is considered completed.
+
+    For exploration wellbores from moveable facilities, this may be the anchor
+    handling or jacking-down start date. For fixed facilities and development
+    wellbores, it is when the wellbore reaches total depth and the last casing,
+    liner, or screen is set. If immediately plugged, it is the date the last
+    plug is set.
+    """
+
+    discovery_internal_identifier: str | None
+    """Internal name of the discovery."""
+
+    multilateral: Literal[0, 1] | None
+    """Whether the wellbore is multilateral. 0 = no, 1 = yes."""
+
+    projected_coordinate_unit: str | None
+    """Projected coordinate unit."""
+
+    projected_coordinate_system: str | None
+    """Coordinate reference system for the easting/northing values."""
+
+    well_uuid: UUID
+    """SMDA UUID for the well."""
+
+    wellbore_uuid: UUID
+    """SMDA UUID for the wellbore."""
+
+
 class SmdaMasterdataResult(BaseResponseModel):
     """Contains SMDA-related attributes."""
 
@@ -152,3 +247,10 @@ class SmdaStratigraphicUnitsResult(BaseResponseModel):
 
     stratigraphic_units: list[StratigraphicUnit]
     """List of stratigraphic units from SMDA."""
+
+
+class SmdaWellHeadersResult(BaseResponseModel):
+    """Result containing a list of well headers."""
+
+    well_headers: list[SmdaWellHeader]
+    """List of well headers from SMDA."""

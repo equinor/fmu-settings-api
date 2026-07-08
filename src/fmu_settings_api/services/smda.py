@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Sequence
 from typing import Any, Final
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx2
 from fmu.datamodels.common.masterdata import (
@@ -14,6 +15,7 @@ from fmu.datamodels.common.masterdata import (
 )
 from fmu.settings._drogon import (
     MASTERDATA as DROGON_MASTERDATA,
+    RMS_WELLS as DROGON_RMS_WELLS,
     RMS_ZONES as DROGON_RMS_ZONES,
     STRATIGRAPHY_MAPPINGS as DROGON_STRATIGRAPHY_MAPPINGS,
 )
@@ -27,6 +29,8 @@ from fmu_settings_api.models.smda import (
     SmdaMasterdataResult,
     SmdaSelectedField,
     SmdaStratigraphicUnitsResult,
+    SmdaWellHeader,
+    SmdaWellHeadersResult,
     StratigraphicUnit,
 )
 
@@ -67,6 +71,31 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
     )
     for zone in DROGON_RMS_ZONES
     if zone["name"] in DROGON_STRATIGRAPHY_BY_SOURCE_ID
+]
+DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
+    SmdaWellHeader(
+        unique_well_identifier=f"NO {well['name']}",
+        unique_wellbore_identifier=f"NO {well['name']}",
+        official_wellbore_name=str(well["name"]),
+        country_identifier=DROGON_SMDA_MASTERDATA["country"][0]["identifier"],
+        parent_wellbore=None,
+        wellbore_type="development",
+        wellbore_purpose="production",
+        wellbore_status="operating",
+        wellbore_purpose_planned="production",
+        drill_year=None,
+        completion_date=None,
+        discovery_internal_identifier=None,
+        multilateral=1 if well["name"] == "MLW_OP5_Y1" else 0,
+        projected_coordinate_unit="m",
+        projected_coordinate_system=DROGON_SMDA_MASTERDATA["coordinate_system"][
+            "identifier"
+        ],
+        # Synthetic but stable UUIDs for the built-in Drogon data.
+        well_uuid=uuid5(NAMESPACE_URL, f"well/{well['name']}"),
+        wellbore_uuid=uuid5(NAMESPACE_URL, f"wellbore/{well['name']}"),
+    )
+    for well in DROGON_RMS_WELLS
 ]
 
 
@@ -341,6 +370,48 @@ class SmdaService:
             if strat_unit_item not in strat_unit_items:
                 strat_unit_items.append(strat_unit_item)
         return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
+
+    async def get_well_headers(self, field_identifier: str) -> SmdaWellHeadersResult:
+        """Queries well headers for a field identifier."""
+        if not field_identifier:
+            raise ValueError("A field identifier must be provided")
+
+        if _is_drogon_identifier(field_identifier):
+            return SmdaWellHeadersResult(well_headers=DROGON_WELL_HEADERS)
+
+        well_header_items = []
+        well_header_res = await self._smda.well_headers(
+            [field_identifier],
+            columns=[
+                "unique_well_identifier",
+                "unique_wellbore_identifier",
+                "official_wellbore_name",
+                "country_identifier",
+                "parent_wellbore",
+                "wellbore_type",
+                "wellbore_purpose",
+                "wellbore_status",
+                "wellbore_purpose_planned",
+                "drill_year",
+                "completion_date",
+                "discovery_internal_identifier",
+                "multilateral",
+                "projected_coordinate_unit",
+                "projected_coordinate_system",
+                "well_uuid",
+                "wellbore_uuid",
+            ],
+        )
+        well_header_results = well_header_res.json()["data"]["results"]
+        for well_header_data in well_header_results:
+            well_header_item = SmdaWellHeader(**well_header_data)
+            if well_header_item not in well_header_items:
+                well_header_items.append(well_header_item)
+        if not well_header_items:
+            raise ValueError(
+                f"No well headers found for field identifier: {field_identifier}"
+            )
+        return SmdaWellHeadersResult(well_headers=well_header_items)
 
     async def _get_countries(
         self, country_identifiers: Sequence[str]

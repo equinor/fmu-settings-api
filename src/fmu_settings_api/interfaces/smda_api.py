@@ -21,6 +21,7 @@ class SmdaRoutes:
     STRAT_UNITS_SEARCH: Final[str] = "smda-api/strat-units/search"
     COORDINATE_SYSTEM_SEARCH: Final[str] = "smda-api/crs/search"
     SURFACE_SEARCH: Final[str] = "smda-api/strat-surface-names/search"
+    WELL_HEADER_SEARCH: Final[str] = "smda-api/wellheader-insight-headers/search"
 
 
 class SmdaAPI:
@@ -110,6 +111,16 @@ class SmdaAPI:
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
         return await self.post(
             SmdaRoutes.DISCOVERIES_SEARCH,
+            json={"_projection": _projection, "field_identifier": field_identifiers},
+        )
+
+    async def well_headers(
+        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+    ) -> httpx2.Response:
+        """Searches for well headers related to a field identifier."""
+        _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        return await self.post(
+            SmdaRoutes.WELL_HEADER_SEARCH,
             json={"_projection": _projection, "field_identifier": field_identifiers},
         )
 

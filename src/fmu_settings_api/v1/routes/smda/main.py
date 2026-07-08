@@ -20,6 +20,7 @@ from fmu_settings_api.models.smda import (
     SmdaSelectedField,
     SmdaStratColumn,
     SmdaStratigraphicUnitsResult,
+    SmdaWellHeadersResult,
 )
 from fmu_settings_api.v1.responses import (
     GetSessionResponses,
@@ -34,6 +35,7 @@ SmdaUpstreamErrorResponses: Final[Responses] = {
         [
             {"detail": "At least one SMDA field must be provided"},
             {"detail": "A stratigraphic column identifier must be provided"},
+            {"detail": "A field identifier must be provided"},
         ],
     ),
     **inline_add_response(
@@ -55,6 +57,7 @@ SmdaUpstreamErrorResponses: Final[Responses] = {
         [
             {"detail": "No fields found for identifiers: {identifiers}"},
             {"detail": "No stratigraphic units found for column: {identifier}"},
+            {"detail": "No well headers found for field identifier: {identifier}"},
         ],
     ),
     **inline_add_response(
@@ -317,6 +320,64 @@ async def post_strat_units(
             case msg if "No stratigraphic units found" in msg:
                 status_code = 422
             case _:
+                status_code = 400
+        raise HTTPException(
+            status_code=status_code,
+            detail=error_msg,
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except httpx2.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"SMDA error requesting {e.request.url}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except KeyError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Malformed response from SMDA: {e}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except TimeoutError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="SMDA API request timed out. Please try again.",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+
+
+@router.post(
+    "/well_headers",
+    response_model=SmdaWellHeadersResult,
+    summary="Retrieves well headers for a field",
+    description=dedent(
+        """
+        A route to gather well header data from SMDA for a specified field.
+
+        This route receives a valid field identifier and returns the well header
+        fields needed to identify and map SMDA wellbores against model well names.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **SmdaUpstreamErrorResponses,
+    },
+)
+async def post_well_headers(
+    field: SmdaField,
+    smda_service: ProjectSmdaServiceDep,
+) -> SmdaWellHeadersResult:
+    """Queries SMDA well headers for a specified field."""
+    try:
+        return await smda_service.get_well_headers(field.identifier)
+    except ValueError as e:
+        error_msg = str(e)
+        match error_msg:
+            case msg if "A field identifier must be provided" in msg:
+                status_code = 400
+            case msg if "No well headers found" in msg:
+                status_code = 422
+            case _:  # pragma: no cover
                 status_code = 400
         raise HTTPException(
             status_code=status_code,

@@ -12,7 +12,10 @@ from fmu.datamodels.common.masterdata import (
     DiscoveryItem,
     StratigraphicColumn,
 )
-from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
+from fmu.settings._drogon import (
+    MASTERDATA as DROGON_MASTERDATA,
+    RMS_WELLS as DROGON_RMS_WELLS,
+)
 
 from fmu_settings_api.models.smda import SmdaField, SmdaSelectedField
 from fmu_settings_api.services.smda import SmdaService
@@ -62,6 +65,127 @@ async def test_get_countries(given: list[str], mock_val: list[CountryItem]) -> N
         assert [mock_val[0]] == res
     else:
         assert res == mock_val
+
+
+async def test_get_well_headers_result() -> None:
+    """Tests public well header lookup queries and deduplicates well header data."""
+    mock_smda = AsyncMock()
+    well_header_resp = MagicMock()
+    well_uuid = UUID("15ce3b84-766f-4c93-9050-b154861f9100")
+    wellbore_uuid = UUID("25ce3b84-766f-4c93-9050-b154861f9100")
+    well_header_data = {
+        "unique_well_identifier": "NO 30/9-B",
+        "unique_wellbore_identifier": "NO 30/9-B-43 A",
+        "official_wellbore_name": None,
+        "country_identifier": "Norway",
+        "parent_wellbore": None,
+        "wellbore_type": "initial",
+        "wellbore_purpose": "production",
+        "wellbore_status": "completed",
+        "wellbore_purpose_planned": "production",
+        "drill_year": 2024,
+        "completion_date": "2024-10-01",
+        "discovery_internal_identifier": "DISC-1",
+        "multilateral": 0,
+        "projected_coordinate_unit": "m",
+        "projected_coordinate_system": "ST_WGS84_UTM37N_P32637",
+        "well_uuid": well_uuid,
+        "wellbore_uuid": wellbore_uuid,
+    }
+    well_header_resp.json.return_value = {
+        "data": {"results": [well_header_data, well_header_data]}
+    }
+    mock_smda.well_headers.return_value = well_header_resp
+
+    service = SmdaService(mock_smda)
+    res = await service.get_well_headers("TROLL")
+
+    mock_smda.well_headers.assert_called_with(
+        ["TROLL"],
+        columns=[
+            "unique_well_identifier",
+            "unique_wellbore_identifier",
+            "official_wellbore_name",
+            "country_identifier",
+            "parent_wellbore",
+            "wellbore_type",
+            "wellbore_purpose",
+            "wellbore_status",
+            "wellbore_purpose_planned",
+            "drill_year",
+            "completion_date",
+            "discovery_internal_identifier",
+            "multilateral",
+            "projected_coordinate_unit",
+            "projected_coordinate_system",
+            "well_uuid",
+            "wellbore_uuid",
+        ],
+    )
+    assert len(res.well_headers) == 1
+    assert res.well_headers[0].unique_well_identifier == "NO 30/9-B"
+    assert res.well_headers[0].unique_wellbore_identifier == "NO 30/9-B-43 A"
+    assert res.well_headers[0].official_wellbore_name is None
+    assert res.well_headers[0].well_uuid == well_uuid
+    assert res.well_headers[0].wellbore_uuid == wellbore_uuid
+
+
+async def test_get_well_headers_empty_identifier() -> None:
+    """Tests that well header lookup requires a field identifier."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(ValueError, match="A field identifier must be provided"):
+        await service.get_well_headers("")
+
+    mock_smda.well_headers.assert_not_called()
+
+
+async def test_get_well_headers_no_results() -> None:
+    """Tests that well header lookup raises when no results are found."""
+    mock_smda = AsyncMock()
+    well_header_resp = MagicMock()
+    well_header_resp.json.return_value = {"data": {"results": []}}
+    mock_smda.well_headers.return_value = well_header_resp
+
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(
+        ValueError,
+        match="No well headers found for field identifier: TROLL",
+    ):
+        await service.get_well_headers("TROLL")
+
+
+async def test_get_drogon_well_headers_uses_drogon_data() -> None:
+    """Tests that Drogon well header lookup does not call SMDA and uses Drogon data."""
+    mock_smda = AsyncMock()
+    service = SmdaService(mock_smda)
+
+    res = await service.get_well_headers("Drogon")
+
+    mock_smda.well_headers.assert_not_called()
+    assert [header.official_wellbore_name for header in res.well_headers] == [
+        well["name"] for well in DROGON_RMS_WELLS
+    ]
+    assert [header.unique_well_identifier for header in res.well_headers] == [
+        f"NO {well['name']}" for well in DROGON_RMS_WELLS
+    ]
+    assert [header.unique_wellbore_identifier for header in res.well_headers] == [
+        f"NO {well['name']}" for well in DROGON_RMS_WELLS
+    ]
+    assert res.well_headers[0].country_identifier == "Norway"
+    assert res.well_headers[0].projected_coordinate_system == "ST_WGS84_UTM37N_P32637"
+    assert res.well_headers[0].parent_wellbore is None
+    assert res.well_headers[0].wellbore_purpose == "production"
+    assert res.well_headers[0].wellbore_status == "operating"
+    assert res.well_headers[0].multilateral == 0
+    multilateral_well = next(
+        header
+        for header in res.well_headers
+        if header.official_wellbore_name == "MLW_OP5_Y1"
+    )
+    assert multilateral_well.multilateral == 1
 
 
 @pytest.mark.parametrize(
