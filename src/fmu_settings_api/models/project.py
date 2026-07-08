@@ -34,13 +34,13 @@ class GlobalConfigPath(BaseResponseModel):
     """Relative path in the project to a global config file."""
 
 
-class MappingFilePath(BaseResponseModel):
-    """A path to a mappings import or export file, relative to the project root."""
+class RmsSimulatorMappingFilePath(BaseResponseModel):
+    """A path to an RMS-to-simulator mapping import or export file."""
 
     relative_path: Path = Field(
         examples=["rms/input/well_modelling/well_info/rms_eclipse.csv"]
     )
-    """Path to a mappings import or export file, relative to the project root."""
+    """Relative path in the project to an RMS-to-simulator mapping file."""
 
 
 class CacheRetention(BaseResponseModel):

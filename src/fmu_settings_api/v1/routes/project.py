@@ -59,8 +59,8 @@ from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
     LockStatus,
-    MappingFilePath,
     MasterdataSmdaMismatchDetail,
+    RmsSimulatorMappingFilePath,
     SumoAsset,
 )
 from fmu_settings_api.models.resource import CacheContent, CacheList
@@ -308,7 +308,7 @@ MappingsResponses: Final[Responses] = {
     ),
     **inline_add_response(
         404,
-        "Project mappings could not be processed because the project path was missing",
+        "Project mappings could not be updated because the project path was missing",
         [{"detail": "Project .fmu directory not found. It may have been deleted."}],
     ),
     **inline_add_response(
@@ -326,13 +326,53 @@ MappingsResponses: Final[Responses] = {
                     "invalid saved mappings."
                 )
             },
+            {"detail": "Invalid mappings: {error_message}"},
+        ],
+    ),
+}
+
+RmsSimulatorMappingsFileResponses: Final[Responses] = {
+    **inline_add_response(
+        403,
+        "The RMS-to-simulator wellbore mapping file could not be read or written",
+        [
+            {"detail": "Permission denied accessing .fmu at {path}"},
+            {"detail": "Permission denied while trying to export the mappings."},
+        ],
+    ),
+    **inline_add_response(
+        404,
+        "The RMS-to-simulator wellbore mapping file could not be found",
+        [
+            {"detail": "CSV file not found: '{path}'"},
+            {"detail": "Mappings file not found"},
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            The RMS-to-simulator wellbore mapping file contains invalid content,
+            or no mappings can be exported.
+            """
+        ),
+        [
+            {"detail": "CSV file is missing required columns: {column_names}"},
+            {"detail": "CSV row has missing well mapping values at line {line_number}"},
+            {"detail": "Invalid mappings: {error_message}"},
+            {"detail": "Invalid mappings in existing file: {error_message}"},
             {
                 "detail": (
                     "Mappings were not exported because the project contains "
                     "invalid saved mappings."
                 )
             },
-            {"detail": "Invalid mappings: {error_message}"},
+            {
+                "detail": (
+                    "No rms-to-simulator primary wellbore mappings available to "
+                    "export as rms_simulator.renaming_table"
+                )
+            },
         ],
     ),
 }
@@ -1570,20 +1610,21 @@ async def put_mappings(
     description=dedent(
         """
         Reads an rms_eclipse.csv-format file from the project and returns the
-        imported RMS-to-simulator internal wellbore mappings. The path is relative
-        to the project root. If no path is provided, the default path relative to
-        the project root is rms/input/well_modelling/well_info/rms_eclipse.csv.
+        imported RMS-to-simulator mappings in the internal wellbore mapping format.
+        The path is relative to the project root. If no path is provided, the default
+        path relative to the project root is
+        rms/input/well_modelling/well_info/rms_eclipse.csv.
         """
     ),
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **MappingsResponses,
+        **RmsSimulatorMappingsFileResponses,
     },
 )
 async def post_mappings_import_rms_eclipse_csv(
     mappings_service: MappingsServiceDep,
-    path: MappingFilePath | None = None,
+    path: RmsSimulatorMappingFilePath | None = None,
 ) -> InternalMappings:
     """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
     try:
@@ -1626,13 +1667,13 @@ async def post_mappings_import_rms_eclipse_csv(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **MappingsResponses,
+        **RmsSimulatorMappingsFileResponses,
         **LockConflictResponses,
     },
 )
 async def post_mappings_export_rms_simulator_renaming_table(
     mappings_service: MappingsServiceDep,
-    path: MappingFilePath | None = None,
+    path: RmsSimulatorMappingFilePath | None = None,
 ) -> Message:
     """Export RMS-to-simulator wellbore mappings to a renaming table file."""
     try:
