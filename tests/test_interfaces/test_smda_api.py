@@ -299,7 +299,26 @@ async def test_smda_discovery_search(mock_httpx_post: MagicMock) -> None:
 
 
 async def test_smda_well_header_search(mock_httpx_post: MagicMock) -> None:
-    """Tests well header search sends correct payload."""
+    """Tests well header search sends default payload."""
+    api = SmdaAPI("token", "key")
+
+    res = await api.well_headers(["FIELD_A"])
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.WELL_HEADER_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "field_identifier": ["FIELD_A"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_well_header_search_with_columns(
+    mock_httpx_post: MagicMock,
+) -> None:
+    """Tests well header search sends requested projection."""
     api = SmdaAPI("token", "key")
 
     res = await api.well_headers(["FIELD_A"], columns=["unique_well_identifier"])
