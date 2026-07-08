@@ -34,6 +34,15 @@ class GlobalConfigPath(BaseResponseModel):
     """Relative path in the project to a global config file."""
 
 
+class RmsSimulatorMappingFilePath(BaseResponseModel):
+    """A path to an RMS-to-simulator mapping import or export file."""
+
+    relative_path: Path = Field(
+        examples=["rms/input/well_modelling/well_info/rms_eclipse.csv"]
+    )
+    """Relative path in the project to an RMS-to-simulator mapping file."""
+
+
 class CacheRetention(BaseResponseModel):
     """Cache retention setting for project resources."""
 
