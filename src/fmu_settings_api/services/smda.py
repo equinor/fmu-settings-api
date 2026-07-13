@@ -38,8 +38,8 @@ from fmu_settings_api.models.smda import (
 logger = get_logger(__name__)
 
 
-def _smda_wellbore_name(rms_well_name: str) -> str:
-    """Convert an RMS well name to an SMDA-style wellbore name."""
+def _drogon_wellbore_identifier(rms_well_name: str) -> str:
+    """Convert a Drogon RMS well name to an SMDA-style wellbore identifier."""
     name = re.sub(r"(?<=\d)_(?=\d)", "/", rms_well_name, count=1)
     return f"NO {name.replace('_', ' ')}"
 
@@ -82,8 +82,8 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
 ]
 DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
     SmdaWellHeader(
-        unique_well_identifier=_smda_wellbore_name(str(well["name"])),
-        unique_wellbore_identifier=_smda_wellbore_name(str(well["name"])),
+        unique_well_identifier=_drogon_wellbore_identifier(str(well["name"])),
+        unique_wellbore_identifier=_drogon_wellbore_identifier(str(well["name"])),
         official_wellbore_name=str(well["name"]),
         country_identifier=DROGON_SMDA_MASTERDATA["country"][0]["identifier"],
         parent_wellbore=None,
