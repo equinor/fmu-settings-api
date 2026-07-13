@@ -168,11 +168,15 @@ async def test_get_drogon_well_headers_uses_drogon_data() -> None:
     assert [header.official_wellbore_name for header in res.well_headers] == [
         well["name"] for well in DROGON_RMS_WELLS
     ]
-    assert [header.unique_well_identifier for header in res.well_headers] == [
-        f"NO {well['name']}" for well in DROGON_RMS_WELLS
-    ]
+    identifiers_by_name = {
+        header.official_wellbore_name: header.unique_well_identifier
+        for header in res.well_headers
+    }
+    assert identifiers_by_name["55_33-A-1"] == "NO 55/33-A-1"
+    assert identifiers_by_name["OP5_Y1"] == "NO OP5 Y1"
+    assert identifiers_by_name["RFT_55_33-A-2"] == "NO RFT 55/33-A-2"
     assert [header.unique_wellbore_identifier for header in res.well_headers] == [
-        f"NO {well['name']}" for well in DROGON_RMS_WELLS
+        header.unique_well_identifier for header in res.well_headers
     ]
     assert res.well_headers[0].country_identifier == "Norway"
     assert res.well_headers[0].projected_coordinate_system == "ST_WGS84_UTM37N_P32637"

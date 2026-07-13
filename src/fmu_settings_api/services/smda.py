@@ -1,6 +1,7 @@
 """Service for querying and translating results from SMDA."""
 
 import asyncio
+import re
 from collections.abc import Sequence
 from typing import Any, Final
 from uuid import NAMESPACE_URL, uuid5
@@ -35,6 +36,13 @@ from fmu_settings_api.models.smda import (
 )
 
 logger = get_logger(__name__)
+
+
+def _smda_wellbore_name(rms_well_name: str) -> str:
+    """Convert an RMS well name to an SMDA-style wellbore name."""
+    name = re.sub(r"(?<=\d)_(?=\d)", "/", rms_well_name, count=1)
+    return f"NO {name.replace('_', ' ')}"
+
 
 DROGON_SMDA_MASTERDATA: Final[dict[str, Any]] = DROGON_MASTERDATA["smda"]
 DROGON_FIELD: Final[dict[str, Any]] = DROGON_SMDA_MASTERDATA["field"][0]
@@ -74,8 +82,8 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
 ]
 DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
     SmdaWellHeader(
-        unique_well_identifier=f"NO {well['name']}",
-        unique_wellbore_identifier=f"NO {well['name']}",
+        unique_well_identifier=_smda_wellbore_name(str(well["name"])),
+        unique_wellbore_identifier=_smda_wellbore_name(str(well["name"])),
         official_wellbore_name=str(well["name"]),
         country_identifier=DROGON_SMDA_MASTERDATA["country"][0]["identifier"],
         parent_wellbore=None,
