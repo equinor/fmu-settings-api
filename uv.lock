@@ -378,7 +378,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi" },
+    { name = "fastapi", specifier = ">=0.138.0" },
     { name = "fmu-datamodels", specifier = ">=0.21.4" },
     { name = "fmu-settings", specifier = ">=1.0.0" },
     { name = "fmu-settings-cli", marker = "extra == 'dev'" },

@@ -1,6 +1,7 @@
 """Tests for the __main__ module."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
@@ -11,9 +12,11 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from fmu_settings_api.__main__ import (
+    add_frontend,
     app,
     logging_http_exception_handler,
     logging_request_validation_exception_handler,
+    run_server,
 )
 from fmu_settings_api.middleware.logging import LoggingMiddleware
 from fmu_settings_api.models import Ok
@@ -37,6 +40,52 @@ def test_health_check() -> None:
     assert response.status_code == status.HTTP_200_OK, response.json()
     assert response.json() == {"status": "ok"}
     assert Ok() == Ok.model_validate(response.json())
+
+
+def test_add_frontend_serves_spa_without_hiding_api_routes(tmp_path: Path) -> None:
+    """Serve frontend files and keep explicit API routes at higher priority."""
+    frontend_directory = tmp_path / "static"
+    assets_directory = frontend_directory / "assets"
+    assets_directory.mkdir(parents=True)
+    (frontend_directory / "index.html").write_text(
+        "<html>frontend</html>", encoding="utf-8"
+    )
+    (assets_directory / "app.js").write_text("app", encoding="utf-8")
+
+    test_app = FastAPI()
+
+    @test_app.get("/api/value")
+    async def get_value() -> dict[str, str]:
+        return {"value": "api"}
+
+    add_frontend(test_app, frontend_directory)
+    local_client = TestClient(test_app)
+
+    api_response = local_client.get("/api/value")
+    route_response = local_client.get(
+        "/project/masterdata", headers={"accept": "text/html"}
+    )
+    asset_response = local_client.get("/assets/app.js")
+
+    assert api_response.json() == {"value": "api"}
+    assert route_response.text == "<html>frontend</html>"
+    assert asset_response.text == "app"
+
+
+def test_run_server_adds_frontend(tmp_path: Path) -> None:
+    """Add the frontend when its directory is supplied."""
+    with (
+        patch("fmu_settings_api.__main__.UserFMUDirectory") as user_directory,
+        patch("fmu_settings_api.__main__.UserSessionLogManager"),
+        patch("fmu_settings_api.__main__.setup_logging"),
+        patch("fmu_settings_api.__main__.uvicorn.run"),
+        patch("fmu_settings_api.__main__.app") as test_app,
+        patch("fmu_settings_api.__main__.add_frontend") as add_frontend_mock,
+    ):
+        user_directory.return_value.path = tmp_path
+        run_server(frontend_directory=tmp_path, reload=True)
+
+    add_frontend_mock.assert_called_once_with(test_app, tmp_path)
 
 
 def test_shutdown_releases_project_lock() -> None:
