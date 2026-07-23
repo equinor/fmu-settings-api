@@ -5,6 +5,7 @@ import sys
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -149,6 +150,11 @@ async def health_check() -> Ok:
     return Ok()
 
 
+def add_frontend(frontend_app: FastAPI, directory: Path) -> None:
+    """Serve a built single-page application from a FastAPI application."""
+    frontend_app.frontend("/", directory=directory, fallback="index.html")
+
+
 def run_server(  # noqa: PLR0913
     *,
     host: str = "127.0.0.1",
@@ -158,8 +164,9 @@ def run_server(  # noqa: PLR0913
     token: str | None = None,
     reload: bool = False,
     log_level: str = "critical",
+    frontend_directory: Path | None = None,
 ) -> None:
-    """Starts the API server."""
+    """Start the API server and, when supplied, its built frontend."""
     log_level = log_level.lower()
 
     try:
@@ -194,6 +201,9 @@ def run_server(  # noqa: PLR0913
             allow_headers=["*"],
             expose_headers=[HttpHeader.UPSTREAM_SOURCE_KEY],
         )
+
+    if frontend_directory is not None:
+        add_frontend(app, frontend_directory)
 
     if reload:
         uvicorn.run(
