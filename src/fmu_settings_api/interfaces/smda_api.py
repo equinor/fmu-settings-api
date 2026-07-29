@@ -115,13 +115,23 @@ class SmdaAPI:
         )
 
     async def well_headers(
-        self, field_identifiers: Sequence[str], columns: Sequence[str] | None = None
+        self,
+        field_identifiers: Sequence[str] | None = None,
+        columns: Sequence[str] | None = None,
+        field_uuid: UUID | None = None,
     ) -> httpx2.Response:
-        """Searches for well headers related to a field identifier."""
+        """Searches for well headers related to a field."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
+        json: dict[str, Any] = {"_projection": _projection}
+
+        if field_identifiers:
+            json["field_identifier"] = field_identifiers
+        if field_uuid is not None:
+            json["field_uuid"] = [str(field_uuid)]
+
         return await self.post(
             SmdaRoutes.WELL_HEADER_SEARCH,
-            json={"_projection": _projection, "field_identifier": field_identifiers},
+            json=json,
         )
 
     async def strat_column_areas(

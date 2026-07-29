@@ -332,3 +332,23 @@ async def test_smda_well_header_search_with_columns(
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
+
+
+async def test_smda_well_header_search_with_uuid(
+    mock_httpx_post: MagicMock,
+) -> None:
+    """Tests well header search can query using a field UUID."""
+    api = SmdaAPI("token", "key")
+    field_uuid = UUID("c8da9f15-f7d9-4d47-a2a3-60e34e9d15d7")
+
+    res = await api.well_headers(field_uuid=field_uuid)
+
+    mock_httpx_post.assert_called_with(
+        f"{SmdaRoutes.BASE_URL}/{SmdaRoutes.WELL_HEADER_SEARCH}",
+        headers=api._headers,
+        json={
+            "_projection": "identifier,uuid",
+            "field_uuid": ["c8da9f15-f7d9-4d47-a2a3-60e34e9d15d7"],
+        },
+    )
+    res.raise_for_status.assert_called_once()  # type: ignore

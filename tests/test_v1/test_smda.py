@@ -23,6 +23,7 @@ from fmu_settings_api.deps.smda import get_project_smda_service
 from fmu_settings_api.models.smda import (
     SmdaFieldSearchResult,
     SmdaFieldUUID,
+    SmdaSelectedField,
     SmdaWellHeadersResult,
 )
 
@@ -1267,7 +1268,8 @@ async def test_post_well_headers_success(
     client_with_smda_session: TestClient,
     session_tmp_path: Path,
 ) -> None:
-    """Tests successful post to well_headers with valid field identifier."""
+    """Tests successful post to well_headers with a selected field."""
+    field_uuid = uuid4()
     smda_service = MagicMock()
     smda_service.get_well_headers = AsyncMock(
         return_value=SmdaWellHeadersResult(well_headers=[])
@@ -1276,7 +1278,7 @@ async def test_post_well_headers_success(
 
     response = client_with_smda_session.post(
         f"{ROUTE}/well_headers",
-        json={"identifier": "TROLL"},
+        json={"identifier": "TROLL", "uuid": str(field_uuid)},
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
@@ -1285,7 +1287,9 @@ async def test_post_well_headers_success(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert response.json() == {"well_headers": []}
-    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="TROLL", uuid=field_uuid)
+    )
 
 
 async def test_post_well_headers_empty_results(
@@ -1312,7 +1316,9 @@ async def test_post_well_headers_empty_results(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert "No well headers found" in response.json()["detail"]
-    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="TROLL")
+    )
 
 
 async def test_post_well_headers_drogon_identifier_calls_service(
@@ -1332,7 +1338,9 @@ async def test_post_well_headers_drogon_identifier_calls_service(
     )
 
     assert response.status_code == status.HTTP_200_OK, response.json()
-    smda_service.get_well_headers.assert_awaited_once_with("Drogon")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="Drogon")
+    )
 
 
 async def test_post_well_headers_empty_identifier(
@@ -1357,7 +1365,9 @@ async def test_post_well_headers_empty_identifier(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert "must be provided" in response.json()["detail"]
-    smda_service.get_well_headers.assert_awaited_once_with("")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="")
+    )
 
 
 async def test_post_well_headers_malformed_response(
@@ -1382,7 +1392,9 @@ async def test_post_well_headers_malformed_response(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert "Malformed response from SMDA" in response.json()["detail"]
-    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="TROLL")
+    )
 
 
 async def test_post_well_headers_request_timeout(
@@ -1407,7 +1419,9 @@ async def test_post_well_headers_request_timeout(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert response.json()["detail"] == "SMDA API request timed out. Please try again."
-    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="TROLL")
+    )
 
 
 async def test_post_well_headers_http_error(
@@ -1440,4 +1454,6 @@ async def test_post_well_headers_http_error(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert "SMDA error requesting" in response.json()["detail"]
-    smda_service.get_well_headers.assert_awaited_once_with("TROLL")
+    smda_service.get_well_headers.assert_awaited_once_with(
+        SmdaSelectedField(identifier="TROLL")
+    )

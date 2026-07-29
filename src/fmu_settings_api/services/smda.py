@@ -379,17 +379,18 @@ class SmdaService:
                 strat_unit_items.append(strat_unit_item)
         return SmdaStratigraphicUnitsResult(stratigraphic_units=strat_unit_items)
 
-    async def get_well_headers(self, field_identifier: str) -> SmdaWellHeadersResult:
-        """Queries well headers for a field identifier."""
-        if not field_identifier:
+    async def get_well_headers(self, field: SmdaSelectedField) -> SmdaWellHeadersResult:
+        """Queries well headers for a selected SMDA field."""
+        if not field.identifier:
             raise ValueError("A field identifier must be provided")
 
-        if _is_drogon_identifier(field_identifier):
+        if _is_drogon_identifier(field.identifier):
             return SmdaWellHeadersResult(well_headers=DROGON_WELL_HEADERS)
 
         well_header_items = []
         well_header_res = await self._smda.well_headers(
-            [field_identifier],
+            field_identifiers=None if field.uuid is not None else [field.identifier],
+            field_uuid=field.uuid,
             columns=[
                 "unique_well_identifier",
                 "unique_wellbore_identifier",
@@ -416,8 +417,10 @@ class SmdaService:
             if well_header_item not in well_header_items:
                 well_header_items.append(well_header_item)
         if not well_header_items:
+            if field.uuid is not None:
+                raise ValueError(f"No well headers found for field UUID: {field.uuid}")
             raise ValueError(
-                f"No well headers found for field identifier: {field_identifier}"
+                f"No well headers found for field identifier: {field.identifier}"
             )
         return SmdaWellHeadersResult(well_headers=well_header_items)
 
