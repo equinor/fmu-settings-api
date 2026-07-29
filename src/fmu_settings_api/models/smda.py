@@ -23,7 +23,7 @@ class SmdaField(BaseResponseModel):
 
 
 class SmdaSelectedField(BaseResponseModel):
-    """A selected field for masterdata lookup."""
+    """A selected SMDA field."""
 
     identifier: str = Field(examples=["TROLL"])
     """A field identifier (name)."""

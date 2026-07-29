@@ -98,10 +98,11 @@ async def test_get_well_headers_result() -> None:
     mock_smda.well_headers.return_value = well_header_resp
 
     service = SmdaService(mock_smda)
-    res = await service.get_well_headers("TROLL")
+    res = await service.get_well_headers(SmdaSelectedField(identifier="TROLL"))
 
     mock_smda.well_headers.assert_called_with(
-        ["TROLL"],
+        field_identifiers=["TROLL"],
+        field_uuid=None,
         columns=[
             "unique_well_identifier",
             "unique_wellbore_identifier",
@@ -136,7 +137,7 @@ async def test_get_well_headers_empty_identifier() -> None:
     service = SmdaService(mock_smda)
 
     with pytest.raises(ValueError, match="A field identifier must be provided"):
-        await service.get_well_headers("")
+        await service.get_well_headers(SmdaSelectedField(identifier=""))
 
     mock_smda.well_headers.assert_not_called()
 
@@ -154,7 +155,7 @@ async def test_get_well_headers_no_results() -> None:
         ValueError,
         match="No well headers found for field identifier: TROLL",
     ):
-        await service.get_well_headers("TROLL")
+        await service.get_well_headers(SmdaSelectedField(identifier="TROLL"))
 
 
 async def test_get_drogon_well_headers_uses_drogon_data() -> None:
@@ -162,7 +163,7 @@ async def test_get_drogon_well_headers_uses_drogon_data() -> None:
     mock_smda = AsyncMock()
     service = SmdaService(mock_smda)
 
-    res = await service.get_well_headers("Drogon")
+    res = await service.get_well_headers(SmdaSelectedField(identifier="Drogon"))
 
     mock_smda.well_headers.assert_not_called()
     assert [header.official_wellbore_name for header in res.well_headers] == [
@@ -190,6 +191,29 @@ async def test_get_drogon_well_headers_uses_drogon_data() -> None:
         if header.official_wellbore_name == "MLW_OP5_Y1"
     )
     assert multilateral_well.multilateral == 1
+
+
+async def test_get_well_headers_uses_selected_field_uuid() -> None:
+    """Tests that well header lookup uses the selected field UUID."""
+    mock_smda = AsyncMock()
+    field_uuid = uuid4()
+    well_header_resp = MagicMock()
+    well_header_resp.json.return_value = {"data": {"results": []}}
+    mock_smda.well_headers.return_value = well_header_resp
+
+    service = SmdaService(mock_smda)
+
+    with pytest.raises(
+        ValueError,
+        match=f"No well headers found for field UUID: {field_uuid}",
+    ):
+        await service.get_well_headers(
+            SmdaSelectedField(identifier="TROLL", uuid=field_uuid)
+        )
+
+    mock_smda.well_headers.assert_awaited_once()
+    assert mock_smda.well_headers.await_args.kwargs["field_identifiers"] is None
+    assert mock_smda.well_headers.await_args.kwargs["field_uuid"] == field_uuid
 
 
 @pytest.mark.parametrize(

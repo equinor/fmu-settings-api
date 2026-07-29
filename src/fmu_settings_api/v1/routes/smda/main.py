@@ -58,6 +58,7 @@ SmdaUpstreamErrorResponses: Final[Responses] = {
             {"detail": "No fields found for identifiers: {identifiers}"},
             {"detail": "No stratigraphic units found for column: {identifier}"},
             {"detail": "No well headers found for field identifier: {identifier}"},
+            {"detail": "No well headers found for field UUID: {uuid}"},
         ],
     ),
     **inline_add_response(
@@ -354,8 +355,11 @@ async def post_strat_units(
         """
         A route to gather well header data from SMDA for a specified field.
 
-        This route receives a valid field identifier and returns the well header
-        fields needed to identify and map SMDA wellbores against model well names.
+        This route receives a selected SMDA field and returns the well header
+        attributes needed to identify and map SMDA wellbores against model well
+        names. When provided, the field UUID is used to find well headers for the
+        selected SMDA field. If no field UUID is provided, the field identifier is
+        used instead.
         """
     ),
     responses={
@@ -364,12 +368,12 @@ async def post_strat_units(
     },
 )
 async def post_well_headers(
-    field: SmdaField,
+    field: SmdaSelectedField,
     smda_service: ProjectSmdaServiceDep,
 ) -> SmdaWellHeadersResult:
-    """Queries SMDA well headers for a specified field."""
+    """Queries SMDA well headers for a specified SMDA field."""
     try:
-        return await smda_service.get_well_headers(field.identifier)
+        return await smda_service.get_well_headers(field)
     except ValueError as e:
         error_msg = str(e)
         match error_msg:
