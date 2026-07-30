@@ -35,7 +35,7 @@ fmu settings api --print-token --reload
 ## API Documentation
 
 The routes have documentation on them. To view them, and work with the API go
-to `localhost:8001/docs` (or whatever your port may end up being).
+to `localhost:8000/docs` (or whatever your port may end up being).
 
 ## Configuration
 
