@@ -78,7 +78,7 @@ def test_run_server_adds_frontend(tmp_path: Path) -> None:
         patch("fmu_settings_api.__main__.UserFMUDirectory") as user_directory,
         patch("fmu_settings_api.__main__.UserSessionLogManager"),
         patch("fmu_settings_api.__main__.setup_logging"),
-        patch("fmu_settings_api.__main__.uvicorn.run"),
+        patch("fmu_settings_api.__main__.uvicorn.run") as uvicorn_run,
         patch("fmu_settings_api.__main__.app") as test_app,
         patch("fmu_settings_api.__main__.add_frontend") as add_frontend_mock,
     ):
@@ -86,6 +86,7 @@ def test_run_server_adds_frontend(tmp_path: Path) -> None:
         run_server(frontend_directory=tmp_path, reload=True)
 
     add_frontend_mock.assert_called_once_with(test_app, tmp_path)
+    assert uvicorn_run.call_args.kwargs["port"] == 8000
 
 
 def test_shutdown_releases_project_lock() -> None:

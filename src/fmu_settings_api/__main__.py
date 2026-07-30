@@ -158,7 +158,7 @@ def add_frontend(frontend_app: FastAPI, directory: Path) -> None:
 def run_server(  # noqa: PLR0913
     *,
     host: str = "127.0.0.1",
-    port: int = 8001,
+    port: int = 8000,
     frontend_host: str | None = None,
     frontend_port: int | None = None,
     token: str | None = None,
