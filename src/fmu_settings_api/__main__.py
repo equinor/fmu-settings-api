@@ -152,7 +152,7 @@ async def health_check() -> Ok:
 
 def add_frontend(frontend_app: FastAPI, directory: Path) -> None:
     """Serve a built single-page application from a FastAPI application."""
-    frontend_app.frontend("/", directory=directory, fallback="index.html")
+    frontend_app.frontend("/", directory=directory)
 
 
 def run_server(  # noqa: PLR0913
