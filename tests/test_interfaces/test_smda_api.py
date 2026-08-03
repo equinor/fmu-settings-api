@@ -310,6 +310,7 @@ async def test_smda_well_header_search(mock_httpx_post: MagicMock) -> None:
         json={
             "_projection": "identifier,uuid",
             "field_identifier": ["FIELD_A"],
+            "_items": 9999,
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
@@ -329,6 +330,7 @@ async def test_smda_well_header_search_with_columns(
         json={
             "_projection": "unique_well_identifier",
             "field_identifier": ["FIELD_A"],
+            "_items": 9999,
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore
@@ -349,6 +351,7 @@ async def test_smda_well_header_search_with_uuid(
         json={
             "_projection": "identifier,uuid",
             "field_uuid": ["c8da9f15-f7d9-4d47-a2a3-60e34e9d15d7"],
+            "_items": 9999,
         },
     )
     res.raise_for_status.assert_called_once()  # type: ignore

@@ -122,7 +122,7 @@ class SmdaAPI:
     ) -> httpx2.Response:
         """Searches for well headers related to a field."""
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
-        json: dict[str, Any] = {"_projection": _projection}
+        json: dict[str, Any] = {"_projection": _projection, "_items": 9999}
 
         if field_identifiers:
             json["field_identifier"] = field_identifiers
