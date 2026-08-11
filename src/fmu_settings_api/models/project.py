@@ -100,18 +100,18 @@ class ValidationMismatch(BaseResponseModel):
     saved_value: Any
     """The value currently saved in the project configuration."""
 
-    source_value: Any
-    """The value found in the validation source."""
+    source_value: Any | None
+    """The source value, or null when the saved item is not present."""
 
     message: str
     """Description of the mismatch."""
 
 
-class MasterdataSmdaMismatchDetail(BaseResponseModel):
-    """Details for project masterdata mismatches against SMDA."""
+class ValidationMismatchDetail(BaseResponseModel):
+    """Details for project validation mismatches."""
 
     message: str
     """Summary of the validation failure."""
 
     mismatches: list[ValidationMismatch]
-    """List of project masterdata values that do not match SMDA."""
+    """List of project values that do not match the validation source."""

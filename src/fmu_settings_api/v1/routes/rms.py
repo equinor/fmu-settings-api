@@ -13,14 +13,21 @@ from fmu.settings.models.project_config import (
 from runrms.api.proxy import RemoteException
 from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 
-from fmu_settings_api.deps import SessionServiceDep
+from fmu_settings_api.deps import (
+    ProjectValidationServiceDep,
+    RefreshLockDep,
+    SessionServiceDep,
+    WritePermissionDep,
+)
 from fmu_settings_api.deps.rms import (
     RmsProjectDep,
     RmsProjectPathDep,
     RmsServiceDep,
 )
 from fmu_settings_api.models.common import Message
+from fmu_settings_api.models.project import ValidationMismatchDetail
 from fmu_settings_api.models.rms import RmsVersion
+from fmu_settings_api.services.project_validation import RmsProjectMismatchError
 from fmu_settings_api.session import (
     SessionNotFoundError,
 )
@@ -90,6 +97,101 @@ FailedOpeningRmsProjectResponses: Final[Responses] = {
                     "or upgrade the RMS project."
                 )
             },
+        ],
+    ),
+}
+
+RmsProjectValidationResponses: Final[Responses] = {
+    **inline_add_response(
+        403,
+        "The project configuration cannot be accessed for writing.",
+        [
+            {
+                "detail": (
+                    "Permission denied accessing .fmu at {project_fmu_directory_path}"
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        404,
+        dedent(
+            """
+            The RMS project saved in the FMU project or its .master file could not
+            be accessed while determining its version.
+            """
+        ),
+        [
+            {"detail": "RMS project not found at '{rms_project_path}'."},
+            {
+                "detail": (
+                    "RMS version cannot be determined because the RMS project "
+                    ".master file is not found at {rms_project_path}."
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        423,
+        "The project is not locked for writing by the current session.",
+        [
+            {"detail": "Project is not locked. Acquire the lock before writing."},
+            {
+                "detail": (
+                    "Project lock file is missing. Project is treated as read-only."
+                )
+            },
+            {
+                "detail": (
+                    "Project is read-only. Cannot write to project that is locked "
+                    "by another process."
+                )
+            },
+        ],
+    ),
+    **inline_add_response(
+        422,
+        dedent(
+            """
+            The FMU project has no saved RMS settings, the saved settings do not
+            match the open RMS project, or the RMS version cannot be used.
+            """
+        ),
+        [
+            {"detail": "No RMS settings are saved in the FMU project."},
+            {
+                "detail": {
+                    "message": "Saved RMS settings do not match the open RMS project.",
+                    "mismatches": [
+                        {
+                            "key": "rms.horizons.Top",
+                            "saved_value": {
+                                "name": "Top",
+                                "type": "interpreted",
+                            },
+                            "source_value": {
+                                "name": "Top",
+                                "type": "calculated",
+                            },
+                            "message": (
+                                "RMS horizon 'Top' has different settings in the "
+                                "FMU project and the open RMS project."
+                            ),
+                        },
+                        {
+                            "key": "rms.wells.A-1",
+                            "saved_value": {"name": "A-1", "planned": False},
+                            "source_value": None,
+                            "message": (
+                                "RMS well 'A-1' is saved in the FMU project but is "
+                                "not present in the open RMS project."
+                            ),
+                        },
+                    ],
+                }
+            },
+            {"detail": "RMS version error for project at '{rms_project_path}'"},
+            {"detail": "Failed to validate the open RMS project: {error_message}"},
         ],
     ),
 }
@@ -195,6 +297,62 @@ async def delete_rms_project(session_service: SessionServiceDep) -> Message:
         return Message(message="RMS project closed successfully")
     except SessionNotFoundError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
+
+
+@router.post(
+    "/validate",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Validate saved RMS settings against the open RMS project",
+    description=dedent(
+        """
+        Compare the RMS settings saved in the FMU project with the open RMS
+        project.
+
+        The operation does not modify saved RMS settings. When validation
+        succeeds, it updates RMS validation metadata in project config.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **RmsResponses,
+        **RmsProjectValidationResponses,
+    },
+)
+async def post_validate_rms_project(
+    project_validation_service: ProjectValidationServiceDep,
+    rms_service: RmsServiceDep,
+    opened_rms_project: RmsProjectDep,
+) -> Message:
+    """Validate saved RMS configuration against the open RMS project."""
+    try:
+        project_validation_service.validate_rms_project(
+            rms_service,
+            opened_rms_project,
+        )
+    except RmsProjectMismatchError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=ValidationMismatchDetail(
+                message="Saved RMS settings do not match the open RMS project.",
+                mismatches=e.mismatches,
+            ).model_dump(),
+        ) from e
+    except RmsProjectNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except RmsVersionError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except RemoteException as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to validate the open RMS project: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    return Message(message="RMS project configuration validated successfully.")
 
 
 @router.get(
