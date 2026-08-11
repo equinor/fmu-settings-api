@@ -38,6 +38,7 @@ from fmu_settings_api.deps import (
     ProjectServiceDep,
     ProjectServiceForRestoreDep,
     ProjectSessionServiceDep,
+    ProjectSmdaServiceDep,
     ProjectValidationServiceDep,
     RefreshLockDep,
     ResourceServiceDep,
@@ -59,9 +60,9 @@ from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
     LockStatus,
-    MasterdataSmdaMismatchDetail,
     RmsSimulatorMappingFilePath,
     SumoAsset,
+    ValidationMismatchDetail,
 )
 from fmu_settings_api.models.resource import CacheContent, CacheList
 from fmu_settings_api.models.rms import (
@@ -979,15 +980,16 @@ async def patch_masterdata(
 )
 async def post_validate_masterdata_smda(
     validation_service: ProjectValidationServiceDep,
+    smda_service: ProjectSmdaServiceDep,
 ) -> Message:
     """Validates saved project SMDA masterdata against SMDA."""
     try:
-        await validation_service.validate_masterdata_smda()
+        await validation_service.validate_masterdata_smda(smda_service)
         return Message(message="Validated SMDA masterdata")
     except MasterdataSmdaMismatchError as e:
         raise HTTPException(
             status_code=422,
-            detail=MasterdataSmdaMismatchDetail(
+            detail=ValidationMismatchDetail(
                 message="Project masterdata does not match SMDA",
                 mismatches=e.mismatches,
             ).model_dump(),

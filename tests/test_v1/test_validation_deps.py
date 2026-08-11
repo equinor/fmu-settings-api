@@ -11,12 +11,7 @@ async def test_get_project_validation_service() -> None:
     project_session = MagicMock()
     project_fmu_directory = MagicMock()
     project_session.project_fmu_directory = project_fmu_directory
-    smda_service = MagicMock()
-
-    validation_service = await get_project_validation_service(
-        project_session, smda_service
-    )
+    validation_service = await get_project_validation_service(project_session)
 
     assert isinstance(validation_service, ProjectValidationService)
     assert validation_service._fmu_dir is project_fmu_directory
-    assert validation_service._smda_service is smda_service

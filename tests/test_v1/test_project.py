@@ -1089,7 +1089,7 @@ async def test_patch_masterdata_general_exception(
 
 
 async def test_post_validate_masterdata_smda_success(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata returns a success message."""
     validation_service = Mock()
@@ -1098,15 +1098,15 @@ async def test_post_validate_masterdata_smda_success(
         validation_service
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"message": "Validated SMDA masterdata"}
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_missing_masterdata_error(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps missing masterdata to 422."""
     validation_service = Mock()
@@ -1119,18 +1119,18 @@ async def test_post_validate_masterdata_smda_missing_masterdata_error(
         validation_service
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert (
         response.json()["detail"]
         == "Project masterdata must be set before validating against SMDA."
     )
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_mismatch_error(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps mismatch details to 422."""
     mismatch = ValidationMismatch(
@@ -1149,18 +1149,18 @@ async def test_post_validate_masterdata_smda_mismatch_error(
         validation_service
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["detail"] == {
         "message": "Project masterdata does not match SMDA",
         "mismatches": [mismatch.model_dump(mode="json")],
     }
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_smda_http_error(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps SMDA HTTP errors."""
     request = httpx2.Request("GET", "https://smda.example.test/masterdata")
@@ -1175,7 +1175,7 @@ async def test_post_validate_masterdata_smda_smda_http_error(
         validation_service
     )
 
-    api_response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    api_response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert api_response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert api_response.json()["detail"] == (
@@ -1185,11 +1185,11 @@ async def test_post_validate_masterdata_smda_smda_http_error(
         api_response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_timeout_error(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps SMDA timeouts."""
     validation_service = Mock()
@@ -1198,7 +1198,7 @@ async def test_post_validate_masterdata_smda_timeout_error(
         validation_service
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.json()["detail"] == "SMDA API request timed out. Please try again."
@@ -1206,11 +1206,11 @@ async def test_post_validate_masterdata_smda_timeout_error(
         response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_malformed_smda_response(
-    client_with_project_session: TestClient,
+    client_with_smda_session: TestClient,
 ) -> None:
     """Test validating SMDA masterdata maps malformed SMDA responses."""
     validation_service = Mock()
@@ -1221,7 +1221,7 @@ async def test_post_validate_masterdata_smda_malformed_smda_response(
         validation_service
     )
 
-    response = client_with_project_session.post(f"{ROUTE}/validate/masterdata/smda")
+    response = client_with_smda_session.post(f"{ROUTE}/validate/masterdata/smda")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json()["detail"] == "Malformed response from SMDA: 'field'"
@@ -1229,7 +1229,7 @@ async def test_post_validate_masterdata_smda_malformed_smda_response(
         response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda.assert_awaited_once_with()
+    validation_service.validate_masterdata_smda.assert_awaited_once()
 
 
 async def test_load_global_config_from_default_path(

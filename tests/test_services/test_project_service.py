@@ -53,7 +53,7 @@ def test_update_masterdata_updates_validation_metadata(
     """Test saving SMDA masterdata also marks it as validated."""
     service = ProjectService(fmu_dir)
     monkeypatch.setattr(
-        "fmu_settings_api.services.project.getpass.getuser",
+        "fmu.settings._fmu_dir.getpass.getuser",
         lambda: "test-user",
     )
 

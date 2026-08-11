@@ -10,13 +10,21 @@ from runrms.api.proxy import RemoteException
 from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 
 from fmu_settings_api.__main__ import app
+from fmu_settings_api.config import settings
 from fmu_settings_api.deps.rms import (
     get_opened_rms_project,
     get_rms_project_path,
     get_rms_service,
 )
 from fmu_settings_api.deps.session import get_session_service
-from fmu_settings_api.session import SessionNotFoundError
+from fmu_settings_api.deps.validation import get_project_validation_service
+from fmu_settings_api.models.project import ValidationMismatch
+from fmu_settings_api.services.project_validation import RmsProjectMismatchError
+from fmu_settings_api.session import (
+    ProjectSession,
+    SessionNotFoundError,
+    get_fmu_session,
+)
 
 ROUTE = "/api/v1/rms"
 
@@ -399,6 +407,254 @@ async def test_close_rms_project_no_session() -> None:
         response = client.delete(f"{ROUTE}/")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["detail"] == "No active session found"
+
+
+async def test_validate_rms_project_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test RMS validation returns success."""
+    validation_service = MagicMock()
+    rms_service = MagicMock()
+    opened_rms_project = MagicMock()
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: rms_service
+    app.dependency_overrides[get_opened_rms_project] = lambda: opened_rms_project
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "message": "RMS project configuration validated successfully."
+    }
+    validation_service.validate_rms_project.assert_called_once_with(
+        rms_service,
+        opened_rms_project,
+    )
+
+
+async def test_validate_rms_project_mismatch_returns_structured_422(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test RMS mismatch details are returned as a structured 422 response."""
+    mismatch = ValidationMismatch(
+        key="rms.wells.A-1",
+        saved_value={"name": "A-1", "planned": False},
+        source_value=None,
+        message=(
+            "RMS well 'A-1' is saved in the FMU project but is not present in the "
+            "open RMS project."
+        ),
+    )
+    validation_service = MagicMock()
+    validation_service.validate_rms_project.side_effect = RmsProjectMismatchError(
+        [mismatch]
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json()["detail"] == {
+        "message": "Saved RMS settings do not match the open RMS project.",
+        "mismatches": [mismatch.model_dump(mode="json")],
+    }
+
+
+async def test_validate_rms_project_missing_configuration_returns_422(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test missing RMS configuration maps to 422."""
+    validation_service = MagicMock()
+    validation_service.validate_rms_project.side_effect = ValueError(
+        "No RMS settings are saved in the FMU project."
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": "No RMS settings are saved in the FMU project."
+    }
+
+
+async def test_validate_rms_project_not_found_returns_404(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test a missing RMS project maps to 404."""
+    validation_service = MagicMock()
+    validation_service.validate_rms_project.side_effect = RmsProjectNotFoundError(
+        "RMS project not found."
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "RMS project not found."}
+
+
+async def test_validate_rms_project_missing_master_file_returns_404(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test a missing RMS project master file maps to 404."""
+    validation_service = MagicMock()
+    validation_service.validate_rms_project.side_effect = FileNotFoundError(
+        "RMS project master file not found."
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "RMS project master file not found."}
+
+
+async def test_validate_rms_project_version_error_returns_422(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test an unsupported RMS version maps to 422."""
+    validation_service = MagicMock()
+    validation_service.validate_rms_project.side_effect = RmsVersionError(
+        "RMS version is not supported."
+    )
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": "RMS version is not supported."}
+
+
+async def test_validate_rms_project_remote_error_returns_422(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test an RMS API error maps to 422."""
+    validation_service = MagicMock()
+    remote_error = RemoteException(message="RMS API request failed.")
+    validation_service.validate_rms_project.side_effect = remote_error
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": f"Failed to validate the open RMS project: {remote_error}"
+    }
+
+
+async def test_validate_rms_project_requires_open_rms_project(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validation uses the existing 400 response when RMS is not open."""
+    validation_service = MagicMock()
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {
+        "detail": "No RMS project is currently open. Please open an RMS project first."
+    }
+    validation_service.validate_rms_project.assert_not_called()
+
+
+async def test_validate_rms_project_requires_project_session() -> None:
+    """Test validation uses the existing 401 response without a project session."""
+    with TestClient(app) as client:
+        response = client.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "No active session found"
+
+
+async def test_validate_rms_project_requires_write_permission(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validation is blocked when the project is not locked."""
+    session_id = client_with_project_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    session = await get_fmu_session(session_id)
+    assert isinstance(session, ProjectSession)
+    lock = MagicMock()
+    lock.is_locked.return_value = False
+    session.project_fmu_directory._lock = lock
+
+    validation_service = MagicMock()
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_423_LOCKED
+    assert response.json() == {
+        "detail": "Project is not locked. Acquire the lock before writing."
+    }
+    validation_service.validate_rms_project.assert_not_called()
+
+
+async def test_validate_rms_project_requires_project_lock(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test validation is blocked when another process holds the lock."""
+    session_id = client_with_project_session.cookies.get(settings.SESSION_COOKIE_KEY)
+    assert session_id is not None
+    session = await get_fmu_session(session_id)
+    assert isinstance(session, ProjectSession)
+    lock = MagicMock()
+    lock.is_locked.return_value = True
+    lock.is_acquired.return_value = False
+    session.project_fmu_directory._lock = lock
+
+    validation_service = MagicMock()
+    app.dependency_overrides[get_project_validation_service] = lambda: (
+        validation_service
+    )
+    app.dependency_overrides[get_rms_service] = lambda: MagicMock()
+    app.dependency_overrides[get_opened_rms_project] = lambda: MagicMock()
+
+    response = client_with_project_session.post(f"{ROUTE}/validate")
+
+    assert response.status_code == status.HTTP_423_LOCKED
+    assert response.json() == {
+        "detail": (
+            "Project is read-only. Cannot write to project that is locked by "
+            "another process."
+        )
+    }
+    validation_service.validate_rms_project.assert_not_called()
 
 
 async def test_get_zones_success(

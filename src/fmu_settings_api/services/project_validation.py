@@ -1,17 +1,22 @@
 """Service for validating project configuration against external sources."""
 
 import asyncio
-import getpass
 import json
-from datetime import UTC, datetime
+from collections.abc import Sequence
 
 from fmu.datamodels.common import Smda
 from fmu.settings import ProjectFMUDirectory
-from fmu.settings.models.project_config import ValidationRecord
+from fmu.settings.models.project_config import (
+    RmsHorizon,
+    RmsStratigraphicZone,
+    RmsWell,
+)
 from pydantic import BaseModel
+from runrms.api import RmsApiProxy
 
 from fmu_settings_api.models.project import ValidationMismatch
 from fmu_settings_api.models.smda import SmdaMasterdataResult, SmdaSelectedField
+from fmu_settings_api.services.rms import RmsService
 from fmu_settings_api.services.smda import SmdaService
 
 
@@ -23,15 +28,25 @@ class MasterdataSmdaMismatchError(ValueError):
         self.mismatches = mismatches
 
 
+class RmsProjectMismatchError(ValueError):
+    """Raised when saved RMS settings do not match the open RMS project."""
+
+    def __init__(self, mismatches: list[ValidationMismatch]) -> None:
+        """Initialize with validation mismatches."""
+        self.mismatches = mismatches
+
+
 class ProjectValidationService:
     """Service for validating project configuration."""
 
-    def __init__(self, fmu_dir: ProjectFMUDirectory, smda_service: SmdaService) -> None:
-        """Initialize the service with project and SMDA access."""
+    def __init__(self, fmu_dir: ProjectFMUDirectory) -> None:
+        """Initialize the service with project access."""
         self._fmu_dir = fmu_dir
-        self._smda_service = smda_service
 
-    async def validate_masterdata_smda(self) -> None:
+    async def validate_masterdata_smda(
+        self,
+        smda_service: SmdaService,
+    ) -> None:
         """Validate saved SMDA masterdata and update validation metadata.
 
         Flow:
@@ -57,7 +72,7 @@ class ProjectValidationService:
         ]
         per_field_smda_results = await asyncio.gather(
             *[
-                self._smda_service.get_masterdata([selected_field])
+                smda_service.get_masterdata([selected_field])
                 for selected_field in selected_fields
             ]
         )
@@ -138,10 +153,134 @@ class ProjectValidationService:
         if mismatches:
             raise MasterdataSmdaMismatchError(mismatches)
 
-        record = ValidationRecord(
-            last_validated_at=datetime.now(UTC),
-            last_validated_by=getpass.getuser(),
-        )
-        self._fmu_dir.set_config_value(
-            "validation.masterdata_smda", record.model_dump()
-        )
+        self._fmu_dir.update_validation_metadata("masterdata_smda")
+
+    def validate_rms_project(
+        self,
+        rms_service: RmsService,
+        opened_rms_project: RmsApiProxy,
+    ) -> None:
+        """Compare saved RMS settings with the open RMS project.
+
+        The check compares the saved RMS version, horizons, zones, and wells
+        with the open project. For wells, it checks every value except
+        ``planned``.
+
+        Every saved horizon, zone, and well must exist in the open project. The
+        order of these items does not matter.
+
+        An empty saved list is valid. It means the user saved no horizons, zones,
+        or wells, either by clearing the category or because the open RMS project
+        had none to save.
+
+        The coordinate system is not checked because it is not currently saved
+        in the project configuration.
+        """
+        config = self._fmu_dir.config.load()
+        if config.rms is None:
+            raise ValueError("No RMS settings are saved in the FMU project.")
+
+        saved_rms = config.rms
+        mismatches: list[ValidationMismatch] = []
+
+        current_version = rms_service.get_rms_version(saved_rms.path)
+        if saved_rms.version != current_version:
+            mismatches.append(
+                ValidationMismatch(
+                    key="rms.version",
+                    saved_value=saved_rms.version,
+                    source_value=current_version,
+                    message=(
+                        "The RMS version saved in the FMU project does not match "
+                        "the version of the open RMS project."
+                    ),
+                )
+            )
+
+        if saved_rms.horizons is not None:
+            mismatches.extend(
+                _find_rms_item_mismatches(
+                    key_prefix="rms.horizons",
+                    item_label="horizon",
+                    saved_items=saved_rms.horizons,
+                    source_items=rms_service.get_horizons(opened_rms_project),
+                )
+            )
+
+        if saved_rms.zones is not None:
+            mismatches.extend(
+                _find_rms_item_mismatches(
+                    key_prefix="rms.zones",
+                    item_label="zone",
+                    saved_items=saved_rms.zones,
+                    source_items=rms_service.get_zones(opened_rms_project),
+                )
+            )
+
+        if saved_rms.wells is not None:
+            mismatches.extend(
+                _find_rms_item_mismatches(
+                    key_prefix="rms.wells",
+                    item_label="well",
+                    saved_items=saved_rms.wells,
+                    source_items=rms_service.get_wells(opened_rms_project),
+                    ignored_fields={"planned"},
+                )
+            )
+
+        if mismatches:
+            raise RmsProjectMismatchError(mismatches)
+
+        self._fmu_dir.update_validation_metadata("rms_project")
+
+
+def _find_rms_item_mismatches(
+    *,
+    key_prefix: str,
+    item_label: str,
+    saved_items: Sequence[RmsHorizon | RmsStratigraphicZone | RmsWell],
+    source_items: Sequence[RmsHorizon | RmsStratigraphicZone | RmsWell],
+    ignored_fields: set[str] | None = None,
+) -> list[ValidationMismatch]:
+    """Find saved RMS items missing from or different in the open RMS project.
+
+    Item order is ignored. Fields in ``ignored_fields`` are excluded from the
+    comparison.
+    """
+    source_by_name = {item.name: item for item in source_items}
+    mismatches: list[ValidationMismatch] = []
+
+    for saved_item in saved_items:
+        source_item = source_by_name.get(saved_item.name)
+        saved_value = saved_item.model_dump(mode="json")
+
+        if source_item is None:
+            mismatches.append(
+                ValidationMismatch(
+                    key=f"{key_prefix}.{saved_item.name}",
+                    saved_value=saved_value,
+                    source_value=None,
+                    message=(
+                        f"RMS {item_label} '{saved_item.name}' is saved in the FMU "
+                        "project but is not present in the open RMS project."
+                    ),
+                )
+            )
+            continue
+
+        if saved_item.model_dump(
+            mode="json", exclude=ignored_fields
+        ) != source_item.model_dump(mode="json", exclude=ignored_fields):
+            mismatches.append(
+                ValidationMismatch(
+                    key=f"{key_prefix}.{saved_item.name}",
+                    saved_value=saved_value,
+                    source_value=source_item.model_dump(mode="json"),
+                    message=(
+                        f"RMS {item_label} '{saved_item.name}' has different "
+                        "settings in the FMU project and the open RMS project."
+                    ),
+                )
+            )
+
+    return mismatches
