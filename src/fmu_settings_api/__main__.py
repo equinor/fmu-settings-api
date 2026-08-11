@@ -3,7 +3,7 @@
 import asyncio
 import sys
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -91,11 +91,10 @@ async def logging_request_validation_exception_handler(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """App lifespan for startup/shutdown housekeeping.
 
-    On shutdown, releases any acquired project locks so other processes
-    are not blocked by stale locks after a graceful stop.
+    On shutdown, releases acquired project locks and closes optional telemetry.
     """
     logger.info(
         "starting_application",
@@ -118,6 +117,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if lock.is_acquired():
             with suppress(Exception):
                 lock.release()
+
+    telemetry = getattr(app.state, "telemetry", None)
+    if telemetry is not None:
+        telemetry.shutdown()
 
 
 app = FastAPI(
@@ -165,6 +168,8 @@ def run_server(  # noqa: PLR0913
     reload: bool = False,
     log_level: str = "critical",
     frontend_directory: Path | None = None,
+    enable_telemetry: bool = False,
+    run_id: str | None = None,
 ) -> None:
     """Start the API server and, when supplied, its built frontend."""
     log_level = log_level.lower()
@@ -179,7 +184,13 @@ def run_server(  # noqa: PLR0913
     log_manager = UserSessionLogManager(user_fmu_dir)
 
     settings.log_level = log_level.upper()  # type: ignore[assignment]
-    setup_logging(settings, fmu_log_manager=log_manager, log_entry_class=EventInfo)
+    app.state.telemetry = setup_logging(
+        settings,
+        fmu_log_manager=log_manager,
+        log_entry_class=EventInfo,
+        enable_telemetry=enable_telemetry,
+        run_id=run_id,
+    )
 
     if fmu_dir_status == "initialized":
         logger.info("fmu_directory_initialized", path=str(user_fmu_dir.path))

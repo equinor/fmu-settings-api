@@ -41,7 +41,7 @@ from fmu_settings_api.session import (
 
 @pytest.fixture(autouse=True)
 def configure_test_logging() -> Generator[None]:
-    """Configure tests with the same logging setup path as the app."""
+    """Configure local test logging with telemetry disabled."""
     setup_logging(settings, Mock(spec_set=["add_log_entry"]), EventInfo)
     yield
 
