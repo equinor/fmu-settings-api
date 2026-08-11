@@ -7,13 +7,14 @@ from typing import Any, Final
 from unittest.mock import MagicMock, patch
 
 import structlog
-from fmu.settings import init_user_fmu_directory
+from fmu.settings import Telemetry, init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 
 from fmu_settings_api.config import settings
 from fmu_settings_api.logging import (
     attach_fmu_settings_handler,
+    attach_telemetry,
     get_logger,
     setup_logging,
 )
@@ -230,6 +231,38 @@ def test_attach_fmu_settings_handler_logs_on_severity() -> None:
     process_event_and_assert_logging("critical", event_dict_critical)
 
 
+def test_attach_telemetry_forwards_structured_event() -> None:
+    """Forward structured properties without the authentication session ID."""
+    telemetry = MagicMock(spec=Telemetry)
+    processor = attach_telemetry(telemetry)
+    event_dict = {
+        "event": "request_started",
+        "level": "info",
+        "logger": "fmu_settings_api.middleware.logging",
+        "method": "GET",
+        "path": "/api/v1/project/changelog",
+        "query_params": "field_name=user&filter_value=alice&operator=%3D%3D",
+        "client_ip": "127.0.0.1",
+        "session_id": "authentication-cookie-value",
+        "exc_info": True,
+    }
+
+    result = processor(None, "info", event_dict)
+
+    assert result is event_dict
+    assert result["session_id"] == "authentication-cookie-value"
+    telemetry.emit.assert_called_once_with(
+        "request_started",
+        level=logging.INFO,
+        exc_info=True,
+        logger="fmu_settings_api.middleware.logging",
+        method="GET",
+        path="/api/v1/project/changelog",
+        query_params="field_name=user&filter_value=alice&operator=%3D%3D",
+        client_ip="127.0.0.1",
+    )
+
+
 def test_setup_logging_configures_structlog() -> None:
     """Test setup_logging configures structlog properly."""
     log_manager = MagicMock()
@@ -242,6 +275,57 @@ def test_setup_logging_configures_structlog() -> None:
     assert logger is not None
     assert hasattr(logger, "info")
     assert hasattr(logger, "error")
+
+
+def test_setup_logging_adds_telemetry_processor() -> None:
+    """Configure shared telemetry and add its structlog processor."""
+    log_manager = MagicMock()
+    telemetry = MagicMock(spec=Telemetry)
+    telemetry_processor = MagicMock()
+
+    with (
+        patch(
+            "fmu_settings_api.logging.configure_telemetry", return_value=telemetry
+        ) as configure_telemetry_mock,
+        patch(
+            "fmu_settings_api.logging.attach_telemetry",
+            return_value=telemetry_processor,
+        ) as attach_telemetry_mock,
+        patch("fmu_settings_api.logging.structlog.configure") as configure_mock,
+    ):
+        result = setup_logging(
+            settings,
+            log_manager,
+            EventInfo,
+            enable_telemetry=True,
+            run_id="run-123",
+        )
+
+    assert result is telemetry
+    configure_telemetry_mock.assert_called_once_with(
+        app_name=settings.APP_NAME,
+        app_version=settings.APP_VERSION,
+        environment=settings.environment,
+        run_id="run-123",
+        minimum_level=logging.INFO,
+    )
+    attach_telemetry_mock.assert_called_once_with(telemetry)
+    assert telemetry_processor in configure_mock.call_args.kwargs["processors"]
+
+
+def test_setup_logging_disables_telemetry_by_default() -> None:
+    """Do not discover or attach telemetry unless explicitly enabled."""
+    log_manager = MagicMock()
+
+    with (
+        patch("fmu_settings_api.logging.configure_telemetry") as configure_mock,
+        patch("fmu_settings_api.logging.attach_telemetry") as attach_mock,
+    ):
+        result = setup_logging(settings, log_manager, EventInfo)
+
+    assert result is None
+    configure_mock.assert_not_called()
+    attach_mock.assert_not_called()
 
 
 def test_setup_logging_sets_log_levels() -> None:
