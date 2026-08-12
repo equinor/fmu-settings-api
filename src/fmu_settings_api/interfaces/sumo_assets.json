@@ -198,5 +198,10 @@
         "name": "Kalundborg",
         "code": "040",
         "roleprefix": "KALUNDBORG"
+    },
+    {
+        "name": "Kvitebjørn",
+        "code": "041",
+        "roleprefix": "KVITEBJORN"
     }
 ]
