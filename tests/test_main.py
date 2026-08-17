@@ -7,15 +7,17 @@ from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
+from fmu.settings import MigrationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from fmu_settings_api.__main__ import (
     add_frontend,
     app,
     logging_http_exception_handler,
+    logging_migration_exception_handler,
     logging_request_validation_exception_handler,
     run_server,
 )
@@ -225,6 +227,85 @@ def test_http_exception_logs_request_failed_details() -> None:
         assert log_data["error_type"] == "HTTPException"
         assert "duration_ms" in log_data
         assert log_data["duration_ms"] >= 0
+
+
+def test_migration_error_from_dependency_returns_422_and_logs_original_error() -> None:
+    """Handle a migration error raised directly by a dependency.
+
+    For example, an SMDA dependency can fail while loading UserConfig before the
+    route runs. The central migration handler must log the original error and return
+    HTTP 422.
+    """
+    test_app = FastAPI()
+    test_app.add_middleware(LoggingMiddleware)
+    test_app.add_exception_handler(
+        MigrationError,
+        logging_migration_exception_handler,
+    )
+    migration_error = MigrationError("Stored UserConfig cannot be migrated")
+
+    async def failing_dependency() -> None:
+        raise migration_error
+
+    @test_app.get("/test", dependencies=[Depends(failing_dependency)])
+    async def dependency_route() -> None:
+        pass
+
+    with (
+        patch("fmu_settings_api.__main__.logger") as mock_logger,
+        TestClient(test_app) as local_client,
+    ):
+        response = local_client.get("/test")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": str(migration_error)}
+    mock_logger.exception.assert_called_once()
+    log_data = mock_logger.exception.call_args.kwargs
+    assert log_data["status_code"] == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert log_data["error"] == str(migration_error)
+    assert log_data["error_type"] == "MigrationError"
+
+
+def test_http_exception_caused_by_migration_error_uses_migration_handler() -> None:
+    """Handle a migration error wrapped in an HTTPException.
+
+    For example, opening a project can catch a ProjectConfig MigrationError as a
+    ValueError and wrap it in an HTTPException. The central HTTP handler must pass the
+    original cause to the migration handler, which logs it and returns HTTP 422.
+    """
+    test_app = FastAPI()
+    test_app.add_middleware(LoggingMiddleware)
+    test_app.add_exception_handler(
+        MigrationError,
+        logging_migration_exception_handler,
+    )
+    test_app.add_exception_handler(
+        StarletteHTTPException,
+        logging_http_exception_handler,
+    )
+    migration_error = MigrationError("Stored ProjectConfig cannot be migrated")
+
+    @test_app.get("/test")
+    async def wrapped_migration_route() -> None:
+        try:
+            raise migration_error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="Invalid project") from error
+
+    with (
+        patch("fmu_settings_api.__main__.logger") as mock_logger,
+        TestClient(test_app) as local_client,
+    ):
+        response = local_client.get("/test")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": str(migration_error)}
+    mock_logger.exception.assert_called_once()
+    mock_logger.warning.assert_not_called()
+    log_data = mock_logger.exception.call_args.kwargs
+    assert log_data["status_code"] == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert log_data["error"] == str(migration_error)
+    assert log_data["error_type"] == "MigrationError"
 
 
 def test_validation_exception_logs_request_failed_details() -> None:

@@ -15,13 +15,13 @@ from fastapi.exception_handlers import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from fmu.settings import UserFMUDirectory, init_user_fmu_directory
+from fmu.settings import MigrationError, UserFMUDirectory, init_user_fmu_directory
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from .config import HttpHeader, settings
@@ -40,6 +40,52 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 logger = get_logger(__name__)
 
 
+def _request_failure_log_data(
+    request: Request,
+    exc: Exception,
+    *,
+    status_code: int,
+    error: object,
+) -> dict[str, object]:
+    """Build the shared fields for a ``request_failed`` log event."""
+    started_at = getattr(request.state, "request_started_at", None)
+    return {
+        "method": request.method,
+        "path": request.url.path,
+        "status_code": status_code,
+        "error": error,
+        "error_type": type(exc).__name__,
+        "duration_ms": (
+            round((time.perf_counter() - started_at) * 1000, 2)
+            if started_at is not None
+            else None
+        ),
+    }
+
+
+async def logging_migration_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> Response:
+    """Log migration failures and return a consistent response."""
+    if not isinstance(exc, MigrationError):
+        raise exc
+
+    logger.exception(
+        "request_failed",
+        **_request_failure_log_data(
+            request,
+            exc,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            error=str(exc),
+        ),
+    )
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": str(exc)},
+    )
+
+
 async def logging_http_exception_handler(
     request: Request,
     exc: Exception,
@@ -48,18 +94,16 @@ async def logging_http_exception_handler(
     if not isinstance(exc, StarletteHTTPException):
         raise exc
 
-    started_at = getattr(request.state, "request_started_at", None)
+    if isinstance(exc.__cause__, MigrationError):
+        return await logging_migration_exception_handler(request, exc.__cause__)
+
     logger.warning(
         "request_failed",
-        method=request.method,
-        path=request.url.path,
-        status_code=exc.status_code,
-        error=exc.detail,
-        error_type=type(exc).__name__,
-        duration_ms=(
-            round((time.perf_counter() - started_at) * 1000, 2)
-            if started_at is not None
-            else None
+        **_request_failure_log_data(
+            request,
+            exc,
+            status_code=exc.status_code,
+            error=exc.detail,
         ),
     )
     return await http_exception_handler(request, exc)
@@ -73,18 +117,13 @@ async def logging_request_validation_exception_handler(
     if not isinstance(exc, RequestValidationError):
         raise exc
 
-    started_at = getattr(request.state, "request_started_at", None)
     logger.warning(
         "request_failed",
-        method=request.method,
-        path=request.url.path,
-        status_code=HTTP_422_UNPROCESSABLE_CONTENT,
-        error=exc.errors(),
-        error_type=type(exc).__name__,
-        duration_ms=(
-            round((time.perf_counter() - started_at) * 1000, 2)
-            if started_at is not None
-            else None
+        **_request_failure_log_data(
+            request,
+            exc,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            error=exc.errors(),
         ),
     )
     return await request_validation_exception_handler(request, exc)
@@ -130,6 +169,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(LoggingMiddleware)
+app.add_exception_handler(MigrationError, logging_migration_exception_handler)
 app.add_exception_handler(StarletteHTTPException, logging_http_exception_handler)
 app.add_exception_handler(
     RequestValidationError,
