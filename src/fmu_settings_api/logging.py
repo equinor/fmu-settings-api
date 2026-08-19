@@ -8,12 +8,41 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
+from fmu.settings import Telemetry, configure_telemetry
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from fmu_settings_api.config import APISettings
+
+
+def attach_telemetry(telemetry: Telemetry) -> Callable[..., Any]:
+    """Create a processor that forwards an event copy to telemetry."""
+
+    def processor(
+        logger: Any, method_name: str, event_dict: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Send a copy of the event and return the original event."""
+        telemetry_event = event_dict.copy()
+        # Do not send the session ID to Azure because it is also the
+        # authentication cookie and could give access to the active session.
+        telemetry_event.pop("session_id", None)
+        event = str(telemetry_event.pop("event", "unknown"))
+        level_name = str(telemetry_event.pop("level", method_name)).upper()
+        level = logging.getLevelNamesMapping().get(level_name, logging.INFO)
+        exc_info = telemetry_event.pop("exc_info", None)
+
+        telemetry.emit(
+            event,
+            level=level,
+            exc_info=exc_info,
+            **telemetry_event,
+        )
+
+        return event_dict
+
+    return processor
 
 
 def attach_fmu_settings_handler(
@@ -60,7 +89,10 @@ def setup_logging(
     settings: APISettings,
     fmu_log_manager: Any,
     log_entry_class: type[Any],
-) -> None:
+    *,
+    enable_telemetry: bool = False,
+    run_id: str | None = None,
+) -> Telemetry | None:
     """Configure structured logging with structlog."""
     logging.basicConfig(
         format="%(message)s",
@@ -83,6 +115,17 @@ def setup_logging(
         ),
     ]
 
+    telemetry = None
+    if enable_telemetry:
+        telemetry = configure_telemetry(
+            app_name=settings.APP_NAME,
+            app_version=settings.APP_VERSION,
+            environment=settings.environment,
+            run_id=run_id,
+            minimum_level=logging.INFO,
+        )
+        processors.append(attach_telemetry(telemetry))
+
     if settings.log_format == "json" or settings.is_production:
         processors += [
             structlog.processors.ExceptionRenderer(),
@@ -103,6 +146,7 @@ def setup_logging(
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+    return telemetry
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
