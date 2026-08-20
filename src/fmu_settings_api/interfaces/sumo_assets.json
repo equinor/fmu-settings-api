@@ -203,5 +203,15 @@
         "name": "Kvitebjørn",
         "code": "041",
         "roleprefix": "KVITEBJORN"
+    },
+    {
+        "name": "Si_Sol_Rod",
+        "code": "042",
+        "roleprefix": "SI_SOL_ROD"
+    },
+    {
+        "name": "Lavrans",
+        "code": "043",
+        "roleprefix": "LAVRANS"
     }
 ]
