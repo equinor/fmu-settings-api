@@ -40,15 +40,19 @@ class MatchService:
             includes up to three targets, ordered from highest to lowest score.
         """
         matches = []
+        normalized_targets = [
+            (target, self._normalize_name(target, replacements)) for target in targets
+        ]
 
         for source in sources:
+            normalized_source = self._normalize_name(source, replacements)
             target_scores = sorted(
                 (
                     (
                         target,
-                        self._calculate_name_score(source, target, replacements),
+                        fuzz.ratio(normalized_source, normalized_target),
                     )
-                    for target in targets
+                    for target, normalized_target in normalized_targets
                 ),
                 key=lambda target_score: target_score[1],
                 reverse=True,
@@ -69,27 +73,6 @@ class MatchService:
             )
 
         return matches
-
-    def _calculate_name_score(
-        self,
-        name1: str,
-        name2: str,
-        replacements: list[MatchReplacementRule] | None = None,
-    ) -> float:
-        """Calculate strict similarity score for two names.
-
-        Args:
-            name1: First name to compare.
-            name2: Second name to compare.
-            replacements: Optional string replacements to apply.
-
-        Returns:
-            Similarity score from 0 to 100.
-        """
-        return fuzz.ratio(
-            self._normalize_name(name1, replacements),
-            self._normalize_name(name2, replacements),
-        )
 
     def _normalize_name(
         self,
