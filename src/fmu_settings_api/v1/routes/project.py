@@ -984,7 +984,9 @@ async def post_validate_masterdata_smda(
 ) -> Message:
     """Validates saved project SMDA masterdata against SMDA."""
     try:
-        await validation_service.validate_masterdata_smda(smda_service)
+        await validation_service.validate_masterdata_smda_and_update_metadata(
+            smda_service
+        )
         return Message(message="Validated SMDA masterdata")
     except MasterdataSmdaMismatchError as e:
         raise HTTPException(

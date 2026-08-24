@@ -84,7 +84,9 @@ async def test_validate_masterdata_smda_updates_validation_metadata(
         lambda: "test-user",
     )
 
-    await ProjectValidationService(fmu_dir).validate_masterdata_smda(smda_service)
+    await ProjectValidationService(
+        fmu_dir
+    ).validate_masterdata_smda_and_update_metadata(smda_service)
 
     config = fmu_dir.config.load(force=True)
     assert config.validation.masterdata_smda is not None
@@ -124,7 +126,9 @@ async def test_validate_masterdata_smda_validates_each_saved_field(
         side_effect=lambda fields: masterdata_by_field[fields[0].identifier]
     )
 
-    await ProjectValidationService(fmu_dir).validate_masterdata_smda(smda_service)
+    await ProjectValidationService(
+        fmu_dir
+    ).validate_masterdata_smda_and_update_metadata(smda_service)
 
     assert smda_service.get_masterdata.await_args_list == [
         call([SmdaSelectedField(identifier=field.identifier, uuid=field.uuid)])
@@ -176,7 +180,9 @@ async def test_validate_masterdata_smda_allows_extra_current_values(
         )
     )
 
-    await ProjectValidationService(fmu_dir).validate_masterdata_smda(smda_service)
+    await ProjectValidationService(
+        fmu_dir
+    ).validate_masterdata_smda_and_update_metadata(smda_service)
 
     assert fmu_dir.config.load(force=True).validation.masterdata_smda is not None
 
@@ -197,7 +203,9 @@ async def test_validate_masterdata_smda_raises_for_mismatch(
     )
 
     with pytest.raises(MasterdataSmdaMismatchError) as exc_info:
-        await ProjectValidationService(fmu_dir).validate_masterdata_smda(smda_service)
+        await ProjectValidationService(
+            fmu_dir
+        ).validate_masterdata_smda_and_update_metadata(smda_service)
 
     assert isinstance(exc_info.value, ValueError)
     assert exc_info.value.mismatches[0].key == "masterdata.smda.field"
@@ -225,7 +233,9 @@ async def test_validate_masterdata_smda_raises_when_masterdata_is_missing(
         ValueError,
         match="Project masterdata must be set before validating against SMDA.",
     ):
-        await ProjectValidationService(fmu_dir).validate_masterdata_smda(smda_service)
+        await ProjectValidationService(
+            fmu_dir
+        ).validate_masterdata_smda_and_update_metadata(smda_service)
 
 
 def test_validate_rms_project_updates_validation_metadata(
@@ -253,7 +263,9 @@ def test_validate_rms_project_updates_validation_metadata(
         lambda: "test-user",
     )
 
-    ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+    ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+        rms_service, Mock()
+    )
 
     record = fmu_dir.config.load(force=True).validation.rms_project
     assert record is not None
@@ -311,7 +323,9 @@ def test_validate_rms_project_accepts_configured_subsets_in_any_order(
         RmsWell(name="A-1", planned=True),
     ]
 
-    ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+    ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+        rms_service, Mock()
+    )
 
     assert fmu_dir.config.load(force=True).validation.rms_project is not None
 
@@ -343,7 +357,9 @@ def test_validate_rms_project_reports_all_mismatches(
     rms_service.get_wells.return_value = []
 
     with pytest.raises(RmsProjectMismatchError) as exc_info:
-        ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+        ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+            rms_service, Mock()
+        )
 
     mismatches = exc_info.value.mismatches
     assert [mismatch.key for mismatch in mismatches] == [
@@ -390,7 +406,9 @@ def test_validate_rms_project_reports_missing_horizon_and_zone(
     rms_service.get_zones.return_value = []
 
     with pytest.raises(RmsProjectMismatchError) as exc_info:
-        ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+        ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+            rms_service, Mock()
+        )
 
     mismatches = exc_info.value.mismatches
     assert [mismatch.key for mismatch in mismatches] == [
@@ -408,7 +426,9 @@ def test_validate_rms_project_does_not_read_unsaved_categories(
     rms_service = Mock()
     rms_service.get_rms_version.return_value = "14.2.2"
 
-    ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+    ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+        rms_service, Mock()
+    )
 
     rms_service.get_rms_version.assert_called_once()
     rms_service.get_horizons.assert_not_called()
@@ -436,7 +456,9 @@ def test_validate_rms_project_accepts_empty_saved_horizon_zone_and_well_lists(
     ]
     rms_service.get_wells.return_value = [RmsWell(name="ExtraWell")]
 
-    ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+    ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+        rms_service, Mock()
+    )
 
     assert fmu_dir.config.load(force=True).validation.rms_project is not None
 
@@ -451,7 +473,9 @@ def test_validate_rms_project_requires_rms_configuration(
         ValueError,
         match="No RMS settings are saved in the FMU project.",
     ):
-        ProjectValidationService(fmu_dir).validate_rms_project(rms_service, Mock())
+        ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+            rms_service, Mock()
+        )
 
     rms_service.get_rms_version.assert_not_called()
     rms_service.get_horizons.assert_not_called()
@@ -475,7 +499,7 @@ def test_validate_rms_project_preserves_previous_metadata_and_config(
         lambda: "test-user",
     )
     service = ProjectValidationService(fmu_dir)
-    service.validate_rms_project(rms_service, Mock())
+    service.validate_rms_project_and_update_metadata(rms_service, Mock())
     previous_record = fmu_dir.config.load(force=True).validation.rms_project
     saved_rms_before_failure = fmu_dir.config.load().rms
     assert previous_record is not None
@@ -483,7 +507,7 @@ def test_validate_rms_project_preserves_previous_metadata_and_config(
 
     rms_service.get_wells.return_value = []
     with pytest.raises(RmsProjectMismatchError):
-        service.validate_rms_project(rms_service, Mock())
+        service.validate_rms_project_and_update_metadata(rms_service, Mock())
 
     config_after_failure = fmu_dir.config.load(force=True)
     assert config_after_failure.validation.rms_project == previous_record

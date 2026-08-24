@@ -43,11 +43,11 @@ class ProjectValidationService:
         """Initialize the service with project access."""
         self._fmu_dir = fmu_dir
 
-    async def validate_masterdata_smda(
+    async def validate_masterdata_smda_and_update_metadata(
         self,
         smda_service: SmdaService,
     ) -> None:
-        """Validate saved SMDA masterdata and update validation metadata.
+        """Validate saved SMDA masterdata and update validation metadata on success.
 
         Flow:
             1. Load the saved project SMDA config.
@@ -155,12 +155,12 @@ class ProjectValidationService:
 
         self._fmu_dir.update_validation_metadata("masterdata_smda")
 
-    def validate_rms_project(
+    def validate_rms_project_and_update_metadata(
         self,
         rms_service: RmsService,
         opened_rms_project: RmsApiProxy,
     ) -> None:
-        """Compare saved RMS settings with the open RMS project.
+        """Validate saved RMS settings and update validation metadata on success.
 
         The check compares the saved RMS version, horizons, zones, and wells
         with the open project. For wells, it checks every value except

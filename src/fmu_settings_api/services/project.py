@@ -126,6 +126,7 @@ class ProjectService:
             {
                 "rms.path": rms_project_path,
                 "rms.version": rms_version,
+                "validation.rms_project": None,
             }
         )
 
@@ -160,14 +161,18 @@ class ProjectService:
             {
                 "rms.zones": [zone.model_dump() for zone in zones],
                 "rms.horizons": [horizon.model_dump() for horizon in horizons],
+                "validation.rms_project": None,
             }
         )
 
     def update_rms_wells(self, wells: list[RmsWell]) -> None:
         """Save RMS wells to the project FMU directory."""
         self._ensure_rms_config_exists()
-        self._fmu_dir.set_config_value(
-            "rms.wells", [well.model_dump() for well in wells]
+        self._fmu_dir.update_config(
+            {
+                "rms.wells": [well.model_dump() for well in wells],
+                "validation.rms_project": None,
+            }
         )
 
     def get_sumo_assets(self) -> list[SumoAsset]:

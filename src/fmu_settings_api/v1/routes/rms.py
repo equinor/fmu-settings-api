@@ -326,7 +326,7 @@ async def post_validate_rms_project(
 ) -> Message:
     """Validate saved RMS configuration against the open RMS project."""
     try:
-        project_validation_service.validate_rms_project(
+        project_validation_service.validate_rms_project_and_update_metadata(
             rms_service,
             opened_rms_project,
         )

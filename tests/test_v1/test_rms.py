@@ -428,7 +428,7 @@ async def test_validate_rms_project_success(
     assert response.json() == {
         "message": "RMS project configuration validated successfully."
     }
-    validation_service.validate_rms_project.assert_called_once_with(
+    validation_service.validate_rms_project_and_update_metadata.assert_called_once_with(
         rms_service,
         opened_rms_project,
     )
@@ -448,8 +448,8 @@ async def test_validate_rms_project_mismatch_returns_structured_422(
         ),
     )
     validation_service = MagicMock()
-    validation_service.validate_rms_project.side_effect = RmsProjectMismatchError(
-        [mismatch]
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        RmsProjectMismatchError([mismatch])
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
@@ -471,8 +471,8 @@ async def test_validate_rms_project_missing_configuration_returns_422(
 ) -> None:
     """Test missing RMS configuration maps to 422."""
     validation_service = MagicMock()
-    validation_service.validate_rms_project.side_effect = ValueError(
-        "No RMS settings are saved in the FMU project."
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        ValueError("No RMS settings are saved in the FMU project.")
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
@@ -493,8 +493,8 @@ async def test_validate_rms_project_not_found_returns_404(
 ) -> None:
     """Test a missing RMS project maps to 404."""
     validation_service = MagicMock()
-    validation_service.validate_rms_project.side_effect = RmsProjectNotFoundError(
-        "RMS project not found."
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        RmsProjectNotFoundError("RMS project not found.")
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
@@ -513,8 +513,8 @@ async def test_validate_rms_project_missing_master_file_returns_404(
 ) -> None:
     """Test a missing RMS project master file maps to 404."""
     validation_service = MagicMock()
-    validation_service.validate_rms_project.side_effect = FileNotFoundError(
-        "RMS project master file not found."
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        FileNotFoundError("RMS project master file not found.")
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
@@ -533,8 +533,8 @@ async def test_validate_rms_project_version_error_returns_422(
 ) -> None:
     """Test an unsupported RMS version maps to 422."""
     validation_service = MagicMock()
-    validation_service.validate_rms_project.side_effect = RmsVersionError(
-        "RMS version is not supported."
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        RmsVersionError("RMS version is not supported.")
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
@@ -554,7 +554,9 @@ async def test_validate_rms_project_remote_error_returns_422(
     """Test an RMS API error maps to 422."""
     validation_service = MagicMock()
     remote_error = RemoteException(message="RMS API request failed.")
-    validation_service.validate_rms_project.side_effect = remote_error
+    validation_service.validate_rms_project_and_update_metadata.side_effect = (
+        remote_error
+    )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
     )
@@ -585,7 +587,7 @@ async def test_validate_rms_project_requires_open_rms_project(
     assert response.json() == {
         "detail": "No RMS project is currently open. Please open an RMS project first."
     }
-    validation_service.validate_rms_project.assert_not_called()
+    validation_service.validate_rms_project_and_update_metadata.assert_not_called()
 
 
 async def test_validate_rms_project_requires_project_session() -> None:
@@ -622,7 +624,7 @@ async def test_validate_rms_project_requires_write_permission(
     assert response.json() == {
         "detail": "Project is not locked. Acquire the lock before writing."
     }
-    validation_service.validate_rms_project.assert_not_called()
+    validation_service.validate_rms_project_and_update_metadata.assert_not_called()
 
 
 async def test_validate_rms_project_requires_project_lock(
@@ -654,7 +656,7 @@ async def test_validate_rms_project_requires_project_lock(
             "another process."
         )
     }
-    validation_service.validate_rms_project.assert_not_called()
+    validation_service.validate_rms_project_and_update_metadata.assert_not_called()
 
 
 async def test_get_zones_success(

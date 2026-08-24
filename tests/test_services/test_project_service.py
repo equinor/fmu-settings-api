@@ -76,10 +76,14 @@ def test_restore_fmu_files_returns_empty_without_calling_restore(
         mock_restore.assert_not_called()
 
 
-def test_update_rms_saves_path_and_version(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test that update_rms saves the RMS project path and version."""
+def test_update_rms_updates_config_and_invalidates_validation_metadata(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test updating the RMS project config invalidates its validation metadata."""
     rms_project_path = Path("/path/to/rms/project.rms14.2.2")
     service = ProjectService(fmu_dir)
+    fmu_dir.update_validation_metadata("rms_project")
+    assert fmu_dir.config.load().validation.rms_project is not None
 
     with patch(
         "fmu_settings_api.services.project.RmsService.get_rms_version",
@@ -88,10 +92,12 @@ def test_update_rms_saves_path_and_version(fmu_dir: ProjectFMUDirectory) -> None
         rms_version = service.update_rms(rms_project_path)
 
     assert rms_version == "14.2.2"
-    saved_config = fmu_dir.config.load().rms
+    config = fmu_dir.config.load()
+    saved_config = config.rms
     assert saved_config is not None
     assert saved_config.path == rms_project_path
     assert saved_config.version == "14.2.2"
+    assert config.validation.rms_project is None
 
 
 def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> None:
@@ -219,12 +225,14 @@ def test_update_rms_coordinate_system_requires_rms_config(
     assert "RMS project path must be set" in str(exc_info.value)
 
 
-def test_update_rms_stratigraphic_framework_success(
+def test_update_rms_stratigraphy_updates_config_and_invalidates_validation_metadata(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
-    """Test saving RMS zones and horizons to config."""
+    """Test updating RMS stratigraphy invalidates its validation metadata."""
     service = ProjectService(fmu_dir)
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+    fmu_dir.update_validation_metadata("rms_project")
+    assert fmu_dir.config.load().validation.rms_project is not None
 
     zones = [
         RmsStratigraphicZone(
@@ -242,7 +250,8 @@ def test_update_rms_stratigraphic_framework_success(
     ]
     service.update_rms_stratigraphic_framework(zones, horizons)
 
-    saved_config = fmu_dir.config.load().rms
+    config = fmu_dir.config.load()
+    saved_config = config.rms
     assert saved_config is not None
     assert saved_config.zones is not None
     assert saved_config.horizons is not None
@@ -255,6 +264,7 @@ def test_update_rms_stratigraphic_framework_success(
         "Top B",
         "Base B",
     ]
+    assert config.validation.rms_project is None
 
 
 def test_update_rms_stratigraphic_framework_requires_rms_config(
@@ -278,19 +288,25 @@ def test_update_rms_stratigraphic_framework_requires_rms_config(
     assert "RMS project path must be set" in str(exc_info.value)
 
 
-def test_update_rms_wells_success(fmu_dir: ProjectFMUDirectory) -> None:
-    """Test saving RMS wells to config."""
+def test_update_rms_wells_updates_config_and_invalidates_validation_metadata(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test updating RMS wells invalidates their validation metadata."""
     service = ProjectService(fmu_dir)
     fmu_dir.set_config_value("rms", {"path": "/some/path", "version": "14.2.2"})
+    fmu_dir.update_validation_metadata("rms_project")
+    assert fmu_dir.config.load().validation.rms_project is not None
 
     wells = [RmsWell(name="W1"), RmsWell(name="W2")]
     service.update_rms_wells(wells)
 
-    saved_config = fmu_dir.config.load().rms
+    config = fmu_dir.config.load()
+    saved_config = config.rms
     assert saved_config is not None
     assert saved_config.wells is not None
     assert len(saved_config.wells) == 2  # noqa: PLR2004
     assert [w.name for w in saved_config.wells] == ["W1", "W2"]
+    assert config.validation.rms_project is None
 
 
 def test_update_rms_wells_requires_rms_config(fmu_dir: ProjectFMUDirectory) -> None:
