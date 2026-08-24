@@ -19,6 +19,7 @@ from fmu_settings_api.__main__ import (
     logging_request_validation_exception_handler,
     run_server,
 )
+from fmu_settings_api.config import settings
 from fmu_settings_api.middleware.logging import LoggingMiddleware
 from fmu_settings_api.models import Ok
 from fmu_settings_api.session import (
@@ -82,14 +83,15 @@ def test_run_server_adds_frontend(
     enable_telemetry: bool,
     run_id: str | None,
 ) -> None:
-    """Add the frontend and pass the telemetry options to logging setup."""
+    """Add the frontend and coordinate optional telemetry with logging setup."""
     telemetry = MagicMock()
     with (
         patch("fmu_settings_api.__main__.UserFMUDirectory") as user_directory,
         patch("fmu_settings_api.__main__.UserSessionLogManager"),
+        patch("fmu_settings_api.__main__.setup_logging") as setup_logging_mock,
         patch(
-            "fmu_settings_api.__main__.setup_logging", return_value=telemetry
-        ) as setup_logging_mock,
+            "fmu_settings_api.__main__.setup_telemetry", return_value=telemetry
+        ) as setup_telemetry_mock,
         patch("fmu_settings_api.__main__.uvicorn.run") as uvicorn_run,
         patch("fmu_settings_api.__main__.app") as test_app,
         patch("fmu_settings_api.__main__.add_frontend") as add_frontend_mock,
@@ -103,9 +105,14 @@ def test_run_server_adds_frontend(
         )
 
     add_frontend_mock.assert_called_once_with(test_app, tmp_path)
-    assert test_app.state.telemetry is telemetry
-    assert setup_logging_mock.call_args.kwargs["enable_telemetry"] is enable_telemetry
-    assert setup_logging_mock.call_args.kwargs["run_id"] == run_id
+    if enable_telemetry:
+        setup_telemetry_mock.assert_called_once_with(settings, run_id=run_id)
+        assert test_app.state.telemetry is telemetry
+        assert setup_logging_mock.call_args.kwargs["telemetry"] is telemetry
+    else:
+        setup_telemetry_mock.assert_not_called()
+        assert test_app.state.telemetry is None
+        assert setup_logging_mock.call_args.kwargs["telemetry"] is None
     assert uvicorn_run.call_args.kwargs["port"] == 8000
 
 

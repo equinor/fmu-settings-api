@@ -17,6 +17,7 @@ from fmu_settings_api.logging import (
     attach_telemetry,
     get_logger,
     setup_logging,
+    setup_telemetry,
 )
 
 
@@ -277,29 +278,14 @@ def test_setup_logging_configures_structlog() -> None:
     assert hasattr(logger, "error")
 
 
-def test_setup_logging_adds_telemetry_processor() -> None:
-    """Configure shared telemetry and add its structlog processor."""
-    log_manager = MagicMock()
+def test_setup_telemetry_configures_shared_telemetry() -> None:
+    """Configure shared telemetry with API context."""
     telemetry = MagicMock(spec=Telemetry)
-    telemetry_processor = MagicMock()
 
-    with (
-        patch(
-            "fmu_settings_api.logging.configure_telemetry", return_value=telemetry
-        ) as configure_telemetry_mock,
-        patch(
-            "fmu_settings_api.logging.attach_telemetry",
-            return_value=telemetry_processor,
-        ) as attach_telemetry_mock,
-        patch("fmu_settings_api.logging.structlog.configure") as configure_mock,
-    ):
-        result = setup_logging(
-            settings,
-            log_manager,
-            EventInfo,
-            enable_telemetry=True,
-            run_id="run-123",
-        )
+    with patch(
+        "fmu_settings_api.logging.configure_telemetry", return_value=telemetry
+    ) as configure_telemetry_mock:
+        result = setup_telemetry(settings, run_id="run-123")
 
     assert result is telemetry
     configure_telemetry_mock.assert_called_once_with(
@@ -309,22 +295,34 @@ def test_setup_logging_adds_telemetry_processor() -> None:
         run_id="run-123",
         minimum_level=logging.INFO,
     )
+
+
+def test_setup_logging_adds_telemetry_processor() -> None:
+    """Add configured telemetry to the structlog processor chain."""
+    log_manager = MagicMock()
+    telemetry = MagicMock(spec=Telemetry)
+    telemetry_processor = MagicMock()
+
+    with (
+        patch(
+            "fmu_settings_api.logging.attach_telemetry",
+            return_value=telemetry_processor,
+        ) as attach_telemetry_mock,
+        patch("fmu_settings_api.logging.structlog.configure") as configure_mock,
+    ):
+        setup_logging(settings, log_manager, EventInfo, telemetry=telemetry)
+
     attach_telemetry_mock.assert_called_once_with(telemetry)
     assert telemetry_processor in configure_mock.call_args.kwargs["processors"]
 
 
-def test_setup_logging_disables_telemetry_by_default() -> None:
-    """Do not discover or attach telemetry unless explicitly enabled."""
+def test_setup_logging_omits_telemetry_processor_by_default() -> None:
+    """Do not attach a telemetry processor unless telemetry is supplied."""
     log_manager = MagicMock()
 
-    with (
-        patch("fmu_settings_api.logging.configure_telemetry") as configure_mock,
-        patch("fmu_settings_api.logging.attach_telemetry") as attach_mock,
-    ):
-        result = setup_logging(settings, log_manager, EventInfo)
+    with patch("fmu_settings_api.logging.attach_telemetry") as attach_mock:
+        setup_logging(settings, log_manager, EventInfo)
 
-    assert result is None
-    configure_mock.assert_not_called()
     attach_mock.assert_not_called()
 
 

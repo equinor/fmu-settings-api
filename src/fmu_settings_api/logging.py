@@ -45,6 +45,17 @@ def attach_telemetry(telemetry: Telemetry) -> Callable[..., Any]:
     return processor
 
 
+def setup_telemetry(settings: APISettings, *, run_id: str | None = None) -> Telemetry:
+    """Configure telemetry for the API."""
+    return configure_telemetry(
+        app_name=settings.APP_NAME,
+        app_version=settings.APP_VERSION,
+        environment=settings.environment,
+        run_id=run_id,
+        minimum_level=logging.INFO,
+    )
+
+
 def attach_fmu_settings_handler(
     log_manager: Any,
     entry_class: type[Any],
@@ -90,9 +101,8 @@ def setup_logging(
     fmu_log_manager: Any,
     log_entry_class: type[Any],
     *,
-    enable_telemetry: bool = False,
-    run_id: str | None = None,
-) -> Telemetry | None:
+    telemetry: Telemetry | None = None,
+) -> None:
     """Configure structured logging with structlog."""
     logging.basicConfig(
         format="%(message)s",
@@ -115,15 +125,7 @@ def setup_logging(
         ),
     ]
 
-    telemetry = None
-    if enable_telemetry:
-        telemetry = configure_telemetry(
-            app_name=settings.APP_NAME,
-            app_version=settings.APP_VERSION,
-            environment=settings.environment,
-            run_id=run_id,
-            minimum_level=logging.INFO,
-        )
+    if telemetry is not None:
         processors.append(attach_telemetry(telemetry))
 
     if settings.log_format == "json" or settings.is_production:
@@ -146,7 +148,6 @@ def setup_logging(
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
-    return telemetry
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

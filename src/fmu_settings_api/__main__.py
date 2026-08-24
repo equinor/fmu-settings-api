@@ -25,7 +25,7 @@ from starlette.responses import Response
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from .config import HttpHeader, settings
-from .logging import get_logger, setup_logging
+from .logging import get_logger, setup_logging, setup_telemetry
 from .middleware.logging import LoggingMiddleware
 from .models import Ok
 from .session import ProjectSession, session_manager
@@ -184,13 +184,14 @@ def run_server(  # noqa: PLR0913
     log_manager = UserSessionLogManager(user_fmu_dir)
 
     settings.log_level = log_level.upper()  # type: ignore[assignment]
-    app.state.telemetry = setup_logging(
+    telemetry = setup_telemetry(settings, run_id=run_id) if enable_telemetry else None
+    setup_logging(
         settings,
         fmu_log_manager=log_manager,
         log_entry_class=EventInfo,
-        enable_telemetry=enable_telemetry,
-        run_id=run_id,
+        telemetry=telemetry,
     )
+    app.state.telemetry = telemetry
 
     if fmu_dir_status == "initialized":
         logger.info("fmu_directory_initialized", path=str(user_fmu_dir.path))
