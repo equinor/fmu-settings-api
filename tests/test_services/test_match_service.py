@@ -38,11 +38,39 @@ class TestMatchNames:
         assert len(results) == 1
         assert results[0].matches[0].score < PERFECT_MATCH_SCORE
 
-    def test_name_normalization(self, match_service: MatchService) -> None:
-        """Test that names are normalized before matching."""
+    @pytest.mark.parametrize(
+        ("source", "target"),
+        [
+            ("VIKING GP 2 1", "viking gp 2 1"),
+            ("Viking_GP_2_1", "viking-gp-2-1"),
+            ("Viking/GP/2/1", "Viking.GP.2.1"),
+            ("  Viking   GP  2  1  ", "viking gp 2 1"),
+        ],
+    )
+    def test_name_normalization(
+        self,
+        match_service: MatchService,
+        source: str,
+        target: str,
+    ) -> None:
+        """Test supported name formatting differences are normalized."""
+        results = match_service.match_names([source], [target])
+
+        assert len(results) == 1
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+        assert results[0].matches[0].confidence == "high"
+
+    def test_wellbore_prefixes_are_removed_before_matching(
+        self, match_service: MatchService
+    ) -> None:
+        """Test RMS and SMDA wellbore prefixes are removed before matching."""
         results = match_service.match_names(
-            ["Viking_GP-2/1"],
-            ["VIKING GP 2 1"],
+            ["RFT_33_5_1"],
+            ["NO 33/5-1"],
+            [
+                MatchReplacementRule(original="RFT", replacement=""),
+                MatchReplacementRule(original="NO", replacement=""),
+            ],
         )
 
         assert len(results) == 1
