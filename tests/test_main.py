@@ -74,16 +74,43 @@ def test_add_frontend_serves_spa_without_hiding_api_routes(tmp_path: Path) -> No
     assert asset_response.text == "app"
 
 
+@pytest.mark.parametrize("frontend_directory_is_set", [False, True])
+def test_run_server_configures_frontend(
+    tmp_path: Path, frontend_directory_is_set: bool
+) -> None:
+    """Add the frontend only when its directory is supplied."""
+    frontend_directory = tmp_path if frontend_directory_is_set else None
+    with (
+        patch("fmu_settings_api.__main__.UserFMUDirectory") as user_directory,
+        patch("fmu_settings_api.__main__.UserSessionLogManager"),
+        patch("fmu_settings_api.__main__.setup_logging"),
+        patch("fmu_settings_api.__main__.uvicorn.run") as uvicorn_run,
+        patch("fmu_settings_api.__main__.app") as test_app,
+        patch("fmu_settings_api.__main__.add_frontend") as add_frontend_mock,
+    ):
+        user_directory.return_value.path = tmp_path
+        run_server(
+            frontend_directory=frontend_directory,
+            reload=True,
+        )
+
+    if frontend_directory_is_set:
+        add_frontend_mock.assert_called_once_with(test_app, tmp_path)
+    else:
+        add_frontend_mock.assert_not_called()
+    assert uvicorn_run.call_args.kwargs["port"] == 8000
+
+
 @pytest.mark.parametrize(
     ("enable_telemetry", "run_id"),
     [(False, None), (True, "run-123")],
 )
-def test_run_server_adds_frontend(
+def test_run_server_configures_telemetry(
     tmp_path: Path,
     enable_telemetry: bool,
     run_id: str | None,
 ) -> None:
-    """Add the frontend and coordinate optional telemetry with logging setup."""
+    """Configure optional telemetry and pass it to logging setup."""
     telemetry = MagicMock()
     with (
         patch("fmu_settings_api.__main__.UserFMUDirectory") as user_directory,
@@ -94,17 +121,14 @@ def test_run_server_adds_frontend(
         ) as setup_telemetry_mock,
         patch("fmu_settings_api.__main__.uvicorn.run") as uvicorn_run,
         patch("fmu_settings_api.__main__.app") as test_app,
-        patch("fmu_settings_api.__main__.add_frontend") as add_frontend_mock,
     ):
         user_directory.return_value.path = tmp_path
         run_server(
-            frontend_directory=tmp_path,
             reload=True,
             enable_telemetry=enable_telemetry,
             run_id=run_id,
         )
 
-    add_frontend_mock.assert_called_once_with(test_app, tmp_path)
     if enable_telemetry:
         setup_telemetry_mock.assert_called_once_with(settings, run_id=run_id)
         assert test_app.state.telemetry is telemetry
