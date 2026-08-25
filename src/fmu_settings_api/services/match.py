@@ -3,7 +3,7 @@
 import re
 from typing import Literal
 
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 
 from fmu_settings_api.models.match import (
     MatchCandidate,
@@ -41,22 +41,20 @@ class MatchService:
         """
         matches = []
         normalized_targets = [
-            (target, self._normalize_name(target, replacements)) for target in targets
+            self._normalize_name(target, replacements) for target in targets
         ]
 
         for source in sources:
             normalized_source = self._normalize_name(source, replacements)
-            target_scores = sorted(
-                (
-                    (
-                        target,
-                        fuzz.ratio(normalized_source, normalized_target),
-                    )
-                    for target, normalized_target in normalized_targets
-                ),
-                key=lambda target_score: target_score[1],
-                reverse=True,
-            )
+            target_scores = [
+                (targets[target_index], score)
+                for _, score, target_index in process.extract(
+                    normalized_source,
+                    normalized_targets,
+                    scorer=fuzz.ratio,
+                    limit=TOP_MATCHES_PER_SOURCE,
+                )
+            ]
 
             matches.append(
                 MatchResult(
@@ -67,7 +65,7 @@ class MatchService:
                             score=score,
                             confidence=self._determine_confidence(score),
                         )
-                        for target, score in target_scores[:TOP_MATCHES_PER_SOURCE]
+                        for target, score in target_scores
                     ],
                 )
             )
