@@ -242,7 +242,7 @@ def test_validate_rms_project_updates_validation_metadata(
     fmu_dir: ProjectFMUDirectory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test matching RMS configuration writes a timezone-aware record."""
+    """Test successful RMS validation records the user, time, and source reads."""
     horizon = RmsHorizon(name="Top", type="interpreted")
     zone = RmsStratigraphicZone(
         name="Reservoir",
@@ -279,6 +279,39 @@ def test_validate_rms_project_updates_validation_metadata(
     rms_service.get_zones.assert_called_once()
     rms_service.get_wells.assert_called_once()
     rms_service.get_coordinate_system.assert_not_called()
+
+
+def test_validate_rms_project_accepts_equal_saved_and_current_items(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Test equal saved and current RMS items pass without mismatches."""
+    horizons = [RmsHorizon(name="Top", type="interpreted")]
+    zones = [
+        RmsStratigraphicZone(
+            name="Reservoir",
+            top_horizon_name="Top",
+            base_horizon_name="Base",
+            stratigraphic_column_name=["Column"],
+        )
+    ]
+    wells = [RmsWell(name="A-1", planned=True)]
+    _set_rms_config(
+        fmu_dir,
+        horizons=horizons,
+        zones=zones,
+        wells=wells,
+    )
+    rms_service = Mock()
+    rms_service.get_rms_version.return_value = "14.2.2"
+    rms_service.get_horizons.return_value = horizons
+    rms_service.get_zones.return_value = zones
+    rms_service.get_wells.return_value = wells
+
+    ProjectValidationService(fmu_dir).validate_rms_project_and_update_metadata(
+        rms_service, Mock()
+    )
+
+    assert fmu_dir.config.load(force=True).validation.rms_project is not None
 
 
 def test_validate_rms_project_accepts_configured_subsets_in_any_order(
