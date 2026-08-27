@@ -13,6 +13,7 @@ from fmu.settings.models.project_config import (
 )
 
 from fmu_settings_api.interfaces import SumoApi
+from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models import FMUProject
 from fmu_settings_api.models.project import (
     CacheRetention,
@@ -21,6 +22,8 @@ from fmu_settings_api.models.project import (
 )
 
 from .rms import RmsService
+
+logger = get_logger(__name__)
 
 
 class ProjectService:
@@ -32,11 +35,19 @@ class ProjectService:
 
     def get_project_data(self) -> FMUProject:
         """Get the paths and configuration of the project FMU directory."""
-        return FMUProject(
+        project = FMUProject(
             path=self._fmu_dir.base_path,
             project_dir_name=self._fmu_dir.base_path.name,
             config=self._fmu_dir.config.load(),
         )
+        project_context: dict[str, str] = {}
+        if project.config.access is not None:
+            project_context["asset_name"] = project.config.access.asset.name
+        if project.config.model is not None:
+            project_context["model_name"] = project.config.model.name
+        if project_context:
+            logger.info("project_data_loaded", **project_context)
+        return project
 
     def get_restorable_fmu_files(self) -> list[Path]:
         """List missing project .fmu files that can currently be recovered."""

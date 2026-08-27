@@ -1,10 +1,12 @@
 """Tests for ProjectService."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
-from fmu.datamodels.common import Smda
+from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings.models.project_config import (
     RmsCoordinateSystem,
@@ -15,6 +17,76 @@ from fmu.settings.models.project_config import (
 
 from fmu_settings_api.models.project import CacheRetention, SumoAsset
 from fmu_settings_api.services.project import ProjectService
+
+
+def test_get_project_data_logs_configured_asset(
+    fmu_dir: ProjectFMUDirectory,
+    access_data: dict[str, Any],
+) -> None:
+    """Log the configured asset when project data loads."""
+    fmu_dir.set_config_value("access", access_data)
+    service = ProjectService(fmu_dir)
+
+    with patch("fmu_settings_api.services.project.logger") as logger_mock:
+        project = service.get_project_data()
+
+    assert project.config.access == Access.model_validate(access_data)
+    logger_mock.info.assert_called_once_with(
+        "project_data_loaded",
+        asset_name="Drogon",
+    )
+
+
+def test_get_project_data_logs_configured_model(
+    fmu_dir: ProjectFMUDirectory,
+    model_data: dict[str, Any],
+) -> None:
+    """Log the configured model when project data loads."""
+    fmu_dir.set_config_value("model", model_data)
+    service = ProjectService(fmu_dir)
+
+    with patch("fmu_settings_api.services.project.logger") as logger_mock:
+        project = service.get_project_data()
+
+    assert project.config.model == Model.model_validate(model_data)
+    logger_mock.info.assert_called_once_with(
+        "project_data_loaded",
+        model_name="Drogon",
+    )
+
+
+def test_get_project_data_logs_asset_and_model_together(
+    fmu_dir: ProjectFMUDirectory,
+    access_data: dict[str, Any],
+    model_data: dict[str, Any],
+) -> None:
+    """Log the asset and model in one project-data event."""
+    fmu_dir.set_config_value("access", access_data)
+    fmu_dir.set_config_value("model", model_data)
+    service = ProjectService(fmu_dir)
+
+    with patch("fmu_settings_api.services.project.logger") as logger_mock:
+        service.get_project_data()
+
+    logger_mock.info.assert_called_once_with(
+        "project_data_loaded",
+        asset_name="Drogon",
+        model_name="Drogon",
+    )
+
+
+def test_get_project_data_omits_event_without_project_context(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Do not log project data without a configured asset or model."""
+    service = ProjectService(fmu_dir)
+
+    with patch("fmu_settings_api.services.project.logger") as logger_mock:
+        project = service.get_project_data()
+
+    assert project.config.access is None
+    assert project.config.model is None
+    logger_mock.info.assert_not_called()
 
 
 def test_rms_project_path_returns_path(fmu_dir: ProjectFMUDirectory) -> None:
