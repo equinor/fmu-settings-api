@@ -1093,7 +1093,9 @@ async def test_post_validate_masterdata_smda_success(
 ) -> None:
     """Test validating SMDA masterdata returns a success message."""
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock()
+    validation_service.validate_masterdata_against_smda_and_update_metadata = (
+        AsyncMock()
+    )
     app.dependency_overrides[get_project_validation_service] = lambda: (
         validation_service
     )
@@ -1102,7 +1104,7 @@ async def test_post_validate_masterdata_smda_success(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"message": "Validated SMDA masterdata"}
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_missing_masterdata_error(
@@ -1110,7 +1112,7 @@ async def test_post_validate_masterdata_smda_missing_masterdata_error(
 ) -> None:
     """Test validating SMDA masterdata maps missing masterdata to 422."""
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock(
+    validation_service.validate_masterdata_against_smda_and_update_metadata = AsyncMock(
         side_effect=ValueError(
             "Project masterdata must be set before validating against SMDA."
         )
@@ -1126,7 +1128,7 @@ async def test_post_validate_masterdata_smda_missing_masterdata_error(
         response.json()["detail"]
         == "Project masterdata must be set before validating against SMDA."
     )
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_mismatch_error(
@@ -1142,7 +1144,7 @@ async def test_post_validate_masterdata_smda_mismatch_error(
         ),
     )
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock(
+    validation_service.validate_masterdata_against_smda_and_update_metadata = AsyncMock(
         side_effect=MasterdataSmdaMismatchError([mismatch])
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
@@ -1156,7 +1158,7 @@ async def test_post_validate_masterdata_smda_mismatch_error(
         "message": "Project masterdata does not match SMDA",
         "mismatches": [mismatch.model_dump(mode="json")],
     }
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_smda_http_error(
@@ -1166,7 +1168,7 @@ async def test_post_validate_masterdata_smda_smda_http_error(
     request = httpx2.Request("GET", "https://smda.example.test/masterdata")
     response = httpx2.Response(status.HTTP_503_SERVICE_UNAVAILABLE, request=request)
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock(
+    validation_service.validate_masterdata_against_smda_and_update_metadata = AsyncMock(
         side_effect=httpx2.HTTPStatusError(
             "SMDA failed", request=request, response=response
         )
@@ -1185,7 +1187,7 @@ async def test_post_validate_masterdata_smda_smda_http_error(
         api_response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_timeout_error(
@@ -1193,7 +1195,7 @@ async def test_post_validate_masterdata_smda_timeout_error(
 ) -> None:
     """Test validating SMDA masterdata maps SMDA timeouts."""
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock(
+    validation_service.validate_masterdata_against_smda_and_update_metadata = AsyncMock(
         side_effect=TimeoutError()
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
@@ -1208,7 +1210,7 @@ async def test_post_validate_masterdata_smda_timeout_error(
         response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_post_validate_masterdata_smda_malformed_smda_response(
@@ -1216,7 +1218,7 @@ async def test_post_validate_masterdata_smda_malformed_smda_response(
 ) -> None:
     """Test validating SMDA masterdata maps malformed SMDA responses."""
     validation_service = Mock()
-    validation_service.validate_masterdata_smda_and_update_metadata = AsyncMock(
+    validation_service.validate_masterdata_against_smda_and_update_metadata = AsyncMock(
         side_effect=KeyError("field")
     )
     app.dependency_overrides[get_project_validation_service] = lambda: (
@@ -1231,7 +1233,7 @@ async def test_post_validate_masterdata_smda_malformed_smda_response(
         response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
-    validation_service.validate_masterdata_smda_and_update_metadata.assert_awaited_once()
+    validation_service.validate_masterdata_against_smda_and_update_metadata.assert_awaited_once()
 
 
 async def test_load_global_config_from_default_path(

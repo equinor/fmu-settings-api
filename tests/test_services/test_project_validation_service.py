@@ -86,7 +86,7 @@ async def test_validate_masterdata_smda_updates_validation_metadata(
 
     await ProjectValidationService(
         fmu_dir
-    ).validate_masterdata_smda_and_update_metadata(smda_service)
+    ).validate_masterdata_against_smda_and_update_metadata(smda_service)
 
     config = fmu_dir.config.load(force=True)
     assert config.validation.masterdata_smda is not None
@@ -128,7 +128,7 @@ async def test_validate_masterdata_smda_validates_each_saved_field(
 
     await ProjectValidationService(
         fmu_dir
-    ).validate_masterdata_smda_and_update_metadata(smda_service)
+    ).validate_masterdata_against_smda_and_update_metadata(smda_service)
 
     assert smda_service.get_masterdata.await_args_list == [
         call([SmdaSelectedField(identifier=field.identifier, uuid=field.uuid)])
@@ -182,7 +182,7 @@ async def test_validate_masterdata_smda_allows_extra_current_values(
 
     await ProjectValidationService(
         fmu_dir
-    ).validate_masterdata_smda_and_update_metadata(smda_service)
+    ).validate_masterdata_against_smda_and_update_metadata(smda_service)
 
     assert fmu_dir.config.load(force=True).validation.masterdata_smda is not None
 
@@ -205,7 +205,7 @@ async def test_validate_masterdata_smda_raises_for_mismatch(
     with pytest.raises(MasterdataSmdaMismatchError) as exc_info:
         await ProjectValidationService(
             fmu_dir
-        ).validate_masterdata_smda_and_update_metadata(smda_service)
+        ).validate_masterdata_against_smda_and_update_metadata(smda_service)
 
     assert isinstance(exc_info.value, ValueError)
     assert exc_info.value.mismatches[0].key == "masterdata.smda.field"
@@ -235,7 +235,7 @@ async def test_validate_masterdata_smda_raises_when_masterdata_is_missing(
     ):
         await ProjectValidationService(
             fmu_dir
-        ).validate_masterdata_smda_and_update_metadata(smda_service)
+        ).validate_masterdata_against_smda_and_update_metadata(smda_service)
 
 
 def test_validate_rms_project_updates_validation_metadata(

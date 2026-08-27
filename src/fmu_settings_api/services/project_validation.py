@@ -43,7 +43,7 @@ class ProjectValidationService:
         """Initialize the service with project access."""
         self._fmu_dir = fmu_dir
 
-    async def validate_masterdata_smda_and_update_metadata(
+    async def validate_masterdata_against_smda_and_update_metadata(
         self,
         smda_service: SmdaService,
     ) -> None:
