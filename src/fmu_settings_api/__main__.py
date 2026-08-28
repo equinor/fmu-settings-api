@@ -24,7 +24,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
-from .config import HttpHeader, settings
+from .config import Environment, HttpHeader, settings
 from .logging import get_logger, setup_logging, setup_telemetry
 from .middleware.logging import LoggingMiddleware
 from .models import Ok
@@ -210,6 +210,7 @@ def run_server(  # noqa: PLR0913
     frontend_directory: Path | None = None,
     enable_telemetry: bool = False,
     run_id: str | None = None,
+    environment: Environment = "development",
 ) -> None:
     """Start the API server and, when supplied, its built frontend."""
     log_level = log_level.lower()
@@ -224,6 +225,7 @@ def run_server(  # noqa: PLR0913
     log_manager = UserSessionLogManager(user_fmu_dir)
 
     settings.log_level = log_level.upper()  # type: ignore[assignment]
+    settings.environment = environment
     telemetry = setup_telemetry(settings, run_id=run_id) if enable_telemetry else None
     setup_logging(
         settings,

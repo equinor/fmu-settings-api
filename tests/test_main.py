@@ -123,13 +123,17 @@ def test_run_server_configures_telemetry(
         ) as setup_telemetry_mock,
         patch("fmu_settings_api.__main__.uvicorn.run") as uvicorn_run,
         patch("fmu_settings_api.__main__.app") as test_app,
+        patch.object(settings, "environment", "development"),
     ):
         user_directory.return_value.path = tmp_path
         run_server(
             reload=True,
             enable_telemetry=enable_telemetry,
             run_id=run_id,
+            environment="production",
         )
+
+        assert settings.environment == "production"
 
     if enable_telemetry:
         setup_telemetry_mock.assert_called_once_with(settings, run_id=run_id)

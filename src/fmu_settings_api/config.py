@@ -3,7 +3,7 @@
 import hashlib
 import secrets
 from datetime import timedelta
-from typing import TYPE_CHECKING, Annotated, Any, Final, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Any, Final, Literal, Self, TypeAlias
 
 from pydantic import (
     BaseModel,
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from ._version import __version__
 else:
     from fmu_settings_api import __version__
+
+Environment: TypeAlias = Literal["development", "production"]
 
 
 def generate_auth_token() -> str:
@@ -86,7 +88,7 @@ class APISettings(BaseModel):
         description="Logging level",
     )
     log_format: Literal["console", "json"] = Field(default="console")
-    environment: Literal["development", "production"] = Field(default="development")
+    environment: Environment = Field(default="development")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
