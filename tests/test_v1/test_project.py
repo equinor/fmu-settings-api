@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID
 
 import httpx2
+import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from fmu.datamodels.common import Access, Smda
@@ -3760,7 +3761,10 @@ async def test_post_export_rms_simulator_renaming_table_success(
             f"Exported RMS-to-simulator mappings to renaming table at {relative_path}"
         )
     }
-    export_rms_simulator_renaming_table.assert_called_once_with(relative_path)
+    export_rms_simulator_renaming_table.assert_called_once_with(
+        relative_path,
+        overwrite=False,
+    )
 
 
 async def test_post_export_rms_simulator_renaming_table_uses_default_path(
@@ -3785,7 +3789,100 @@ async def test_post_export_rms_simulator_renaming_table_uses_default_path(
             f"Exported RMS-to-simulator mappings to renaming table at {default_path}"
         )
     }
-    export_rms_simulator_renaming_table.assert_called_once_with(default_path)
+    export_rms_simulator_renaming_table.assert_called_once_with(
+        default_path,
+        overwrite=False,
+    )
+
+
+async def test_post_export_rms_simulator_renaming_table_forwards_overwrite(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test that the overwrite option is forwarded to the service."""
+    default_path = Path(
+        "rms/input/well_modelling/well_info/rms_simulator.renaming_table"
+    )
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+    ) as export_rms_simulator_renaming_table:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table",
+            json={"overwrite": True},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    export_rms_simulator_renaming_table.assert_called_once_with(
+        default_path,
+        overwrite=True,
+    )
+
+
+async def test_post_export_rms_simulator_renaming_table_file_exists(
+    client_with_project_session: TestClient,
+) -> None:
+    """Test that a service FileExistsError maps to a 409 response."""
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=FileExistsError,
+    ) as export_rms_simulator_renaming_table:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table",
+            json={"relative_path": str(relative_path)},
+        )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json() == {
+        "detail": f"Export file already exists: '{relative_path}'"
+    }
+    export_rms_simulator_renaming_table.assert_called_once_with(
+        relative_path,
+        overwrite=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("error", "detail"),
+    [
+        (
+            IsADirectoryError,
+            "Cannot export mappings to a directory. Select a file path",
+        ),
+        (
+            NotADirectoryError,
+            "Cannot export mappings because part of the folder path is a file. "
+            "Select a valid file path",
+        ),
+    ],
+)
+async def test_post_export_rms_simulator_renaming_table_invalid_path(
+    client_with_project_session: TestClient,
+    error: type[OSError],
+    detail: str,
+) -> None:
+    """Test that an invalid export path maps to a 422 response."""
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+
+    with patch(
+        "fmu_settings_api.services.mappings.MappingsService."
+        "export_rms_simulator_renaming_table",
+        side_effect=error,
+    ) as export_rms_simulator_renaming_table:
+        response = client_with_project_session.post(
+            f"{ROUTE}/mappings/export/rms_simulator_renaming_table",
+            json={"relative_path": str(relative_path)},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {"detail": f"{detail}: '{relative_path}'"}
+    export_rms_simulator_renaming_table.assert_called_once_with(
+        relative_path,
+        overwrite=False,
+    )
 
 
 async def test_post_export_rms_simulator_renaming_table_file_not_found(

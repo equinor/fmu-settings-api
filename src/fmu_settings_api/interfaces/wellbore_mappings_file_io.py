@@ -157,6 +157,7 @@ class WellboreMappingsFileIO:
         source_system: DataSystem,
         target_system: DataSystem,
         relative_path: str | Path,
+        overwrite: bool = False,
     ) -> None:
         """Write wellbore mappings to a renaming table file.
 
@@ -164,17 +165,21 @@ class WellboreMappingsFileIO:
         with the header row ``SETNAMES``, the source system, and the target
         system separated by tab characters, followed by one source and one
         target identifier per line.
-        If the target renaming_table file already exists, it is overwritten.
+        Existing files are overwritten only when ``overwrite`` is true.
 
         Args:
             wellbore_mappings: Wellbore mappings to export.
             source_system: Source system to use for the first output column.
             target_system: Target system to use for the second output column.
             relative_path: Output path relative to the project root.
+            overwrite: Whether an existing output file may be overwritten.
 
         Raises:
             ValueError: If the path escapes the project root, no mappings can be
                 represented in the renaming table format.
+            FileExistsError: If the output file exists and overwrite is false.
+            IsADirectoryError: If the output path is a directory.
+            NotADirectoryError: If a parent path component is not a directory.
         """
         renaming_table_path = self._fmu_dir.resolve_path_inside_project(
             Path(relative_path)
@@ -184,10 +189,25 @@ class WellboreMappingsFileIO:
                 f"No wellbore mappings available to write to {renaming_table_path.name}"
             )
 
-        renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
-        header = f"SETNAMES {source_system.value}\t{target_system.value}"
+        try:
+            renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
+        except FileExistsError as e:
+            raise NotADirectoryError(
+                f"Parent path is not a directory: '{renaming_table_path.parent}'"
+            ) from e
 
-        with renaming_table_path.open("w", encoding="utf-8", newline="") as file_handle:
-            file_handle.write(f"{header}\n")
-            for mapping in wellbore_mappings:
-                file_handle.write(f"{mapping.source_id}\t{mapping.target_id}\n")
+        header = f"SETNAMES {source_system.value}\t{target_system.value}"
+        mode = "w" if overwrite else "x"
+        try:
+            with renaming_table_path.open(
+                mode, encoding="utf-8", newline=""
+            ) as file_handle:
+                file_handle.write(f"{header}\n")
+                for mapping in wellbore_mappings:
+                    file_handle.write(f"{mapping.source_id}\t{mapping.target_id}\n")
+        except FileExistsError as e:
+            if renaming_table_path.is_dir():
+                raise IsADirectoryError(
+                    f"Output path is a directory: '{renaming_table_path}'"
+                ) from e
+            raise

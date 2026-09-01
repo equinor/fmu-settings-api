@@ -107,7 +107,10 @@ class MappingsService:
         )
 
     def export_rms_simulator_renaming_table(
-        self: Self, relative_path: str | Path | None = None
+        self: Self,
+        relative_path: str | Path | None = None,
+        *,
+        overwrite: bool = False,
     ) -> None:
         """Export RMS-to-simulator wellbore mappings as rms_simulator renaming table."""
         self._fmu_dir._lock.ensure_can_write()
@@ -127,10 +130,14 @@ class MappingsService:
             source_system=DataSystem.rms,
             target_system=DataSystem.simulator,
             relative_path=(relative_path or self.RMS_SIMULATOR_RENAMING_TABLE_PATH),
+            overwrite=overwrite,
         )
 
     def export_rms_pdm_renaming_table(
-        self: Self, relative_path: str | Path | None = None
+        self: Self,
+        relative_path: str | Path | None = None,
+        *,
+        overwrite: bool = False,
     ) -> None:
         """Export RMS-to-PDM wellbore mappings as rms_pdm renaming table."""
         self._fmu_dir._lock.ensure_can_write()
@@ -150,6 +157,7 @@ class MappingsService:
             source_system=DataSystem.rms,
             target_system=DataSystem.pdm,
             relative_path=relative_path or self.RMS_PDM_RENAMING_TABLE_PATH,
+            overwrite=overwrite,
         )
 
     def _filter_wellbore_mappings(

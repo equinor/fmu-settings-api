@@ -626,6 +626,44 @@ def test_export_rms_simulator_renaming_table_forwards_filtered_mappings_and_path
         source_system=DataSystem.rms,
         target_system=DataSystem.simulator,
         relative_path=expected_path,
+        overwrite=False,
+    )
+
+
+def test_export_rms_simulator_renaming_table_forwards_overwrite(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_rms_simulator_mappings: Callable[[], InternalWellboreMappings],
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """RMS simulator export forwards an explicit overwrite request."""
+    expected_path = Path("data/custom/rms_simulator.renaming_table")
+    stored_mappings = make_rms_simulator_mappings()
+    filtered_mappings = [make_wellbore_mapping()]
+
+    with (
+        patch.object(
+            type(fmu_dir.mappings),
+            "internal_wellbore_mappings",
+            new_callable=PropertyMock,
+        ) as mappings_mock,
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "write_wellbore_renaming_table",
+        ) as write_mock,
+    ):
+        mappings_mock.return_value = stored_mappings
+        mappings_service.export_rms_simulator_renaming_table(
+            expected_path,
+            overwrite=True,
+        )
+
+    write_mock.assert_called_once_with(
+        wellbore_mappings=filtered_mappings,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.simulator,
+        relative_path=expected_path,
+        overwrite=True,
     )
 
 
@@ -718,6 +756,58 @@ def test_export_rms_pdm_renaming_table_forwards_filtered_mappings_and_path(
         source_system=DataSystem.rms,
         target_system=DataSystem.pdm,
         relative_path=expected_path,
+        overwrite=False,
+    )
+
+
+def test_export_rms_pdm_renaming_table_forwards_overwrite(
+    mappings_service: MappingsService,
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """RMS-to-PDM export forwards an explicit overwrite request."""
+    expected_path = Path("data/custom/rms_pdm.renaming_table")
+    stored_mappings = InternalWellboreMappings(
+        root=[
+            make_wellbore_mapping(
+                source_system=DataSystem.rms,
+                target_system=DataSystem.rms,
+                source_id="30_9-B-43_A",
+                target_id="30_9-B-43_A",
+            ),
+            make_wellbore_mapping(
+                source_system=DataSystem.rms,
+                target_system=DataSystem.pdm,
+                source_id="30_9-B-43_A",
+                target_id="30/9-B-43 A",
+            ),
+        ]
+    )
+    filtered_mappings = [stored_mappings[1]]
+
+    with (
+        patch.object(
+            type(fmu_dir.mappings),
+            "internal_wellbore_mappings",
+            new_callable=PropertyMock,
+        ) as mappings_mock,
+        patch.object(
+            mappings_service._wellbore_mappings_file_io,
+            "write_wellbore_renaming_table",
+        ) as write_mock,
+    ):
+        mappings_mock.return_value = stored_mappings
+        mappings_service.export_rms_pdm_renaming_table(
+            expected_path,
+            overwrite=True,
+        )
+
+    write_mock.assert_called_once_with(
+        wellbore_mappings=filtered_mappings,
+        source_system=DataSystem.rms,
+        target_system=DataSystem.pdm,
+        relative_path=expected_path,
+        overwrite=True,
     )
 
 

@@ -187,6 +187,90 @@ def test_write_wellbore_renaming_table_writes_expected_format(
     )
 
 
+def test_write_wellbore_renaming_table_preserves_existing_file_by_default(
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """An existing renaming table is preserved when overwrite is false."""
+    file_io = WellboreMappingsFileIO(fmu_dir)
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+    renaming_table_path = fmu_dir.base_path / relative_path
+    renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
+    renaming_table_path.write_text("existing-content\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError):
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[make_wellbore_mapping()],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=relative_path,
+        )
+
+    assert renaming_table_path.read_text(encoding="utf-8") == "existing-content\n"
+
+
+def test_write_wellbore_renaming_table_overwrites_existing_file_when_allowed(
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """An existing renaming table is replaced when overwrite is true."""
+    file_io = WellboreMappingsFileIO(fmu_dir)
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+    renaming_table_path = fmu_dir.base_path / relative_path
+    renaming_table_path.parent.mkdir(parents=True, exist_ok=True)
+    renaming_table_path.write_text("existing-content\n", encoding="utf-8")
+
+    file_io.write_wellbore_renaming_table(
+        wellbore_mappings=[make_wellbore_mapping()],
+        source_system=DataSystem.rms,
+        target_system=DataSystem.simulator,
+        relative_path=relative_path,
+        overwrite=True,
+    )
+
+    assert renaming_table_path.read_text(encoding="utf-8") == (
+        "SETNAMES rms\tsimulator\n30_9-B-43_A\tB43A\n"
+    )
+
+
+def test_write_wellbore_renaming_table_raises_for_directory_output(
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """A directory output path raises IsADirectoryError."""
+    file_io = WellboreMappingsFileIO(fmu_dir)
+    relative_path = Path("data/custom/rms_simulator.renaming_table")
+    (fmu_dir.base_path / relative_path).mkdir(parents=True)
+
+    with pytest.raises(IsADirectoryError):
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[make_wellbore_mapping()],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=relative_path,
+        )
+
+
+def test_write_wellbore_renaming_table_raises_for_file_in_parent_path(
+    fmu_dir: ProjectFMUDirectory,
+    make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],
+) -> None:
+    """A file in the parent path raises NotADirectoryError."""
+    file_io = WellboreMappingsFileIO(fmu_dir)
+    parent_relative_path = Path("data/custom")
+    parent_path = fmu_dir.base_path / parent_relative_path
+    parent_path.parent.mkdir(parents=True)
+    parent_path.write_text("existing-content\n", encoding="utf-8")
+
+    with pytest.raises(NotADirectoryError):
+        file_io.write_wellbore_renaming_table(
+            wellbore_mappings=[make_wellbore_mapping()],
+            source_system=DataSystem.rms,
+            target_system=DataSystem.simulator,
+            relative_path=parent_relative_path / "rms_simulator.renaming_table",
+        )
+
+
 def test_write_wellbore_renaming_table_writes_to_standard_path(
     fmu_dir: ProjectFMUDirectory,
     make_wellbore_mapping: Callable[..., InternalWellboreIdentifierMapping],

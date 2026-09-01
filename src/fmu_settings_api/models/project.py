@@ -34,13 +34,26 @@ class GlobalConfigPath(BaseResponseModel):
     """Relative path in the project to a global config file."""
 
 
-class RmsSimulatorMappingFilePath(BaseResponseModel):
-    """A path to an RMS-to-simulator mapping import or export file."""
+class RmsSimulatorMappingImportRequest(BaseResponseModel):
+    """Options for importing RMS-to-simulator mappings."""
 
-    relative_path: Path = Field(
-        examples=["rms/input/well_modelling/well_info/rms_eclipse.csv"]
+    relative_path: Path | None = Field(
+        default=None, examples=["rms/input/well_modelling/well_info/rms_eclipse.csv"]
     )
-    """Relative path in the project to an RMS-to-simulator mapping file."""
+    """Input path relative to the project root, or the default path if omitted."""
+
+
+class RmsSimulatorMappingExportRequest(BaseResponseModel):
+    """Options for exporting RMS-to-simulator mappings."""
+
+    relative_path: Path | None = Field(
+        default=None,
+        examples=["rms/input/well_modelling/well_info/rms_simulator.renaming_table"],
+    )
+    """Output path relative to the project root, or the default path if omitted."""
+
+    overwrite: bool = False
+    """Whether an existing export file may be overwritten."""
 
 
 class CacheRetention(BaseResponseModel):

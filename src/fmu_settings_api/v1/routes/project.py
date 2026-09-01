@@ -60,7 +60,8 @@ from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
     LockStatus,
-    RmsSimulatorMappingFilePath,
+    RmsSimulatorMappingExportRequest,
+    RmsSimulatorMappingImportRequest,
     SumoAsset,
     ValidationMismatchDetail,
 )
@@ -332,35 +333,65 @@ MappingsResponses: Final[Responses] = {
     ),
 }
 
-RmsSimulatorMappingsFileResponses: Final[Responses] = {
+RmsSimulatorMappingsImportResponses: Final[Responses] = {
     **inline_add_response(
         403,
-        "The RMS-to-simulator wellbore mapping file could not be read or written",
-        [
-            {"detail": "Permission denied accessing .fmu at {path}"},
-            {"detail": "Permission denied while trying to export the mappings."},
-        ],
+        "The RMS-to-simulator wellbore mapping file could not be read",
+        [{"detail": "Permission denied accessing .fmu at {path}"}],
     ),
     **inline_add_response(
         404,
         "The RMS-to-simulator wellbore mapping file could not be found",
+        [{"detail": "CSV file not found: '{path}'"}],
+    ),
+    **inline_add_response(
+        422,
+        "The RMS-to-simulator wellbore mapping file contains invalid content",
         [
-            {"detail": "CSV file not found: '{path}'"},
-            {"detail": "Mappings file not found"},
+            {"detail": "CSV file is missing required columns: {column_names}"},
+            {"detail": "CSV row has missing well mapping values at line {line_number}"},
+            {"detail": "Invalid mappings: {error_message}"},
         ],
+    ),
+}
+
+RmsSimulatorMappingsExportResponses: Final[Responses] = {
+    **inline_add_response(
+        403,
+        "The RMS-to-simulator wellbore mapping file could not be written",
+        [{"detail": "Permission denied while trying to export the mappings."}],
+    ),
+    **inline_add_response(
+        404,
+        "The saved project mappings could not be found",
+        [{"detail": "Mappings file not found"}],
+    ),
+    **inline_add_response(
+        409,
+        "The export file already exists and overwrite was not authorized",
+        [{"detail": "Export file already exists: '{path}'"}],
     ),
     **inline_add_response(
         422,
         dedent(
             """
-            The RMS-to-simulator wellbore mapping file contains invalid content,
-            or no mappings can be exported.
+            The export path or saved mappings are invalid, or no mappings can
+            be exported.
             """
         ),
         [
-            {"detail": "CSV file is missing required columns: {column_names}"},
-            {"detail": "CSV row has missing well mapping values at line {line_number}"},
-            {"detail": "Invalid mappings: {error_message}"},
+            {
+                "detail": (
+                    "Cannot export mappings to a directory. Select a file path: "
+                    "'{path}'"
+                )
+            },
+            {
+                "detail": (
+                    "Cannot export mappings because part of the folder path is a "
+                    "file. Select a valid file path: '{path}'"
+                )
+            },
             {"detail": "Invalid mappings in existing file: {error_message}"},
             {
                 "detail": (
@@ -1623,17 +1654,17 @@ async def put_mappings(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **RmsSimulatorMappingsFileResponses,
+        **RmsSimulatorMappingsImportResponses,
     },
 )
 async def post_mappings_import_rms_eclipse_csv(
     mappings_service: MappingsServiceDep,
-    path: RmsSimulatorMappingFilePath | None = None,
+    import_request: RmsSimulatorMappingImportRequest | None = None,
 ) -> InternalMappings:
     """Import RMS-to-simulator wellbore mappings from an rms_eclipse CSV file."""
     try:
         wellbore_mappings = mappings_service.import_rms_eclipse_csv(
-            path.relative_path if path else None
+            import_request.relative_path if import_request else None
         )
         return InternalMappings(wellbore=wellbore_mappings)
     except FileNotFoundError as e:
@@ -1671,34 +1702,59 @@ async def post_mappings_import_rms_eclipse_csv(
     responses={
         **GetSessionResponses,
         **ProjectResponses,
-        **RmsSimulatorMappingsFileResponses,
+        **RmsSimulatorMappingsExportResponses,
         **LockConflictResponses,
     },
 )
 async def post_mappings_export_rms_simulator_renaming_table(
     mappings_service: MappingsServiceDep,
-    path: RmsSimulatorMappingFilePath | None = None,
+    export_request: RmsSimulatorMappingExportRequest | None = None,
 ) -> Message:
     """Export RMS-to-simulator wellbore mappings to a renaming table file."""
+    relative_path = (
+        export_request.relative_path
+        if export_request and export_request.relative_path
+        else mappings_service.RMS_SIMULATOR_RENAMING_TABLE_PATH
+    )
+    overwrite = export_request.overwrite if export_request else False
     try:
-        relative_path = (
-            path.relative_path
-            if path
-            else mappings_service.RMS_SIMULATOR_RENAMING_TABLE_PATH
+        mappings_service.export_rms_simulator_renaming_table(
+            relative_path,
+            overwrite=overwrite,
         )
-        mappings_service.export_rms_simulator_renaming_table(relative_path)
         return Message(
             message=(
                 "Exported RMS-to-simulator mappings to renaming table at "
                 f"{relative_path}"
             )
         )
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Export file already exists: '{relative_path}'",
+        ) from e
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
             detail="Permission denied while trying to export the mappings.",
+        ) from e
+    except IsADirectoryError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot export mappings to a directory. Select a file path: "
+                f"'{relative_path}'"
+            ),
+        ) from e
+    except NotADirectoryError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot export mappings because part of the folder path is a file. "
+                f"Select a valid file path: '{relative_path}'"
+            ),
         ) from e
     except ValidationError as e:
         errors = [error.get("msg", str(error)) for error in e.errors()]
