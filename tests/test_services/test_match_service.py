@@ -77,6 +77,100 @@ class TestMatchNames:
         assert results[0].matches[0].score == PERFECT_MATCH_SCORE
         assert results[0].matches[0].confidence == "high"
 
+    def test_selected_prefixes_are_removed_before_first_digit(
+        self, match_service: MatchService
+    ) -> None:
+        """Test selected prefixes are removed from names before matching."""
+        results = match_service.match_names(
+            ["RFT_33_5_1"],
+            ["NO RFT 33/5-1"],
+            prefixes_to_remove=["NO", "RFT"],
+        )
+
+        assert results[0].source == "RFT_33_5_1"
+        assert results[0].matches[0].target == "NO RFT 33/5-1"
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+        assert results[0].matches[0].confidence == "high"
+
+    def test_custom_prefix_is_normalized_before_removal(
+        self, match_service: MatchService
+    ) -> None:
+        """Test a caller-defined prefix uses normal name normalization."""
+        results = match_service.match_names(
+            ["Custom-Prefix_33_5_1"],
+            ["33/5-1"],
+            prefixes_to_remove=["custom_prefix"],
+        )
+
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+
+    def test_multi_token_prefix_is_not_split_into_individual_prefixes(
+        self, match_service: MatchService
+    ) -> None:
+        """Test a multi-token prefix is removed only as a complete sequence."""
+        results = match_service.match_names(
+            ["SEA 31/2-1"],
+            ["31/2-1"],
+            prefixes_to_remove=["NORTH SEA"],
+        )
+
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
+    @pytest.mark.parametrize(
+        "prefixes_to_remove",
+        [
+            ["NORTH", "NORTH SEA"],
+            ["NORTH SEA", "NORTH"],
+        ],
+    )
+    def test_overlapping_prefixes_are_removed_in_any_request_order(
+        self,
+        match_service: MatchService,
+        prefixes_to_remove: list[str],
+    ) -> None:
+        """Test overlapping selected prefixes do not depend on request order."""
+        results = match_service.match_names(
+            ["NORTH SEA 31/2-1"],
+            ["31/2-1"],
+            prefixes_to_remove=prefixes_to_remove,
+        )
+
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+
+    def test_unselected_prefix_is_kept(self, match_service: MatchService) -> None:
+        """Test prefix removal does not remove a prefix that was not selected."""
+        results = match_service.match_names(
+            ["33/5-1"],
+            ["NO RFT 33/5-1"],
+            prefixes_to_remove=["RFT"],
+        )
+
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
+    def test_selected_text_after_first_digit_is_kept(
+        self, match_service: MatchService
+    ) -> None:
+        """Test selected text after the first digit is not removed."""
+        results = match_service.match_names(
+            ["31_2-O-13_BY1H_GL"],
+            ["NO 31/2-O-13"],
+            prefixes_to_remove=["NO", "GL"],
+        )
+
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
+    def test_prefix_is_not_removed_when_name_has_no_digit(
+        self, match_service: MatchService
+    ) -> None:
+        """Test prefix removal does not change a name without a digit."""
+        results = match_service.match_names(
+            ["RFT Viking"],
+            ["Viking"],
+            prefixes_to_remove=["RFT"],
+        )
+
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
     def test_wellbore_name_matches_across_data_systems(
         self, match_service: MatchService
     ) -> None:

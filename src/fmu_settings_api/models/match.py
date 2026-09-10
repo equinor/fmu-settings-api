@@ -44,6 +44,9 @@ class MatchRequest(BaseResponseModel):
     replacements: list[MatchReplacementRule] = Field(default_factory=list)
     """Optional normalized token sequence replacements to apply before matching."""
 
+    prefixes_to_remove: list[str] = Field(default_factory=list)
+    """Prefixes to remove from the text before the first digit."""
+
 
 class MatchCandidate(BaseResponseModel):
     """A target candidate for a source name."""

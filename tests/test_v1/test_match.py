@@ -1,10 +1,14 @@
 """Tests for the /api/v1/match routes."""
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from fmu_settings_api.__main__ import app
+from fmu_settings_api.deps.match import get_match_service
+from fmu_settings_api.services.match import MatchService
 
 ROUTE = "/api/v1/match"
 PERFECT_MATCH_SCORE = 100.0
@@ -52,6 +56,31 @@ class TestPostMatchEndpoint:
 
         assert response.status_code == status.HTTP_200_OK, response.json()
         assert response.json()[0]["matches"][0]["score"] == PERFECT_MATCH_SCORE
+
+    def test_prefixes_are_passed_to_match_service(self) -> None:
+        """Test the route passes selected prefixes to the match service."""
+        match_service = MagicMock(spec=MatchService)
+        match_service.match_names.return_value = []
+        app.dependency_overrides[get_match_service] = lambda: match_service
+
+        with TestClient(app) as client:
+            response = client.post(
+                ROUTE,
+                json={
+                    "sources": ["RFT_33_5_1"],
+                    "targets": ["NO 33/5-1"],
+                    "prefixes_to_remove": ["RFT", "NO"],
+                },
+            )
+
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        assert response.json() == []
+        match_service.match_names.assert_called_once_with(
+            ["RFT_33_5_1"],
+            ["NO 33/5-1"],
+            [],
+            prefixes_to_remove=["RFT", "NO"],
+        )
 
     def test_empty_targets_returns_source_with_empty_matches(self) -> None:
         """Test matching with no targets returns source with no matches."""
