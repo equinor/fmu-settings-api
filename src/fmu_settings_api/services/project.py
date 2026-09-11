@@ -1,5 +1,6 @@
 """Service for managing FMU project operations and business logic."""
 
+from os.path import relpath
 from pathlib import Path
 
 from fmu.datamodels.common import Access, Smda
@@ -38,8 +39,11 @@ class ProjectService:
         project = FMUProject(
             path=self._fmu_dir.base_path,
             project_dir_name=self._fmu_dir.base_path.name,
-            config=self._fmu_dir.config.load(),
+            config=self._fmu_dir.config.load().model_copy(deep=True),
         )
+        rms_path = self.rms_project_path
+        if project.config.rms is not None and rms_path is not None:
+            project.config.rms.path = rms_path
         project_context: dict[str, str] = {}
         if project.config.access is not None:
             project_context["asset_name"] = project.config.access.asset.name
@@ -69,8 +73,9 @@ class ProjectService:
 
     @property
     def rms_project_path(self) -> Path | None:
-        """Returns the path to the RMS project from the config file."""
-        return self._fmu_dir.get_config_value("rms.path", None)
+        """Return the absolute path to the configured RMS project."""
+        path = self._fmu_dir.get_config_value("rms.path", None)
+        return self._fmu_dir.base_path / path if path is not None else None
 
     def check_valid_global_config(self) -> None:
         """Check if a valid global config exists at the default location."""
@@ -131,11 +136,12 @@ class ProjectService:
             FileNotFoundError: If the RMS project or .master file does not exist
             RmsVersionError: If the RMS version is not supported
         """
+        rms_project_path = self._fmu_dir.base_path / rms_project_path
         rms_version = RmsService.get_rms_version(rms_project_path)
 
         self._fmu_dir.update_config(
             {
-                "rms.path": rms_project_path,
+                "rms.path": Path(relpath(rms_project_path, self._fmu_dir.base_path)),
                 "rms.version": rms_version,
                 "validation.rms_project": None,
             }
