@@ -213,5 +213,45 @@
         "name": "Lavrans",
         "code": "043",
         "roleprefix": "LAVRANS"
+    },
+    {
+        "name": "Frigg",
+        "code": "044",
+        "roleprefix": "FRIGG"
+    },
+    {
+        "name": "Kveikje",
+        "code": "045",
+        "roleprefix": "KVEIKJE"
+    },
+    {
+        "name": "Swisher",
+        "code": "046",
+        "roleprefix": "SWISHER"
+    },
+    {
+        "name": "Mulder",
+        "code": "047",
+        "roleprefix": "MULDER"
+    },
+    {
+        "name": "Toppand",
+        "code": "048",
+        "roleprefix": "TOPPAND"
+    },
+    {
+        "name": "Røver",
+        "code": "049",
+        "roleprefix": "ROVER"
+    },
+    {
+        "name": "Blåbjørn",
+        "code": "050",
+        "roleprefix": "BLABJORN"
+    },
+    {
+        "name": "Caesar Tonga",
+        "code": "051",
+        "roleprefix": "CAESAR-TONGA"
     }
 ]
