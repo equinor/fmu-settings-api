@@ -91,11 +91,19 @@ def test_get_project_data_omits_event_without_project_context(
 
 def test_rms_project_path_returns_path(fmu_dir: ProjectFMUDirectory) -> None:
     """Test that rms_project_path property returns the path from config."""
-    expected_path = Path("/path/to/rms/project")
+    relative_path = Path("rms/model/project.rms14.2.2")
     service = ProjectService(fmu_dir)
-    fmu_dir.set_config_value("rms", {"path": expected_path, "version": "14.2.2"})
+    fmu_dir.set_config_value("rms", {"path": relative_path, "version": "14.2.2"})
 
-    assert service.rms_project_path == expected_path
+    assert service.rms_project_path == fmu_dir.base_path / relative_path
+
+
+def test_rms_project_path_resolves_relative_path(fmu_dir: ProjectFMUDirectory) -> None:
+    """Resolve the relative RMS path against the FMU project root."""
+    path = Path("rms/model/main.rms")
+    fmu_dir.update_config({"rms.path": path, "rms.version": "14.2.2"})
+
+    assert ProjectService(fmu_dir).rms_project_path == fmu_dir.base_path / path
 
 
 def test_rms_project_path_returns_none(fmu_dir: ProjectFMUDirectory) -> None:
@@ -152,7 +160,7 @@ def test_update_rms_updates_config_and_invalidates_validation_metadata(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
     """Test updating the RMS project config invalidates its validation metadata."""
-    rms_project_path = Path("/path/to/rms/project.rms14.2.2")
+    rms_project_path = fmu_dir.base_path / "rms/model/project.rms14.2.2"
     service = ProjectService(fmu_dir)
     fmu_dir.update_validation_metadata("rms_project")
     assert fmu_dir.config.load().validation.rms_project is not None
@@ -167,7 +175,7 @@ def test_update_rms_updates_config_and_invalidates_validation_metadata(
     config = fmu_dir.config.load()
     saved_config = config.rms
     assert saved_config is not None
-    assert saved_config.path == rms_project_path
+    assert saved_config.path == rms_project_path.relative_to(fmu_dir.base_path)
     assert saved_config.version == "14.2.2"
     assert config.validation.rms_project is None
 
@@ -186,7 +194,7 @@ def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> N
     fmu_dir.set_config_value(
         "rms",
         {
-            "path": Path("/old/path/project.rms13.1.0"),
+            "path": Path("rms/model/old.rms13.1.0"),
             "version": "13.1.0",
             "coordinate_system": coordinate_system.model_dump(),
             "zones": [zone.model_dump()],
@@ -195,7 +203,7 @@ def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> N
         },
     )
 
-    new_rms_project_path = Path("/new/path/project.rms14.2.2")
+    new_rms_project_path = fmu_dir.base_path / "rms/model/new.rms14.2.2"
     with patch(
         "fmu_settings_api.services.project.RmsService.get_rms_version",
         return_value="14.2.2",
@@ -205,7 +213,7 @@ def test_update_rms_preserves_existing_fields(fmu_dir: ProjectFMUDirectory) -> N
     assert rms_version == "14.2.2"
     saved_config = fmu_dir.config.load().rms
     assert saved_config is not None
-    assert saved_config.path == new_rms_project_path
+    assert saved_config.path == new_rms_project_path.relative_to(fmu_dir.base_path)
     assert saved_config.version == "14.2.2"
 
     assert saved_config.coordinate_system is not None
@@ -231,7 +239,7 @@ def test_update_rms_missing_project_path_raises_file_not_found(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
     """Test update_rms raises FileNotFoundError when RMS path is missing."""
-    rms_project_path = Path("/path/to/rms/project.rms14.2.2")
+    rms_project_path = fmu_dir.base_path / "rms/model/project.rms14.2.2"
     service = ProjectService(fmu_dir)
 
     with (
@@ -437,3 +445,42 @@ def test_project_service_get_sumo_assets(
 
     assert len(sumo_assets) == 1
     assert sumo_assets[0] == asset
+
+
+@pytest.mark.parametrize("absolute_input", [False, True])
+def test_update_rms_saves_relative_path(
+    fmu_dir: ProjectFMUDirectory, absolute_input: bool
+) -> None:
+    """Save a relative RMS path for either relative or absolute input."""
+    relative_path = Path("rms/model/project.rms14.2.2")
+    absolute_path = fmu_dir.base_path / relative_path
+    fmu_dir.set_config_value("rms", {"path": absolute_path, "version": "14.2.2"})
+    service = ProjectService(fmu_dir)
+    with patch(
+        "fmu_settings_api.services.project.RmsService.get_rms_version",
+        return_value="14.2.2",
+    ) as get_version:
+        version = service.update_rms(absolute_path if absolute_input else relative_path)
+    get_version.assert_called_once_with(absolute_path)
+    assert version == "14.2.2"
+
+    config = fmu_dir.config.load(force=True)
+    assert config.rms is not None
+    assert config.rms.path == relative_path
+
+
+def test_get_project_data_resolves_rms_path_only_in_response(
+    fmu_dir: ProjectFMUDirectory,
+) -> None:
+    """Keep the configured path relative while returning an absolute path."""
+    relative_path = Path("rms/model/project.rms14.2.2")
+    fmu_dir.update_config({"rms.path": relative_path, "rms.version": "14.2.2"})
+    config = fmu_dir.config.load()
+    service = ProjectService(fmu_dir)
+
+    project = service.get_project_data()
+
+    assert project.config.rms is not None
+    assert project.config.rms.path == fmu_dir.base_path / relative_path
+    assert config.rms is not None
+    assert config.rms.path == relative_path

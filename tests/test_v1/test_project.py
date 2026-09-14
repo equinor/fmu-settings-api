@@ -4426,7 +4426,13 @@ async def test_post_cache_restore_invalid_resource_content(
 
     fmu_dir = session.project_fmu_directory
     revision_path = fmu_dir.cache.store_revision(
-        Path("config.json"), json.dumps({"cache_max_revisions": 1})
+        Path("config.json"),
+        json.dumps(
+            {
+                "schema_version": fmu_dir.config.load().schema_version,
+                "cache_max_revisions": 1,
+            }
+        ),
     )
     assert revision_path is not None
 
