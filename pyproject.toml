@@ -1,8 +1,5 @@
 [build-system]
-requires = [
-    "setuptools>=45.0",
-    "setuptools_scm[toml]>=6.2",
-]
+requires = ["setuptools>=45.0", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
@@ -14,9 +11,7 @@ description = "The API for fmu-settings"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0" }
-authors = [
-    { name = "Equinor", email = "fg-fmu_atlas@equinor.com" },
-]
+authors = [{ name = "Equinor", email = "fg-fmu_atlas@equinor.com" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Topic :: Scientific/Engineering",
@@ -30,9 +25,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "fastapi>=0.138.0",  # FastAPI.frontend() support
-    "fmu-datamodels>=0.21.4",  # no equivalent relation, no fmu data system
-    "fmu-settings>=1.2.0",  # telemetry support
+    "fastapi>=0.138.0",       # FastAPI.frontend() support
+    "fmu-datamodels>=0.21.4", # no equivalent relation, no fmu data system
+    "fmu-settings>=1.3.0",    # migration of RMS absolute path to relative path
     "httpx2",
     "packaging",
     "pydantic",
@@ -65,9 +60,7 @@ Repository = "https://github.com/equinor/fmu-settings-api"
 Documentation = "https://github.com/equinor/fmu-settings-api"
 
 [tool.coverage.run]
-omit = [
-    "_version.py",
-]
+omit = ["_version.py"]
 
 [tool.mypy]
 check_untyped_defs = true
@@ -84,16 +77,8 @@ warn_unused_configs = true
 warn_unused_ignores = true
 
 [tool.pytest.ini_options]
-norecursedirs = [
-    ".git",
-    ".tox",
-    ".env",
-    "dist",
-    "build",
-]
-markers = [
-    "integration: Marks a test as an integration test",
-]
+norecursedirs = [".git", ".tox", ".env", "dist", "build"]
+markers = ["integration: Marks a test as an integration test"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
@@ -102,26 +87,24 @@ line-length = 88
 exclude = ["_version.py"]
 
 [tool.ruff.lint]
-ignore = [
-    "C901",
-]
+ignore = ["C901"]
 select = [
-    "B",  # flake-8-bugbear
-    "C90",  # mccabe
-    "D",  # pydocstyle
-    "E",  # pycodestyle-error
-    "F",  # pyflakes
-    "I",  # isort
-    "NPY",  # numpy
+    "B",   # flake-8-bugbear
+    "C90", # mccabe
+    "D",   # pydocstyle
+    "E",   # pycodestyle-error
+    "F",   # pyflakes
+    "I",   # isort
+    "NPY", # numpy
     "PD",  # pandas-vet
-    "PIE",  # flake8-pie
-    "Q",  # flake-8 quotes
-    "Q",  # flake8-quotes
-    "RET",  # flake8-return
-    "RSE",  # flake8-raise
-    "SIM",  # flake8-simplify
-    "TCH",  # flake8-type-checking
-    "TID",  # flake8-tidy-imports
+    "PIE", # flake8-pie
+    "Q",   # flake-8 quotes
+    "Q",   # flake8-quotes
+    "RET", # flake8-return
+    "RSE", # flake8-raise
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "TID", # flake8-tidy-imports
     "UP",  # pyupgrade
 ]
 
