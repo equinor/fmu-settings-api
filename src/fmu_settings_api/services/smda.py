@@ -1,7 +1,6 @@
 """Service for querying and translating results from SMDA."""
 
 import asyncio
-import re
 from collections.abc import Sequence
 from typing import Any, Final
 from uuid import NAMESPACE_URL, uuid5
@@ -16,9 +15,9 @@ from fmu.datamodels.common.masterdata import (
 )
 from fmu.settings._drogon import (
     MASTERDATA as DROGON_MASTERDATA,
-    RMS_WELLS as DROGON_RMS_WELLS,
     RMS_ZONES as DROGON_RMS_ZONES,
     STRATIGRAPHY_MAPPINGS as DROGON_STRATIGRAPHY_MAPPINGS,
+    WELLBORE_MAPPINGS as DROGON_WELLBORE_MAPPINGS,
 )
 
 from fmu_settings_api.interfaces import SmdaAPI
@@ -36,12 +35,6 @@ from fmu_settings_api.models.smda import (
 )
 
 logger = get_logger(__name__)
-
-
-def _drogon_wellbore_identifier(rms_well_name: str) -> str:
-    """Convert a Drogon RMS well name to an SMDA-style wellbore identifier."""
-    name = re.sub(r"(?<=\d)_(?=\d)", "/", rms_well_name, count=1)
-    return f"NO {name.replace('_', ' ')}"
 
 
 DROGON_SMDA_MASTERDATA: Final[dict[str, Any]] = DROGON_MASTERDATA["smda"]
@@ -80,11 +73,16 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
     for zone in DROGON_RMS_ZONES
     if zone["name"] in DROGON_STRATIGRAPHY_BY_SOURCE_ID
 ]
+DROGON_WELLBORE_MAPPINGS_BY_TARGET_ID: Final[dict[str, dict[str, Any]]] = {
+    mapping["target_id"]: mapping
+    for mapping in DROGON_WELLBORE_MAPPINGS
+    if mapping["relation_type"] == "primary" and isinstance(mapping["target_id"], str)
+}
 DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
     SmdaWellHeader(
-        unique_well_identifier=_drogon_wellbore_identifier(str(well["name"])),
-        unique_wellbore_identifier=_drogon_wellbore_identifier(str(well["name"])),
-        official_wellbore_name=str(well["name"]),
+        unique_well_identifier=target_id,
+        unique_wellbore_identifier=target_id,
+        official_wellbore_name=target_id.removeprefix("NO "),
         country_identifier=DROGON_SMDA_MASTERDATA["country"][0]["identifier"],
         parent_wellbore=None,
         wellbore_type="development",
@@ -94,16 +92,16 @@ DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
         drill_year=None,
         completion_date=None,
         discovery_internal_identifier=None,
-        multilateral=1 if well["name"] == "MLW_OP5_Y1" else 0,
+        multilateral=0,
         projected_coordinate_unit="m",
         projected_coordinate_system=DROGON_SMDA_MASTERDATA["coordinate_system"][
             "identifier"
         ],
-        # Synthetic but stable UUIDs for the built-in Drogon data.
-        well_uuid=uuid5(NAMESPACE_URL, f"well/{well['name']}"),
-        wellbore_uuid=uuid5(NAMESPACE_URL, f"wellbore/{well['name']}"),
+        # Synthetic but stable well UUID for the built-in Drogon data.
+        well_uuid=uuid5(NAMESPACE_URL, f"well/{target_id}"),
+        wellbore_uuid=mapping["target_uuid"],
     )
-    for well in DROGON_RMS_WELLS
+    for target_id, mapping in DROGON_WELLBORE_MAPPINGS_BY_TARGET_ID.items()
 ]
 
 

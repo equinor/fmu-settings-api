@@ -14,7 +14,7 @@ from fmu.datamodels.common.masterdata import (
 )
 from fmu.settings._drogon import (
     MASTERDATA as DROGON_MASTERDATA,
-    RMS_WELLS as DROGON_RMS_WELLS,
+    WELLBORE_MAPPINGS as DROGON_WELLBORE_MAPPINGS,
 )
 
 from fmu_settings_api.models.smda import SmdaField, SmdaSelectedField
@@ -166,31 +166,29 @@ async def test_get_drogon_well_headers_uses_drogon_data() -> None:
     res = await service.get_well_headers(SmdaSelectedField(identifier="Drogon"))
 
     mock_smda.well_headers.assert_not_called()
-    assert [header.official_wellbore_name for header in res.well_headers] == [
-        well["name"] for well in DROGON_RMS_WELLS
-    ]
-    identifiers_by_name = {
-        header.official_wellbore_name: header.unique_well_identifier
-        for header in res.well_headers
+    expected_wellbore_uuids_by_target_id = {
+        mapping["target_id"]: UUID(mapping["target_uuid"])
+        for mapping in DROGON_WELLBORE_MAPPINGS
     }
-    assert identifiers_by_name["55_33-A-1"] == "NO 55/33-A-1"
-    assert identifiers_by_name["OP5_Y1"] == "NO OP5 Y1"
-    assert identifiers_by_name["RFT_55_33-A-2"] == "NO RFT 55/33-A-2"
-    assert [header.unique_wellbore_identifier for header in res.well_headers] == [
-        header.unique_well_identifier for header in res.well_headers
+    expected_target_ids = list(expected_wellbore_uuids_by_target_id)
+    assert [header.unique_well_identifier for header in res.well_headers] == (
+        expected_target_ids
+    )
+    assert [
+        header.unique_wellbore_identifier for header in res.well_headers
+    ] == expected_target_ids
+    assert [header.official_wellbore_name for header in res.well_headers] == [
+        target_id.removeprefix("NO ") for target_id in expected_target_ids
     ]
+    assert [header.wellbore_uuid for header in res.well_headers] == list(
+        expected_wellbore_uuids_by_target_id.values()
+    )
     assert res.well_headers[0].country_identifier == "Norway"
     assert res.well_headers[0].projected_coordinate_system == "ST_WGS84_UTM37N_P32637"
     assert res.well_headers[0].parent_wellbore is None
     assert res.well_headers[0].wellbore_purpose == "production"
     assert res.well_headers[0].wellbore_status == "operating"
     assert res.well_headers[0].multilateral == 0
-    multilateral_well = next(
-        header
-        for header in res.well_headers
-        if header.official_wellbore_name == "MLW_OP5_Y1"
-    )
-    assert multilateral_well.multilateral == 1
 
 
 async def test_get_well_headers_uses_selected_field_uuid() -> None:
