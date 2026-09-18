@@ -195,3 +195,7 @@ class ProjectService:
     def get_sumo_assets(self) -> list[SumoAsset]:
         """Get the Sumo assets."""
         return SumoApi().get_assets()
+
+    def login_to_sumo(self) -> None:
+        """Start an interactive Sumo login."""
+        SumoApi().login()

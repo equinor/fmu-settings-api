@@ -1,126 +1,224 @@
-"""Test Sumo Api interface."""
+"""Tests the Sumo API interface."""
 
 import json
-from pathlib import Path
-from unittest.mock import patch
+from collections.abc import Generator
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-from pydantic import ValidationError
 
-from fmu_settings_api.interfaces.sumo_api import SumoApi
-from fmu_settings_api.models.project import SumoAsset
+from fmu_settings_api.interfaces.sumo_api import (
+    SumoApi,
+    SumoAuthenticationRequiredError,
+    SumoInvalidResponseError,
+    SumoUnavailableError,
+)
 
 
 @pytest.fixture
-def sumo_assets() -> list[SumoAsset]:
-    """List of Sumo assets."""
-    return [
-        SumoAsset(name="TestAsset", code="001", roleprefix="ASSET1"),
-        SumoAsset(name="TestAsset2", code="002", roleprefix="ASSET2"),
-        SumoAsset(name="TestAsset3", code="003", roleprefix="ASSET3"),
-    ]
+def mock_sumo_client() -> Generator[tuple[MagicMock, MagicMock]]:
+    """Mocks the context-managed Sumo client."""
+    with patch("fmu_settings_api.interfaces.sumo_api.SumoClient") as client_class:
+        client = client_class.return_value.__enter__.return_value
+        client.authenticate.return_value = "token"
+        yield client_class, client
 
 
-def test_sumo_api_get_assets(
-    sumo_assets: list[SumoAsset],
+def test_get_assets_returns_sorted_assets_with_write_access(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
 ) -> None:
-    """Tests that sumo assets are returned as expected."""
-    api = SumoApi()
+    """Tests that only sorted assets with user write access are returned."""
+    client_class, client = mock_sumo_client
+    client.get.return_value.json.return_value = {
+        "Read only": ["read"],
+        "Drogon": ["read", "write"],
+        "Alpha": ["write"],
+        "No access": [],
+    }
 
-    with patch.object(
-        api,
-        "_read_assets_from_file",
-        return_value=sumo_assets,
-    ) as mocked_method:
-        assets = api.get_assets()
+    assets = SumoApi().get_assets()
 
-        mocked_method.assert_called_once_with(api._asset_filepath)
-        assert len(assets) == len(sumo_assets)
-        assert assets == sumo_assets
+    assert [asset.name for asset in assets] == ["Alpha", "Drogon"]
+    client_class.assert_called_once_with(env="prod", interactive=False)
+    client.authenticate.assert_called_once_with()
+    client.get.assert_called_once_with("/userpermissions")
 
 
-def test_sumo_api_read_assets_from_file(
-    sumo_assets: list[SumoAsset],
-    tmp_path: Path,
+def test_get_assets_uses_selected_environment(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
 ) -> None:
-    """Tests that sumo assets are read from file at the expected path."""
-    file_path = tmp_path / "sumo_assets.json"
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump([asset.model_dump() for asset in sumo_assets], f, indent=2)
+    """Tests that asset requests use the selected Sumo environment."""
+    client_class, client = mock_sumo_client
+    client.get.return_value.json.return_value = {}
 
-    api = SumoApi()
-    assets = api._read_assets_from_file(file_path)
+    SumoApi(environment="dev").get_assets()
 
-    assert len(assets) == len(sumo_assets)
-    assert assets == sumo_assets
+    client_class.assert_called_once_with(env="dev", interactive=False)
 
 
-def test_sumo_api_read_assets_from_file_raises_validation_error(
-    tmp_path: Path,
+def test_get_assets_requires_cached_login(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
 ) -> None:
-    """Tests that invalid Sumo assets in file raises ValidationError."""
-    file_path = tmp_path / "sumo_assets.json"
-    invalid_model = {"name": "invalid_model"}
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump([invalid_model], f, indent=2)
+    """Tests that missing cached login is reported without interactive login."""
+    client_class, client = mock_sumo_client
+    client.authenticate.side_effect = Exception(
+        "No valid authorization provider found."
+    )
 
-    api = SumoApi()
-    with pytest.raises(ValidationError):
-        api._read_assets_from_file(file_path)
+    with pytest.raises(SumoAuthenticationRequiredError, match="login is required"):
+        SumoApi().get_assets()
 
-
-def test_sumo_api_read_assets_from_file_raises_json_error(tmp_path: Path) -> None:
-    """Tests that non-json file content raises JSONDecodeError."""
-    file_path = tmp_path / "sumo_assets.json"
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write("Some string that is not a valid json")
-
-    api = SumoApi()
-    with pytest.raises(json.JSONDecodeError):
-        api._read_assets_from_file(file_path)
+    client_class.assert_called_once_with(env="prod", interactive=False)
+    client.get.assert_not_called()
 
 
-def test_sumo_api_read_assets_from_file_raises_file_not_found(tmp_path: Path) -> None:
-    """Tests that FileNotFoundError is raised when file to read does not exist."""
-    file_path = tmp_path / "sumo_assets.json"
-    api = SumoApi()
-    with pytest.raises(FileNotFoundError):
-        api._read_assets_from_file(file_path)
+def test_get_assets_reports_unavailable_for_unexpected_authentication_error(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that unexpected authentication errors are translated."""
+    _, client = mock_sumo_client
+    authentication_error = RuntimeError("Unexpected authentication error")
+    client.authenticate.side_effect = authentication_error
+
+    with pytest.raises(
+        SumoUnavailableError, match="Unable to authenticate"
+    ) as exc_info:
+        SumoApi().get_assets()
+
+    assert exc_info.value.__cause__ is authentication_error
+    client.get.assert_not_called()
 
 
-def test_sumo_assets_json_file() -> None:
-    """Tests that the sumo_assets.json file is according to rules.
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"Drogon": "write"},
+        {"Drogon": [1]},
+        ["Drogon"],
+    ],
+)
+def test_get_assets_rejects_invalid_response(
+    mock_sumo_client: tuple[MagicMock, MagicMock], response: object
+) -> None:
+    """Tests that an asset response with an unexpected structure is rejected."""
+    _, client = mock_sumo_client
+    client.get.return_value.json.return_value = response
 
-    This test is here to catch if the sumo_assets.json
-    file is updated wrongly and not according to the rules.
-    """
-    api = SumoApi()
-    assets = api.get_assets()
+    with pytest.raises(SumoInvalidResponseError, match="invalid asset response"):
+        SumoApi().get_assets()
 
-    # Check uniquness of name among Sumo assets
-    names_list = [asset.name for asset in assets]
-    assert len(names_list) == len(set(names_list))
 
-    # Check uniquness of code among Sumo assets
-    codes_list = [asset.code for asset in assets]
-    assert len(codes_list) == len(set(codes_list))
+def test_get_assets_rejects_invalid_json(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that a Sumo response without JSON is rejected."""
+    _, client = mock_sumo_client
+    client.get.return_value.json.side_effect = json.JSONDecodeError("invalid", "", 0)
 
-    # Check uniquness of roleprefix among Sumo assets
-    roleprefix_list = [asset.roleprefix for asset in assets]
-    assert len(roleprefix_list) == len(set(roleprefix_list))
+    with pytest.raises(SumoInvalidResponseError, match="invalid asset response"):
+        SumoApi().get_assets()
 
-    # Check that code can be parsed as int and is always increased by one
-    last_code = 0
-    for asset in assets:
-        code_as_int = int(asset.code)
-        assert code_as_int == last_code + 1
-        last_code = code_as_int
 
-    # Check that roleprefix relates to name
-    for asset in assets:
-        roleprefix = asset.roleprefix
-        roleprefix_parts = roleprefix.split("-")
-        asset_name = (
-            asset.name.casefold().replace("æ", "e").replace("ø", "o").replace("å", "a")
-        )
-        assert all(part.casefold() in asset_name for part in roleprefix_parts)
+def test_get_assets_reports_unavailable_sumo(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that Sumo connection errors are translated."""
+    _, client = mock_sumo_client
+    client.get.side_effect = httpx.ConnectError(
+        "Connection failed", request=httpx.Request("GET", "https://sumo.example")
+    )
+
+    with pytest.raises(SumoUnavailableError, match="Unable to get assets"):
+        SumoApi().get_assets()
+
+
+def test_get_assets_reports_unavailable_when_client_construction_fails() -> None:
+    """Tests that Sumo client construction failures are translated."""
+    discovery_error = Exception("unexpected discovery failure")
+    with (
+        patch(
+            "fmu_settings_api.interfaces.sumo_api.SumoClient",
+            side_effect=discovery_error,
+        ),
+        pytest.raises(SumoUnavailableError, match="Unable to get assets"),
+    ):
+        SumoApi().get_assets()
+
+
+def test_get_assets_requires_login_after_unauthorized_response(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that a rejected cached token requires a new login."""
+    _, client = mock_sumo_client
+    request = httpx.Request("GET", "https://sumo.example/userpermissions")
+    response = httpx.Response(401, request=request)
+    client.get.side_effect = httpx.HTTPStatusError(
+        "Unauthorized", request=request, response=response
+    )
+
+    with pytest.raises(SumoAuthenticationRequiredError, match="login is required"):
+        SumoApi().get_assets()
+
+
+def test_login_uses_interactive_production_client(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that explicit production login uses interactive authentication."""
+    client_class, client = mock_sumo_client
+
+    SumoApi().login()
+
+    client_class.assert_called_once_with(env="prod", interactive=True)
+    client.authenticate.assert_called_once_with()
+
+
+def test_login_reports_incomplete_login(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that an incomplete interactive login is reported."""
+    _, client = mock_sumo_client
+    client.authenticate.return_value = None
+
+    with pytest.raises(SumoAuthenticationRequiredError, match="not completed"):
+        SumoApi().login()
+
+
+def test_login_reports_unavailable_sumo(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that connection errors preventing interactive login are translated."""
+    client_class, _ = mock_sumo_client
+    client_class.side_effect = httpx.ConnectError(
+        "Connection failed", request=httpx.Request("GET", "https://sumo.example")
+    )
+
+    with pytest.raises(SumoUnavailableError, match="Unable to connect"):
+        SumoApi().login()
+
+
+def test_login_reports_unavailable_for_invalid_discovery() -> None:
+    """Tests that Sumo client construction failures prevent login cleanly."""
+    with (
+        patch(
+            "fmu_settings_api.interfaces.sumo_api.SumoClient",
+            side_effect=Exception("unexpected discovery failure"),
+        ),
+        pytest.raises(SumoUnavailableError, match="Unable to connect"),
+    ):
+        SumoApi().login()
+
+
+def test_login_reports_unavailable_for_unexpected_authentication_error(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that unexpected authentication errors are translated."""
+    _, client = mock_sumo_client
+    authentication_error = RuntimeError("Unexpected authentication error")
+    client.authenticate.side_effect = authentication_error
+
+    with pytest.raises(
+        SumoUnavailableError, match="Unable to authenticate"
+    ) as exc_info:
+        SumoApi().login()
+
+    assert exc_info.value.__cause__ is authentication_error
