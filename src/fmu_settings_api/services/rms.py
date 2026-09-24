@@ -15,7 +15,10 @@ from runrms.config._rms_config import RmsConfig
 from runrms.exceptions import RmsProjectNotFoundError, RmsVersionError
 from runrms.executor import ApiExecutor
 
+from fmu_settings_api.logging import get_logger
+
 MIN_RMS_API_VERSION_FOR_STRAT_COLUMNS = Version("1.12")
+logger = get_logger(__name__)
 
 
 class RmsService:
@@ -66,8 +69,20 @@ class RmsService:
             proxy
         """
         executor = get_executor(version=rms_version)
-        rms_proxy = executor.run()
-        return executor, rms_proxy.Project.open(str(rms_project_path), readonly=True)
+        try:
+            rms_proxy = executor.run()
+            project = rms_proxy.Project.open(str(rms_project_path), readonly=True)
+        except Exception:
+            try:
+                executor.shutdown()
+            except Exception as cleanup_error:
+                logger.error(
+                    "rms_executor_shutdown_failed",
+                    error=str(cleanup_error),
+                    error_type=type(cleanup_error).__name__,
+                )
+            raise
+        return executor, project
 
     def get_zones(self, rms_project: RmsApiProxy) -> list[RmsStratigraphicZone]:
         """Retrieve the zones from the RMS project.

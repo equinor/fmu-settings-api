@@ -19,7 +19,7 @@ from fmu.settings._drogon import MASTERDATA as DROGON_MASTERDATA
 
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader
-from fmu_settings_api.deps.smda import get_project_smda_service
+from fmu_settings_api.deps.smda import get_project_smda_service, get_smda_service
 from fmu_settings_api.models.smda import (
     SmdaFieldSearchResult,
     SmdaFieldUUID,
@@ -124,6 +124,49 @@ async def test_get_health_request_failure_raises_exception(
         == HttpHeader.UPSTREAM_SOURCE_SMDA
     )
     assert response.json()["detail"] == "SMDA error requesting https://smda"
+
+
+@pytest.mark.parametrize(
+    ("error", "detail"),
+    [
+        (
+            httpx2.ConnectTimeout("Connection timed out"),
+            "SMDA API request timed out. Please try again later.",
+        ),
+        (
+            httpx2.ReadTimeout("Response timed out"),
+            "SMDA API request timed out. Please try again later.",
+        ),
+        (
+            TimeoutError("Operation timed out"),
+            "SMDA API request timed out. Please try again later.",
+        ),
+        (
+            httpx2.ConnectError("Connection failed"),
+            "Could not connect to SMDA. There may be a network or proxy "
+            "problem. Please try again later.",
+        ),
+    ],
+)
+async def test_get_health_transport_failure_returns_503(
+    client_with_smda_session: TestClient,
+    error: Exception,
+    detail: str,
+) -> None:
+    """Tests that transport failures return a clear 503 response."""
+    smda_service = MagicMock()
+    smda_service.check_health = AsyncMock(side_effect=error)
+    app.dependency_overrides[get_smda_service] = lambda: smda_service
+
+    response = client_with_smda_session.get(f"{ROUTE}/health")
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE, response.json()
+    assert (
+        response.headers[HttpHeader.UPSTREAM_SOURCE_KEY]
+        == HttpHeader.UPSTREAM_SOURCE_SMDA
+    )
+    assert response.json()["detail"] == detail
+    smda_service.check_health.assert_awaited_once_with()
 
 
 async def test_post_field_succeeds_with_one(

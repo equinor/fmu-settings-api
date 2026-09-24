@@ -123,6 +123,13 @@ router = APIRouter(
             503,
             "SMDA API is unreachable or returns an error",
             [
+                {"detail": "SMDA API request timed out. Please try again later."},
+                {
+                    "detail": (
+                        "Could not connect to SMDA. There may be a network or proxy "
+                        "problem. Please try again later."
+                    )
+                },
                 {"detail": "SMDA error requesting {url}"},
             ],
         ),
@@ -137,6 +144,21 @@ async def get_health(smda_service: SmdaServiceDep) -> Ok:
         raise HTTPException(
             status_code=e.response.status_code,
             detail=f"SMDA error requesting {e.request.url}",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except (httpx2.TimeoutException, TimeoutError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail="SMDA API request timed out. Please try again later.",
+            headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
+        ) from e
+    except httpx2.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Could not connect to SMDA. There may be a network or proxy "
+                "problem. Please try again later."
+            ),
             headers={HttpHeader.UPSTREAM_SOURCE_KEY: HttpHeader.UPSTREAM_SOURCE_SMDA},
         ) from e
 

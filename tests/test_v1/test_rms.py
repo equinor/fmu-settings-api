@@ -376,6 +376,33 @@ async def test_open_rms_project_remote_exception(
     }
 
 
+async def test_open_rms_project_timeout(
+    client_with_project_session: TestClient,
+    tmp_path: Path,
+) -> None:
+    """Tests that an RMS project open timeout returns 504."""
+    rms_version = "15.0.1.0"
+    rms_path = tmp_path / "project.rms15.0.1.0"
+    rms_path.mkdir()
+    mock_service = MagicMock()
+    mock_service.open_rms_project.side_effect = TimeoutError("Request timed out")
+    mock_session_service = AsyncMock()
+
+    app.dependency_overrides[get_rms_service] = lambda: mock_service
+    app.dependency_overrides[get_rms_project_path] = lambda: rms_path
+    app.dependency_overrides[get_session_service] = lambda: mock_session_service
+
+    response = client_with_project_session.post(ROUTE, json={"version": rms_version})
+
+    assert response.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+    assert response.json() == {
+        "detail": "Opening the RMS project timed out. Please try again."
+    }
+    mock_service.get_rms_version.assert_not_called()
+    mock_service.open_rms_project.assert_called_once_with(rms_path, rms_version)
+    mock_session_service.add_rms_session.assert_not_awaited()
+
+
 async def test_open_rms_project_unexpected_service_error(
     client_with_project_session: TestClient,
 ) -> None:
