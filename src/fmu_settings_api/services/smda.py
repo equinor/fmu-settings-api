@@ -76,7 +76,10 @@ DROGON_STRATIGRAPHIC_UNITS: Final[list[StratigraphicUnit]] = [
 DROGON_WELLBORE_MAPPINGS_BY_TARGET_ID: Final[dict[str, dict[str, Any]]] = {
     mapping["target_id"]: mapping
     for mapping in DROGON_WELLBORE_MAPPINGS
-    if mapping["relation_type"] == "primary" and isinstance(mapping["target_id"], str)
+    if mapping["source_system"] == "rms"
+    and mapping["target_system"] == "smda"
+    and mapping["relation_type"] == "primary"
+    and isinstance(mapping["target_id"], str)
 }
 DROGON_WELL_HEADERS: Final[list[SmdaWellHeader]] = [
     SmdaWellHeader(

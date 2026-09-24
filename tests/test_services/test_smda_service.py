@@ -169,6 +169,9 @@ async def test_get_drogon_well_headers_uses_drogon_data() -> None:
     expected_wellbore_uuids_by_target_id = {
         mapping["target_id"]: UUID(mapping["target_uuid"])
         for mapping in DROGON_WELLBORE_MAPPINGS
+        if mapping["source_system"] == "rms"
+        and mapping["target_system"] == "smda"
+        and mapping["relation_type"] == "primary"
     }
     expected_target_ids = list(expected_wellbore_uuids_by_target_id)
     assert [header.unique_well_identifier for header in res.well_headers] == (
