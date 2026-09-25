@@ -47,6 +47,11 @@ from fmu_settings_api.deps import (
 )
 from fmu_settings_api.deps.changelog import ChangelogFiltersDep, ChangelogServiceDep
 from fmu_settings_api.deps.mappings import MappingsServiceDep
+from fmu_settings_api.interfaces import (
+    SumoAuthenticationRequiredError,
+    SumoInvalidResponseError,
+    SumoUnavailableError,
+)
 from fmu_settings_api.models import (
     ConfigurationErrorDetail,
     FMUDirPath,
@@ -539,17 +544,32 @@ ChangelogResponses: Final[Responses] = {
 
 SumoAssetsResponses: Final[Responses] = {
     **inline_add_response(
-        404,
-        "Sumo assets file not found",
-        [{"detail": "Sumo assets file not found: {error}"}],
+        424,
+        "Sumo login required",
+        [{"detail": "Sumo login is required"}],
     ),
     **inline_add_response(
-        422,
-        "Invalid file content in Sumo assets file",
-        [
-            {"detail": "Sumo assets file contains invalid assets: {errors}"},
-            {"detail": "Sumo assets file is not a valid JSON: {error}"},
-        ],
+        502,
+        "Invalid response from Sumo",
+        [{"detail": "Sumo returned an invalid asset response"}],
+    ),
+    **inline_add_response(
+        503,
+        "Sumo unavailable",
+        [{"detail": "Unable to get assets from Sumo"}],
+    ),
+}
+
+SumoLoginResponses: Final[Responses] = {
+    **inline_add_response(
+        424,
+        "Sumo login not completed",
+        [{"detail": "Sumo login was not completed"}],
+    ),
+    **inline_add_response(
+        503,
+        "Sumo unavailable",
+        [{"detail": "Unable to connect to Sumo"}],
     ),
 }
 
@@ -599,33 +619,42 @@ async def get_project(session_service: SessionServiceDep) -> FMUProject:
 @router.get(
     "/sumo_assets",
     response_model=list[SumoAsset],
-    summary="Returns a list of Sumo assets.",
+    summary="Returns Sumo assets with user write access.",
     description=dedent(
         """
-        Returns a list of the assets that have been onboarded to
-        the Sumo platform.
+        Returns assets to which the current user has write access.
         """
     ),
     responses={**GetSessionResponses, **SumoAssetsResponses},
 )
-async def get_sumo_assets(project_service: ProjectServiceDep) -> list[SumoAsset]:
-    """Returns a list of the Sumo assets."""
+def get_sumo_assets(project_service: ProjectServiceDep) -> list[SumoAsset]:
+    """Return the Sumo assets to which the user has write access."""
     try:
         return project_service.get_sumo_assets()
-    except ValidationError as e:
-        errors = [error.get("msg", str(error)) for error in e.errors()]
-        raise HTTPException(
-            status_code=422,
-            detail=f"Sumo assets file contains invalid assets: {'; '.join(errors)}",
-        ) from e
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=422, detail=f"Sumo assets file is not a valid JSON: {str(e)}"
-        ) from e
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404, detail=f"Sumo assets file not found: {str(e)}"
-        ) from e
+    except SumoAuthenticationRequiredError as e:
+        raise HTTPException(status_code=424, detail=str(e)) from e
+    except SumoInvalidResponseError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except SumoUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@router.post(
+    "/sumo_login",
+    response_model=Ok,
+    summary="Logs in to Sumo.",
+    description="Starts an interactive Sumo login if no cached token is available.",
+    responses={**GetSessionResponses, **SumoLoginResponses},
+)
+def post_sumo_login(project_service: ProjectServiceDep) -> Ok:
+    """Log in to Sumo interactively."""
+    try:
+        project_service.login_to_sumo()
+        return Ok()
+    except SumoAuthenticationRequiredError as e:
+        raise HTTPException(status_code=424, detail=str(e)) from e
+    except SumoUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @router.get(

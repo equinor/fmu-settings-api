@@ -435,16 +435,25 @@ def test_project_service_get_sumo_assets(
     fmu_dir: ProjectFMUDirectory,
 ) -> None:
     """Tests that sumo assets are returned as expected."""
-    asset = SumoAsset(name="TestAsset", code="001", roleprefix="TEST")
+    asset = SumoAsset(name="TestAsset")
     with patch(
         "fmu_settings_api.interfaces.sumo_api.SumoApi.get_assets", return_value=[asset]
-    ) as class_init_mock:
+    ) as get_assets_mock:
         service = ProjectService(fmu_dir)
         sumo_assets = service.get_sumo_assets()
-        class_init_mock.assert_called_once()
+        get_assets_mock.assert_called_once()
 
     assert len(sumo_assets) == 1
     assert sumo_assets[0] == asset
+
+
+def test_project_service_login_to_sumo(fmu_dir: ProjectFMUDirectory) -> None:
+    """Delegate an interactive login to the Sumo interface."""
+    with patch("fmu_settings_api.interfaces.sumo_api.SumoApi.login") as login_mock:
+        service = ProjectService(fmu_dir)
+        service.login_to_sumo()
+
+    login_mock.assert_called_once_with()
 
 
 @pytest.mark.parametrize("absolute_input", [False, True])

@@ -40,6 +40,11 @@ from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.deps.changelog import get_changelog_service
 from fmu_settings_api.deps.validation import get_project_validation_service
+from fmu_settings_api.interfaces import (
+    SumoAuthenticationRequiredError,
+    SumoInvalidResponseError,
+    SumoUnavailableError,
+)
 from fmu_settings_api.models.project import (
     FMUProject,
     LockStatus,
@@ -404,60 +409,103 @@ async def test_get_changelog_validation_error(
 async def test_get_sumo_assets_success(
     client_with_project_session: TestClient,
 ) -> None:
-    """Tests that 200 and Sumo assets are returned when assets are valid."""
-    response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
+    """Tests that Sumo assets with write access are returned from the service."""
+    assets = [SumoAsset(name="Alpha"), SumoAsset(name="Drogon")]
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
+        return_value=assets,
+    ):
+        response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
 
     assert response.status_code == status.HTTP_200_OK
-    for asset in response.json():
-        assert SumoAsset.model_validate(asset)
+    assert response.json() == [{"name": "Alpha"}, {"name": "Drogon"}]
 
 
-async def test_get_sumo_assets_file_invalid_assets(
+async def test_get_sumo_assets_requires_login(
     client_with_project_session: TestClient,
 ) -> None:
-    """Tests that 422 is returned when Sumo assets file contains invalid assets."""
-
-    def trigger_validation_error() -> SumoAsset:
-        return SumoAsset.model_validate({})
-
+    """Tests that 424 is returned when the user must log in to Sumo."""
     with patch(
         "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
-        side_effect=trigger_validation_error,
+        side_effect=SumoAuthenticationRequiredError("Sumo login is required"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "Sumo assets file contains invalid assets:" in str(response.json())
+    assert response.status_code == status.HTTP_424_FAILED_DEPENDENCY
+    assert response.json() == {"detail": "Sumo login is required"}
 
 
-async def test_get_sumo_assets_invalid_json(
+async def test_get_sumo_assets_invalid_response(
     client_with_project_session: TestClient,
 ) -> None:
-    """Tests that 422 is returned when Sumo assets file is not a valid JSON."""
+    """Tests that 502 is returned for an invalid Sumo asset response."""
     with patch(
         "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
-        side_effect=json.JSONDecodeError("Some error message.", "", 0),
+        side_effect=SumoInvalidResponseError("Sumo returned an invalid asset response"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-    assert "Sumo assets file is not a valid JSON:" in str(response.json())
+    assert response.status_code == status.HTTP_502_BAD_GATEWAY
+    assert response.json() == {"detail": "Sumo returned an invalid asset response"}
 
 
-async def test_get_sumo_assets_file_not_found(
+async def test_get_sumo_assets_unavailable(
     client_with_project_session: TestClient,
 ) -> None:
-    """Tests that 404 is returned when Sumo assets file is not found."""
+    """Tests that 503 is returned when the Sumo API is unavailable."""
     with patch(
         "fmu_settings_api.services.project.ProjectService.get_sumo_assets",
-        side_effect=FileNotFoundError("Some error message."),
+        side_effect=SumoUnavailableError("Unable to get assets from Sumo"),
     ):
         response = client_with_project_session.get(f"{ROUTE}/sumo_assets")
 
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.json() == {
-        "detail": "Sumo assets file not found: Some error message."
-    }
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json() == {"detail": "Unable to get assets from Sumo"}
+
+
+# POST project/sumo_login #
+
+
+async def test_login_to_sumo_success(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that an interactive Sumo login returns success."""
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.login_to_sumo"
+    ) as login_mock:
+        response = client_with_project_session.post(f"{ROUTE}/sumo_login")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"status": "ok"}
+    login_mock.assert_called_once_with()
+
+
+async def test_login_to_sumo_not_completed(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 424 is returned when the Sumo login is not completed."""
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.login_to_sumo",
+        side_effect=SumoAuthenticationRequiredError("Sumo login was not completed"),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/sumo_login")
+
+    assert response.status_code == status.HTTP_424_FAILED_DEPENDENCY
+    assert response.json() == {"detail": "Sumo login was not completed"}
+
+
+async def test_login_to_sumo_unavailable(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that 503 is returned when Sumo cannot start the login flow."""
+    with patch(
+        "fmu_settings_api.services.project.ProjectService.login_to_sumo",
+        side_effect=SumoUnavailableError("Unable to connect to Sumo"),
+    ):
+        response = client_with_project_session.post(f"{ROUTE}/sumo_login")
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json() == {"detail": "Unable to connect to Sumo"}
 
 
 # POST project/ #
