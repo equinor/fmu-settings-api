@@ -124,6 +124,47 @@ def test_open_rms_project_success(rms_service: RmsService) -> None:
         )
         assert executor == mock_executor
         assert opened_project == "opened_project"
+        mock_executor.shutdown.assert_not_called()
+
+
+def test_open_rms_project_timeout_shuts_down_executor(rms_service: RmsService) -> None:
+    """Tests that an RMS open timeout shuts down its executor."""
+    rms_project_path = Path("/path/to/rms/project")
+    rms_version = "14.2.2"
+    mock_rmsapi = MagicMock()
+    mock_rmsapi.Project.open.side_effect = TimeoutError("Request timed out")
+    mock_executor = MagicMock()
+    mock_executor.run.return_value = mock_rmsapi
+
+    with (
+        patch("fmu_settings_api.services.rms.get_executor", return_value=mock_executor),
+        pytest.raises(TimeoutError, match="Request timed out"),
+    ):
+        rms_service.open_rms_project(rms_project_path, rms_version)
+
+    mock_rmsapi.Project.open.assert_called_once_with(
+        str(rms_project_path), readonly=True
+    )
+    mock_executor.shutdown.assert_called_once_with()
+
+
+def test_open_rms_project_preserves_timeout_when_shutdown_fails(
+    rms_service: RmsService,
+) -> None:
+    """Tests that shutdown failure does not hide an RMS open timeout."""
+    mock_rmsapi = MagicMock()
+    mock_rmsapi.Project.open.side_effect = TimeoutError("Request timed out")
+    mock_executor = MagicMock()
+    mock_executor.run.return_value = mock_rmsapi
+    mock_executor.shutdown.side_effect = RuntimeError("Shutdown failed")
+
+    with (
+        patch("fmu_settings_api.services.rms.get_executor", return_value=mock_executor),
+        pytest.raises(TimeoutError, match="Request timed out"),
+    ):
+        rms_service.open_rms_project(Path("/path/to/rms/project"), "14.2.2")
+
+    mock_executor.shutdown.assert_called_once_with()
 
 
 def test_get_zones(rms_service: RmsService, mock_rms_proxy: MagicMock) -> None:

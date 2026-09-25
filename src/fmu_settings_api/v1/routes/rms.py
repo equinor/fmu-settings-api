@@ -99,6 +99,11 @@ FailedOpeningRmsProjectResponses: Final[Responses] = {
             },
         ],
     ),
+    **inline_add_response(
+        504,
+        "Opening the RMS project timed out.",
+        [{"detail": "Opening the RMS project timed out. Please try again."}],
+    ),
 }
 
 RmsProjectValidationResponses: Final[Responses] = {
@@ -238,7 +243,13 @@ async def post_rms_project(
     try:
         if version is None:
             version = rms_service.get_rms_version(rms_project_path)
-        executor, project = rms_service.open_rms_project(rms_project_path, version)
+        try:
+            executor, project = rms_service.open_rms_project(rms_project_path, version)
+        except TimeoutError as e:
+            raise HTTPException(
+                status_code=504,
+                detail="Opening the RMS project timed out. Please try again.",
+            ) from e
         await session_service.add_rms_session(executor, project)
         return Message(
             message=f"RMS project opened successfully with RMS version {version}."
