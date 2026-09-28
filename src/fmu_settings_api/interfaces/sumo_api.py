@@ -7,7 +7,7 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 from sumo.wrapper import SumoClient  # type: ignore[import-untyped]
 
-from fmu_settings_api.models.project import SumoAsset
+from fmu_settings_api.models.sumo import SumoAsset
 
 
 class SumoAuthenticationRequiredError(Exception):

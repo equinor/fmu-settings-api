@@ -20,6 +20,7 @@ from .smda import (
     SmdaInterfaceDep,
     SmdaServiceDep,
 )
+from .sumo import SumoServiceDep
 from .user_fmu import UserFMUDirDep
 from .validation import ProjectValidationServiceDep
 
@@ -37,6 +38,7 @@ __all__ = [
     "SmdaInterfaceDep",
     "ProjectSmdaServiceDep",
     "SmdaServiceDep",
+    "SumoServiceDep",
     "WritePermissionDep",
     "SmdaAPI",
     "ProjectServiceDep",

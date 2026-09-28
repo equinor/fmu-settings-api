@@ -13,13 +13,11 @@ from fmu.settings.models.project_config import (
     RmsWell,
 )
 
-from fmu_settings_api.interfaces import SumoApi
 from fmu_settings_api.logging import get_logger
 from fmu_settings_api.models import FMUProject
 from fmu_settings_api.models.project import (
     CacheRetention,
     GlobalConfigPath,
-    SumoAsset,
 )
 
 from .rms import RmsService
@@ -191,11 +189,3 @@ class ProjectService:
                 "validation.rms_project": None,
             }
         )
-
-    def get_sumo_assets(self) -> list[SumoAsset]:
-        """Get the Sumo assets."""
-        return SumoApi().get_assets()
-
-    def login_to_sumo(self) -> None:
-        """Start an interactive Sumo login."""
-        SumoApi().login()
