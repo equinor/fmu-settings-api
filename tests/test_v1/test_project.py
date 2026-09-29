@@ -14,7 +14,7 @@ import httpx2
 import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.common import Access, FieldItem, Smda
 from fmu.datamodels.context.mappings import DataSystem, MappingType
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import (
@@ -39,6 +39,7 @@ from runrms.exceptions import RmsVersionError
 from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.deps.changelog import get_changelog_service
+from fmu_settings_api.deps.project import get_project_service
 from fmu_settings_api.deps.validation import get_project_validation_service
 from fmu_settings_api.models.project import (
     FMUProject,
@@ -1021,6 +1022,109 @@ async def test_patch_masterdata_general_exception(
         )
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "An unexpected error occurred."}
+
+
+# PATCH project/associated_fields #
+
+
+async def test_patch_associated_fields_project(
+    client_with_project_session: TestClient,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test saving associated fields passes the parsed fields to the service."""
+    project_service = Mock()
+    app.dependency_overrides[get_project_service] = lambda: project_service
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/associated_fields", json=associated_fields_data
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"message": "Saved associated fields"}
+    project_service.update_associated_fields.assert_called_once_with(
+        [FieldItem.model_validate(field) for field in associated_fields_data]
+    )
+
+
+async def test_patch_associated_fields_requires_project_session(
+    client_with_session: TestClient,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test saving associated fields to .fmu requires an active project."""
+    project_service = Mock()
+    app.dependency_overrides[get_project_service] = lambda: project_service
+
+    response = client_with_session.patch(
+        f"{ROUTE}/associated_fields", json=associated_fields_data
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.json()
+    assert response.json()["detail"] == "No FMU project directory open"
+    project_service.update_associated_fields.assert_not_called()
+
+
+async def test_patch_associated_fields_no_directory_permissions(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    associated_fields_data: list[dict[str, Any]],
+    no_permissions: Callable[[str | Path], AbstractContextManager[None]],
+) -> None:
+    """Test 403 returns when lacking permissions."""
+    project_service = Mock()
+    app.dependency_overrides[get_project_service] = lambda: project_service
+    bad_project_dir = session_tmp_path / ".fmu"
+
+    with no_permissions(bad_project_dir):
+        response = client_with_project_session.patch(
+            f"{ROUTE}/associated_fields", json=associated_fields_data
+        )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": f"Permission denied accessing .fmu at {bad_project_dir}"
+    }
+    project_service.update_associated_fields.assert_not_called()
+
+
+async def test_patch_associated_fields_no_directory(
+    client_with_project_session: TestClient,
+    session_tmp_path: Path,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test that if .fmu/ is deleted during a session an error is raised."""
+    project_service = Mock()
+    app.dependency_overrides[get_project_service] = lambda: project_service
+    project_dir = session_tmp_path / ".fmu"
+
+    # remove project .fmu
+    shutil.rmtree(project_dir)
+    assert not project_dir.exists()
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/associated_fields", json=associated_fields_data
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()["detail"]
+    project_service.update_associated_fields.assert_not_called()
+
+
+async def test_patch_associated_fields_general_exception(
+    client_with_project_session: TestClient,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test 500 returns when general exceptions occur in patch_associated_fields."""
+    project_service = Mock()
+    project_service.update_associated_fields.side_effect = ValueError(
+        "Invalid associated fields"
+    )
+    app.dependency_overrides[get_project_service] = lambda: project_service
+
+    response = client_with_project_session.patch(
+        f"{ROUTE}/associated_fields", json=associated_fields_data
+    )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {"detail": "An unexpected error occurred."}
 
 
 # POST project/validate/masterdata/smda #

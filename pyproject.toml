@@ -27,7 +27,7 @@ dynamic = ["version"]
 dependencies = [
     "fastapi>=0.138.0",           # FastAPI.frontend() support
     "fmu-datamodels>=0.21.4",     # no equivalent relation, no fmu data system
-    "fmu-settings>=1.4.1",        # drogon wellbore mapping data
+    "fmu-settings>=1.5.0",        # support associated fields
     "httpx",
     "httpx2",
     "packaging",

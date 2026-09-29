@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.common import Access, FieldItem, Smda
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import ProjectFMUDirectory
 from fmu.settings.models.project_config import (
@@ -143,6 +143,40 @@ def test_update_masterdata_updates_validation_metadata(
     assert config.validation.masterdata_smda is not None
     assert config.validation.masterdata_smda.last_validated_at is not None
     assert config.validation.masterdata_smda.last_validated_by == "test-user"
+
+
+def test_update_associated_fields_success(
+    fmu_dir: ProjectFMUDirectory,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test saving associated fields to config."""
+    service = ProjectService(fmu_dir)
+    associated_fields = [
+        FieldItem.model_validate(field) for field in associated_fields_data
+    ]
+
+    service.update_associated_fields(associated_fields)
+
+    assert fmu_dir.config.load(force=True).associated_fields == associated_fields
+
+
+def test_update_associated_fields_overwrites_existing_fields(
+    fmu_dir: ProjectFMUDirectory,
+    associated_fields_data: list[dict[str, Any]],
+) -> None:
+    """Test that existing associated fields are replaced."""
+    fmu_dir.set_config_value(
+        "associated_fields",
+        [{"identifier": "OLD FIELD", "uuid": "a9a46c82-1eb4-4315-bd7e-c015f6030754"}],
+    )
+    service = ProjectService(fmu_dir)
+    associated_fields = [
+        FieldItem.model_validate(field) for field in associated_fields_data
+    ]
+
+    service.update_associated_fields(associated_fields)
+
+    assert fmu_dir.config.load(force=True).associated_fields == associated_fields
 
 
 def test_restore_fmu_files_returns_empty_without_calling_restore(

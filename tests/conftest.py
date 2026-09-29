@@ -430,6 +430,14 @@ def access_data() -> dict[str, Any]:
 
 
 @pytest.fixture
+def associated_fields_data() -> list[dict[str, Any]]:
+    """Returns example associated fields for the .fmu project."""
+    return [
+        {"identifier": "TROLL BRENT B", "uuid": "afe0e5cb-c24b-4b02-b1d3-7a3f7d0a43c1"}
+    ]
+
+
+@pytest.fixture
 def global_variables_mock() -> dict[str, Any]:
     """Returns an example of the global_variables.yml file with SMDA masterdata."""
     return {
