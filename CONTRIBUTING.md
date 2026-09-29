@@ -32,3 +32,15 @@ ruff check
 ruff format --check
 mypy src tests
 ```
+
+If the repo is cloned from a fork, the upstream has to be set and tags fetched
+from there so that the package will be installed and built correctly. Without
+updated tags the package might be built to an outdated version.
+
+```sh
+git clone git@github.com:<username>/fmu-settings-api.git
+cd fmu-settings-api
+git remote add upstream git@github.com:equinor/fmu-settings-api.git
+git fetch upstream --tags
+pip install -e ".[dev]"
+```
