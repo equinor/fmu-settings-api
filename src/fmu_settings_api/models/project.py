@@ -91,19 +91,6 @@ class LockStatus(BaseResponseModel):
     """Error message from the last attempt to refresh the lock."""
 
 
-class SumoAsset(BaseResponseModel):
-    """A valid asset in Sumo."""
-
-    name: str
-    """Name of the asset in Sumo."""
-
-    code: str
-    """Code of the asset in Sumo."""
-
-    roleprefix: str
-    """Roleprefix of the asset in Sumo."""
-
-
 class ValidationMismatch(BaseResponseModel):
     """A project validation mismatch."""
 
