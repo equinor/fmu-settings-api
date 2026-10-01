@@ -3,7 +3,7 @@
 from os.path import relpath
 from pathlib import Path
 
-from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.common import Access, FieldItem, Smda
 from fmu.datamodels.fmu_results.fields import Model
 from fmu.settings import ProjectFMUDirectory, find_global_config
 from fmu.settings.models.project_config import (
@@ -110,6 +110,12 @@ class ProjectService:
         """Save SMDA masterdata to the project FMU directory."""
         self._fmu_dir.set_config_value("masterdata.smda", smda_masterdata.model_dump())
         self._fmu_dir.update_validation_metadata("masterdata_smda")
+
+    def update_associated_fields(self, associated_fields: list[FieldItem]) -> None:
+        """Replace associated SMDA fields in the project FMU directory."""
+        self._fmu_dir.set_config_value(
+            "associated_fields", [field.model_dump() for field in associated_fields]
+        )
 
     def update_model(self, model: Model) -> None:
         """Save model data to the project FMU directory."""

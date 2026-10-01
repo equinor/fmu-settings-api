@@ -7,7 +7,7 @@ from typing import Final
 
 import httpx2
 from fastapi import APIRouter, HTTPException, Request
-from fmu.datamodels.common import Access, Smda
+from fmu.datamodels.common import Access, FieldItem, Smda
 from fmu.datamodels.context.mappings import (
     DataSystem,
     MappingType,
@@ -939,6 +939,35 @@ async def patch_masterdata(
     """Saves SMDA masterdata to the project .fmu directory."""
     project_service.update_masterdata(smda_masterdata)
     return Message(message="Saved SMDA masterdata")
+
+
+@router.patch(
+    "/associated_fields",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Saves associated SMDA fields to the project .fmu directory",
+    description=dedent(
+        """
+        Saves associated SMDA fields to the project .fmu directory.
+        Associated fields are used to find SMDA wellbores outside the project fields.
+        They are not part of the project masterdata.
+        Existing associated fields are replaced with the supplied list.
+        An empty list removes all associated fields.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **LockConflictResponses,
+    },
+)
+async def patch_associated_fields(
+    project_service: ProjectServiceDep,
+    associated_fields: list[FieldItem],
+) -> Message:
+    """Saves associated SMDA fields to the project .fmu directory."""
+    project_service.update_associated_fields(associated_fields)
+    return Message(message="Saved associated fields")
 
 
 @router.post(
