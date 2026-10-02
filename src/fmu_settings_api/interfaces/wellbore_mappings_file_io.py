@@ -45,7 +45,7 @@ class WellboreMappingsFileIO:
         Raises:
             FileNotFoundError: If the CSV file does not exist.
             ValueError: If the path escapes the project root, required columns are
-                missing, or a non-empty row has missing values.
+                missing, or a non-empty row has missing values or duplicate names.
         """
         csv_path = self._fmu_dir.resolve_path_inside_project(Path(relative_path))
 
@@ -64,8 +64,10 @@ class WellboreMappingsFileIO:
                 )
 
             mappings: list[InternalWellboreIdentifierMapping] = []
-            primary_source_ids: set[str] = set()
-            for row_number, row in enumerate(reader, start=2):
+            source_rows: dict[str, int] = {}
+            target_rows: dict[str, int] = {}
+            for row in reader:
+                row_number = reader.line_num
                 source_id = (row.get("RMS_WELL_NAME") or "").strip()
                 target_id = (row.get("ECLIPSE_WELL_NAME") or "").strip()
 
@@ -77,20 +79,33 @@ class WellboreMappingsFileIO:
                         f"CSV row has missing well mapping values at line {row_number}"
                     )
 
-                if source_id not in primary_source_ids:
-                    primary_source_ids.add(source_id)
-                    mappings.append(
-                        InternalWellboreIdentifierMapping(
-                            source_system=DataSystem.rms,
-                            target_system=DataSystem.rms,
-                            mapping_type=MappingType.wellbore,
-                            relation_type=InternalRelationType.primary,
-                            source_id=source_id,
-                            source_uuid=None,
-                            target_id=source_id,
-                            target_uuid=None,
-                        )
+                if source_id in source_rows:
+                    raise ValueError(
+                        f"The RMS name '{source_id}' is repeated in CSV rows "
+                        f"{source_rows[source_id]} and {row_number}. "
+                        "Each RMS name can have only one mapping to simulator."
                     )
+                if target_id in target_rows:
+                    raise ValueError(
+                        f"The simulator name '{target_id}' is repeated in CSV rows "
+                        f"{target_rows[target_id]} and {row_number}. "
+                        "Each simulator name can map to only one RMS name."
+                    )
+                source_rows[source_id] = row_number
+                target_rows[target_id] = row_number
+
+                mappings.append(
+                    InternalWellboreIdentifierMapping(
+                        source_system=DataSystem.rms,
+                        target_system=DataSystem.rms,
+                        mapping_type=MappingType.wellbore,
+                        relation_type=InternalRelationType.primary,
+                        source_id=source_id,
+                        source_uuid=None,
+                        target_id=source_id,
+                        target_uuid=None,
+                    )
+                )
 
                 mappings.append(
                     InternalWellboreIdentifierMapping(
