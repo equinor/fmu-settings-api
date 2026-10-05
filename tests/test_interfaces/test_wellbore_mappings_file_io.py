@@ -120,6 +120,50 @@ def test_read_rms_eclipse_csv_skips_empty_rows(
     )
 
 
+@pytest.mark.parametrize(
+    ("duplicate_row", "expected_message"),
+    [
+        (
+            "30_9-B-43_A,B44A",
+            "The RMS name '30_9-B-43_A' is repeated in CSV rows 2 and 6. "
+            "Each RMS name can have only one mapping to simulator.",
+        ),
+        (
+            "30_9-B-43_A,B43A",
+            "The RMS name '30_9-B-43_A' is repeated in CSV rows 2 and 6. "
+            "Each RMS name can have only one mapping to simulator.",
+        ),
+        (
+            "30_9-B-44_A,B43A",
+            "The simulator name 'B43A' is repeated in CSV rows 2 and 6. "
+            "Each simulator name can map to only one RMS name.",
+        ),
+    ],
+)
+def test_read_rms_eclipse_csv_reports_duplicate_rows(
+    fmu_dir: ProjectFMUDirectory,
+    duplicate_row: str,
+    expected_message: str,
+) -> None:
+    """Duplicate names report file rows, including skipped and unrelated rows."""
+    file_io = WellboreMappingsFileIO(fmu_dir)
+    csv_relative_path = Path("rms_eclipse.csv")
+    (fmu_dir.base_path / csv_relative_path).write_text(
+        "RMS_WELL_NAME,ECLIPSE_WELL_NAME\n"
+        "30_9-B-43_A,B43A\n"
+        "\n"
+        ",\n"
+        "30_9-B-45_A,B45A\n"
+        f"{duplicate_row}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        file_io.read_rms_eclipse_csv(csv_relative_path)
+
+    assert str(exc_info.value) == expected_message
+
+
 @pytest.mark.parametrize("relative_path", [Path("../outside.csv"), Path("/tmp/x.csv")])
 def test_read_rms_eclipse_csv_rejects_paths_outside_project_root(
     fmu_dir: ProjectFMUDirectory,
