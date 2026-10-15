@@ -6,7 +6,11 @@ from fmu.settings import CacheResource, ProjectFMUDirectory
 from fmu.settings.models.diff import ResourceDiff
 
 from fmu_settings_api.logging import get_logger
-from fmu_settings_api.models.resource import CacheContent, CacheList
+from fmu_settings_api.models.resource import (
+    CacheContent,
+    CacheList,
+    MigrationBackupStatus,
+)
 
 logger = get_logger(__name__)
 
@@ -74,3 +78,23 @@ class ResourceService:
             resource=resource.value,
             revision_id=revision_id,
         )
+
+    def get_migration_backup_status(self) -> MigrationBackupStatus:
+        """Check if a project config migration backup can be restored."""
+        return MigrationBackupStatus(
+            available=self._fmu_dir.has_compatible_migration_backup()
+        )
+
+    def restore_latest_migration_backup(self) -> None:
+        """Replace the project config with the latest compatible migration backup.
+
+        The current config is not backed up, so changes made after the backup are
+        lost.
+        """
+        try:
+            self._fmu_dir.restore_latest_compatible_migration_backup()
+        except FileNotFoundError as e:
+            logger.error("migration_backup_restore_failed", error=str(e))
+            raise
+
+        logger.info("migration_backup_restored")

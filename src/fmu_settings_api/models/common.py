@@ -62,3 +62,12 @@ class ConfigurationErrorDetail(BaseResponseModel):
     """Error message describing the configuration issue."""
     error: str
     """Additional error details or context."""
+
+
+class MigrationErrorResponse(BaseResponseModel):
+    """Migration error response with a string detail and a specific error code."""
+
+    code: Literal["newer_schema_version"]
+    """Machine-readable error code."""
+    detail: str
+    """Error message describing the migration failure."""

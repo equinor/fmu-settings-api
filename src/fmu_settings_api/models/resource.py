@@ -17,3 +17,10 @@ class CacheContent(BaseResponseModel):
 
     data: dict[str, Any]
     """Parsed JSON object for the cached resource."""
+
+
+class MigrationBackupStatus(BaseResponseModel):
+    """Availability of a restorable project config migration backup."""
+
+    available: bool
+    """Whether a backup compatible with the installed schema exists."""
