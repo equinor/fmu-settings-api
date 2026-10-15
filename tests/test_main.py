@@ -10,7 +10,7 @@ import pytest
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
-from fmu.settings import MigrationError
+from fmu.settings import MigrationError, NewerSchemaVersionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from fmu_settings_api.__main__ import (
@@ -268,6 +268,83 @@ def test_migration_error_from_dependency_returns_422_and_logs_original_error() -
     assert log_data["status_code"] == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert log_data["error"] == str(migration_error)
     assert log_data["error_type"] == "MigrationError"
+
+
+def test_newer_schema_version_error_returns_string_detail_and_code() -> None:
+    """Tests that a direct newer-schema error returns HTTP 422 with an error code.
+
+    The response contains the original error message in ``detail`` and
+    ``code="newer_schema_version"``. The migration handler logs the error once.
+    """
+    test_app = FastAPI()
+    test_app.add_exception_handler(
+        MigrationError,
+        logging_migration_exception_handler,
+    )
+    migration_error = NewerSchemaVersionError(
+        "Stored ProjectConfig uses newer schema version 99"
+    )
+
+    @test_app.get("/test")
+    async def newer_schema_route() -> None:
+        raise migration_error
+
+    with (
+        patch("fmu_settings_api.__main__.logger") as mock_logger,
+        TestClient(test_app) as local_client,
+    ):
+        response = local_client.get("/test")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": str(migration_error),
+        "code": "newer_schema_version",
+    }
+    mock_logger.exception.assert_called_once()
+    mock_logger.warning.assert_not_called()
+
+
+def test_http_exception_caused_by_newer_schema_error_uses_migration_handler() -> None:
+    """Tests that a wrapped newer-schema error uses the migration handler.
+
+    The response is HTTP 422 with the original error message in ``detail`` and
+    ``code="newer_schema_version"``, regardless of the outer HTTP exception's
+    status and detail. The migration handler logs the error once.
+    The HTTP handler does not log it again.
+    """
+    test_app = FastAPI()
+    test_app.add_exception_handler(
+        MigrationError,
+        logging_migration_exception_handler,
+    )
+    test_app.add_exception_handler(
+        StarletteHTTPException,
+        logging_http_exception_handler,
+    )
+    migration_error = NewerSchemaVersionError(
+        "Stored ProjectConfig uses newer schema version 99"
+    )
+
+    @test_app.get("/test")
+    async def wrapped_newer_schema_route() -> None:
+        try:
+            raise migration_error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="Invalid project") from error
+
+    with (
+        patch("fmu_settings_api.__main__.logger") as mock_logger,
+        TestClient(test_app) as local_client,
+    ):
+        response = local_client.get("/test")
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json() == {
+        "detail": str(migration_error),
+        "code": "newer_schema_version",
+    }
+    mock_logger.exception.assert_called_once()
+    mock_logger.warning.assert_not_called()
 
 
 def test_http_exception_caused_by_migration_error_uses_migration_handler() -> None:

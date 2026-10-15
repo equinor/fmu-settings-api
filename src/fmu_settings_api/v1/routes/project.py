@@ -64,7 +64,11 @@ from fmu_settings_api.models.project import (
     RmsSimulatorMappingImportRequest,
     ValidationMismatchDetail,
 )
-from fmu_settings_api.models.resource import CacheContent, CacheList
+from fmu_settings_api.models.resource import (
+    CacheContent,
+    CacheList,
+    MigrationBackupStatus,
+)
 from fmu_settings_api.models.rms import (
     RmsProjectPath,
     RmsProjectPathsResult,
@@ -510,6 +514,23 @@ CacheResponses: Final[Responses] = {
                 "for cache operations"
             },
             {"detail": "Invalid cached content for {resource}: {error}"},
+        ],
+    ),
+}
+
+MigrationBackupResponses: Final[Responses] = {
+    **inline_add_response(
+        404,
+        "Project .fmu directory not found, or no compatible config migration "
+        "backup exists",
+        [
+            {"detail": "Project .fmu directory not found. It may have been deleted."},
+            {
+                "detail": (
+                    "No migration backup of the project config is compatible "
+                    "with the installed version of fmu-settings"
+                )
+            },
         ],
     ),
 }
@@ -1415,6 +1436,73 @@ async def post_cache_restore(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.get(
+    "/migration_backup/check",
+    response_model=MigrationBackupStatus,
+    summary="Checks if a compatible project config migration backup exists",
+    description=dedent(
+        """
+        Checks if the project has a config migration backup that validates with
+        the installed schema. Use this when the project config was migrated by a
+        newer version and cannot be loaded.
+        """
+    ),
+    responses={**GetSessionResponses, **ProjectResponses},
+)
+async def get_migration_backup_check(
+    resource_service: ResourceServiceDep,
+) -> MigrationBackupStatus:
+    """Check if a compatible project config migration backup exists."""
+    try:
+        return resource_service.get_migration_backup_status()
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Permission denied accessing .fmu at {resource_service.fmu_dir_path}"
+            ),
+        ) from e
+
+
+@router.post(
+    "/migration_backup/restore",
+    response_model=Message,
+    dependencies=[WritePermissionDep, RefreshLockDep],
+    summary="Restores the latest compatible project config migration backup",
+    description=dedent(
+        """
+        Replaces the project config with the newest migration backup that
+        validates with the installed schema.
+
+        The current config is not backed up. All config changes made after the
+        backup are lost.
+        """
+    ),
+    responses={
+        **GetSessionResponses,
+        **ProjectResponses,
+        **MigrationBackupResponses,
+        **LockConflictResponses,
+    },
+)
+async def post_migration_backup_restore(
+    resource_service: ResourceServiceDep,
+) -> Message:
+    """Restore the latest compatible project config migration backup."""
+    try:
+        resource_service.restore_latest_migration_backup()
+        return Message(message="Restored config.json from migration backup")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(
             status_code=403,
