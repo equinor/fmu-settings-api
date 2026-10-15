@@ -5,6 +5,7 @@ import os
 import shutil
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
@@ -40,12 +41,14 @@ from fmu_settings_api.__main__ import app
 from fmu_settings_api.config import HttpHeader, settings
 from fmu_settings_api.deps.changelog import get_changelog_service
 from fmu_settings_api.deps.project import get_project_service
+from fmu_settings_api.deps.resource import get_resource_service
 from fmu_settings_api.deps.validation import get_project_validation_service
 from fmu_settings_api.models.project import (
     FMUProject,
     LockStatus,
     ValidationMismatch,
 )
+from fmu_settings_api.models.resource import MigrationBackupStatus
 from fmu_settings_api.services.project_validation import (
     MasterdataSmdaMismatchError,
 )
@@ -4517,6 +4520,99 @@ async def test_post_cache_restore_resource_permission_error(
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json() == {
         "detail": f"Permission denied accessing .fmu at {fmu_dir.path}"
+    }
+
+
+# GET project/migration_backup/check #
+
+
+async def test_get_migration_backup_check_returns_status_from_service(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that the migration backup status from the service is returned."""
+    resource_service = Mock()
+    resource_service.get_migration_backup_status.return_value = MigrationBackupStatus(
+        available=True,
+        last_modified_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
+        last_modified_by="backup_user",
+    )
+    app.dependency_overrides[get_resource_service] = lambda: resource_service
+
+    response = client_with_project_session.get(f"{ROUTE}/migration_backup/check")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {
+        "available": True,
+        "last_modified_at": "2026-01-02T03:04:05Z",
+        "last_modified_by": "backup_user",
+    }
+    resource_service.get_migration_backup_status.assert_called_once_with()
+
+
+async def test_get_migration_backup_check_permission_error_returns_403(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that a permission error from the service returns 403."""
+    resource_service = Mock()
+    resource_service.fmu_dir_path = Path("/tmp/project/.fmu")
+    resource_service.get_migration_backup_status.side_effect = PermissionError
+    app.dependency_overrides[get_resource_service] = lambda: resource_service
+
+    response = client_with_project_session.get(f"{ROUTE}/migration_backup/check")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": "Permission denied accessing .fmu at /tmp/project/.fmu"
+    }
+
+
+# POST project/migration_backup/restore #
+
+
+async def test_post_migration_backup_restore_restores_with_service(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that restoring the migration backup calls the service."""
+    resource_service = Mock()
+    app.dependency_overrides[get_resource_service] = lambda: resource_service
+
+    response = client_with_project_session.post(f"{ROUTE}/migration_backup/restore")
+
+    assert response.status_code == status.HTTP_200_OK, response.json()
+    assert response.json() == {"message": "Restored config.json from migration backup"}
+    resource_service.restore_latest_migration_backup.assert_called_once_with()
+
+
+async def test_post_migration_backup_restore_without_backup_returns_404(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that a missing compatible backup returns 404."""
+    resource_service = Mock()
+    resource_service.restore_latest_migration_backup.side_effect = FileNotFoundError(
+        "No compatible migration backup"
+    )
+    app.dependency_overrides[get_resource_service] = lambda: resource_service
+
+    response = client_with_project_session.post(f"{ROUTE}/migration_backup/restore")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {"detail": "No compatible migration backup"}
+
+
+async def test_post_migration_backup_restore_permission_error_returns_403(
+    client_with_project_session: TestClient,
+) -> None:
+    """Tests that a permission error from the service returns 403."""
+    resource_service = Mock()
+    resource_service.fmu_dir_path = Path("/tmp/project/.fmu")
+    resource_service.restore_latest_migration_backup.side_effect = PermissionError
+    app.dependency_overrides[get_resource_service] = lambda: resource_service
+
+    response = client_with_project_session.post(f"{ROUTE}/migration_backup/restore")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json() == {
+        "detail": "Permission denied accessing .fmu at /tmp/project/.fmu"
     }
 
 

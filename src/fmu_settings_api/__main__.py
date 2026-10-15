@@ -15,7 +15,12 @@ from fastapi.exception_handlers import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from fmu.settings import MigrationError, UserFMUDirectory, init_user_fmu_directory
+from fmu.settings import (
+    MigrationError,
+    NewerSchemaVersionError,
+    UserFMUDirectory,
+    init_user_fmu_directory,
+)
 from fmu.settings._resources.user_session_log_manager import UserSessionLogManager
 from fmu.settings.models.event_info import EventInfo
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -28,6 +33,7 @@ from .config import Environment, HttpHeader, settings
 from .logging import get_logger, setup_logging, setup_telemetry
 from .middleware.logging import LoggingMiddleware
 from .models import Ok
+from .models.common import MigrationErrorResponse
 from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
 
@@ -82,8 +88,23 @@ async def logging_migration_exception_handler(
     )
     return JSONResponse(
         status_code=HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"detail": str(exc)},
+        content=_migration_error_response(exc),
     )
+
+
+def _migration_error_response(exc: MigrationError) -> dict[str, str]:
+    """Build the JSON response body for a migration error.
+
+    The ``detail`` field contains the error message as a string.
+    ``NewerSchemaVersionError`` also adds ``code="newer_schema_version"``.
+    Other migration errors return only ``detail``.
+    """
+    if isinstance(exc, NewerSchemaVersionError):
+        return MigrationErrorResponse(
+            code="newer_schema_version",
+            detail=str(exc),
+        ).model_dump()
+    return {"detail": str(exc)}
 
 
 async def logging_http_exception_handler(
