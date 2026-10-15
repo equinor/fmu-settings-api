@@ -53,7 +53,6 @@ dev = [
     "types-PyYAML",
     "types-requests",
     "watchfiles",
-    "fmu-settings-cli",
 ]
 
 [project.urls]
@@ -124,7 +123,6 @@ exclude-newer = "1 week"
 [tool.uv.exclude-newer-package]
 "fmu-datamodels" = false
 "fmu-settings" = false
-"fmu-settings-cli" = false
 "fmu-settings-gui" = false
 "runrms" = false
 "sumo-wrapper-python" = false
