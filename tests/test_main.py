@@ -27,6 +27,7 @@ from fmu_settings_api.models import Ok
 from fmu_settings_api.session import (
     AccessTokens,
     ProjectSession,
+    RmsSession,
     Session,
     session_manager,
 )
@@ -181,6 +182,45 @@ def test_shutdown_releases_project_lock() -> None:
         lock.release.assert_called_once()
     finally:
         session_manager.storage = original_storage
+
+
+@pytest.mark.parametrize("failed_operation", [None, "close", "shutdown"])
+def test_shutdown_cleans_up_rms_sessions(failed_operation: str | None) -> None:
+    """Clean up RMS without blocking lock release or telemetry shutdown."""
+    project = MagicMock()
+    executor = MagicMock()
+    if failed_operation == "close":
+        project.close.side_effect = RuntimeError("Project close failed")
+    elif failed_operation == "shutdown":
+        executor.shutdown.side_effect = RuntimeError("Executor shutdown failed")
+
+    lock = MagicMock()
+    lock.is_acquired.return_value = True
+    now = datetime.now(UTC)
+    session = ProjectSession(
+        id="rms-session",
+        user_fmu_directory=cast("Any", object()),
+        created_at=now,
+        expires_at=now,
+        last_accessed=now,
+        access_tokens=AccessTokens(),
+        project_fmu_directory=cast("Any", SimpleNamespace(_lock=lock)),
+        rms_session=RmsSession(executor=executor, project=project, expires_at=now),
+    )
+    telemetry = MagicMock()
+
+    with (
+        patch.object(session_manager, "storage", {session.id: session}),
+        patch.object(app.state, "telemetry", telemetry, create=True),
+    ):
+        with TestClient(app):
+            project.close.assert_not_called()
+            executor.shutdown.assert_not_called()
+        project.close.assert_called_once_with()
+        executor.shutdown.assert_called_once_with()
+        lock.release.assert_called_once_with()
+        telemetry.shutdown.assert_called_once_with()
+        assert session.rms_session is None
 
 
 def test_shutdown_closes_telemetry() -> None:
