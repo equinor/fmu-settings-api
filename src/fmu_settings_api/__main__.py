@@ -154,7 +154,7 @@ async def logging_request_validation_exception_handler(
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """App lifespan for startup/shutdown housekeeping.
 
-    On shutdown, releases acquired project locks and closes optional telemetry.
+    On shutdown, cleans up RMS sessions, releases locks, and closes telemetry.
     """
     logger.info(
         "starting_application",
@@ -172,6 +172,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for session in tuple(session_manager.storage.values()):
         if not isinstance(session, ProjectSession):
             continue
+
+        if session.rms_session is not None:
+            session.rms_session.cleanup(session.id)
+            session.rms_session = None
 
         lock = session.project_fmu_directory._lock
         if lock.is_acquired():
