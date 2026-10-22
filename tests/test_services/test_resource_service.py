@@ -2,8 +2,9 @@
 
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fmu.datamodels.context.mappings import DataSystem
@@ -18,6 +19,7 @@ from fmu.settings import (
 from fmu.settings.models import ListFieldDiff
 from fmu.settings.models.diff import ScalarFieldDiff
 
+from fmu_settings_api.models.resource import MigrationBackupStatus
 from fmu_settings_api.services.resource import ResourceService
 
 
@@ -138,6 +140,72 @@ def test_restore_from_cache_unsupported_model(fmu_dir: ProjectFMUDirectory) -> N
         ),
     ):
         service.restore_from_cache(CacheResource.config, "missing.json")
+
+
+def test_get_migration_backup_status_returns_backup_last_modified() -> None:
+    """Tests that the status contains the last modified info of the backup."""
+    fmu_dir = Mock(spec=ProjectFMUDirectory)
+    fmu_dir.config = Mock()
+    backup_config = Mock(
+        last_modified_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
+        last_modified_by="backup_user",
+    )
+    fmu_dir.config.find_latest_compatible_migration_backup.return_value = (
+        Path("migration-backups/config/backup.json"),
+        backup_config,
+    )
+    service = ResourceService(fmu_dir)
+
+    assert service.get_migration_backup_status() == MigrationBackupStatus(
+        available=True,
+        last_modified_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
+        last_modified_by="backup_user",
+    )
+
+
+def test_get_migration_backup_status_without_backup_returns_unavailable() -> None:
+    """Tests that the status is unavailable when no backup exists."""
+    fmu_dir = Mock(spec=ProjectFMUDirectory)
+    fmu_dir.config = Mock()
+    fmu_dir.config.find_latest_compatible_migration_backup.return_value = None
+    service = ResourceService(fmu_dir)
+
+    assert service.get_migration_backup_status() == MigrationBackupStatus(
+        available=False
+    )
+
+
+def test_restore_latest_migration_backup_restores_and_logs_success() -> None:
+    """Tests that the latest compatible backup is restored and logged."""
+    fmu_dir = Mock(spec=ProjectFMUDirectory)
+    service = ResourceService(fmu_dir)
+
+    with patch("fmu_settings_api.services.resource.logger") as logger_mock:
+        service.restore_latest_migration_backup()
+
+    fmu_dir.restore_latest_compatible_migration_backup.assert_called_once_with()
+    logger_mock.info.assert_called_once_with("migration_backup_restored")
+    logger_mock.error.assert_not_called()
+
+
+def test_restore_latest_migration_backup_without_backup_logs_and_raises() -> None:
+    """Tests that a missing compatible backup is logged and raised again."""
+    fmu_dir = Mock(spec=ProjectFMUDirectory)
+    fmu_dir.restore_latest_compatible_migration_backup.side_effect = FileNotFoundError(
+        "No compatible migration backup"
+    )
+    service = ResourceService(fmu_dir)
+
+    with (
+        patch("fmu_settings_api.services.resource.logger") as logger_mock,
+        pytest.raises(FileNotFoundError, match="No compatible migration backup"),
+    ):
+        service.restore_latest_migration_backup()
+
+    logger_mock.error.assert_called_once_with(
+        "migration_backup_restore_failed", error="No compatible migration backup"
+    )
+    logger_mock.info.assert_not_called()
 
 
 def test_get_cache_diff_unsupported_model(fmu_dir: ProjectFMUDirectory) -> None:
