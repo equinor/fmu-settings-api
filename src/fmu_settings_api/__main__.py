@@ -32,7 +32,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 from .config import Environment, HttpHeader, settings
 from .logging import get_logger, setup_logging, setup_telemetry
 from .middleware.logging import LoggingMiddleware
-from .models import Ok
+from .models import HealthResponse
 from .models.common import MigrationErrorResponse
 from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
@@ -206,16 +206,16 @@ app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 @app.get(
     "/health",
     tags=["health"],
-    response_model=Ok,
+    response_model=HealthResponse,
     summary="A health check on the application",
     description=(
         "This route requires no form of authentication or authorization. "
         "It can be used to check if the application is running and responsive."
     ),
 )
-async def health_check() -> Ok:
-    """Simple health check endpoint."""
-    return Ok()
+async def health_check() -> HealthResponse:
+    """Return the health status and application identifier."""
+    return HealthResponse()
 
 
 def add_frontend(frontend_app: FastAPI, directory: Path) -> None:
