@@ -23,7 +23,7 @@ from fmu_settings_api.__main__ import (
 )
 from fmu_settings_api.config import settings
 from fmu_settings_api.middleware.logging import LoggingMiddleware
-from fmu_settings_api.models import Ok
+from fmu_settings_api.models import HealthResponse
 from fmu_settings_api.session import (
     AccessTokens,
     ProjectSession,
@@ -40,11 +40,11 @@ def test_main_invocation() -> None:
 
 
 def test_health_check() -> None:
-    """Test the health check endpoint."""
+    """Tests that the health check identifies FMU Settings without authentication."""
     response = client.get("/health")
     assert response.status_code == status.HTTP_200_OK, response.json()
-    assert response.json() == {"status": "ok"}
-    assert Ok() == Ok.model_validate(response.json())
+    assert response.json() == {"status": "ok", "application": "fmu-settings"}
+    assert HealthResponse() == HealthResponse.model_validate(response.json())
 
 
 def test_add_frontend_serves_spa_without_hiding_api_routes(tmp_path: Path) -> None:

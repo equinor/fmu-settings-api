@@ -19,6 +19,12 @@ class Ok(BaseResponseModel):
     status: Literal["ok"] = "ok"
 
 
+class HealthResponse(Ok):
+    """Identify a responsive FMU Settings API."""
+
+    application: Literal["fmu-settings"] = "fmu-settings"
+
+
 class Message(BaseResponseModel):
     """A generic message to return to the GUI."""
 
