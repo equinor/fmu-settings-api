@@ -26,6 +26,7 @@ class MatchService:
         replacements: list[MatchReplacementRule] | None = None,
         *,
         prefixes_to_remove: list[str] | None = None,
+        suffixes_to_remove: list[str] | None = None,
     ) -> list[MatchResult]:
         """Match source names to target names using strict name similarity.
 
@@ -38,6 +39,8 @@ class MatchService:
             replacements: Optional string replacements to apply before matching.
             prefixes_to_remove: Optional prefixes to remove from the text before
                 the first digit.
+            suffixes_to_remove: Optional complete token sequences to remove from
+                the end of names.
 
         Returns:
             Match results in the original source order. Each source result
@@ -58,11 +61,20 @@ class MatchService:
             if normalized_prefix:
                 prefix_sequences_to_remove.append(tuple(normalized_prefix.split()))
 
+        suffix_sequences_to_remove: list[tuple[str, ...]] = []
+        for suffix in suffixes_to_remove or []:
+            normalized_suffix = self._normalize_text(suffix)
+            if normalized_suffix:
+                suffix_sequences_to_remove.append(tuple(normalized_suffix.split()))
+        # Check longer token sequences first. Removal stops at the first match.
+        suffix_sequences_to_remove.sort(key=len, reverse=True)
+
         normalized_targets = [
             self._normalize_name(
                 target,
                 prepared_replacements,
                 prefix_sequences_to_remove,
+                suffix_sequences_to_remove,
             )
             for target in targets
         ]
@@ -72,6 +84,7 @@ class MatchService:
                 source,
                 prepared_replacements,
                 prefix_sequences_to_remove,
+                suffix_sequences_to_remove,
             )
             target_scores = [
                 (targets[target_index], score)
@@ -104,11 +117,12 @@ class MatchService:
         name: str,
         prepared_replacements: list[tuple[re.Pattern[str], str]],
         prefix_sequences_to_remove: list[tuple[str, ...]],
+        suffix_sequences_to_remove: list[tuple[str, ...]],
     ) -> str:
         """Normalize a name for comparison.
 
         Converts to lowercase, replaces underscores, dots, dashes, and slashes
-        with spaces, collapses whitespace, removes requested prefixes, and
+        with spaces, collapses whitespace, removes requested prefixes and suffixes, and
         applies replacement rules to whole normalized token sequences only.
 
         Example:
@@ -122,6 +136,7 @@ class MatchService:
             prepared_replacements: Normalized replacement patterns and values.
             prefix_sequences_to_remove: Normalized prefix sequences to remove
                 from the text before the first digit.
+            suffix_sequences_to_remove: Normalized suffix sequences, longest first.
 
         Returns:
             Normalized name.
@@ -130,6 +145,11 @@ class MatchService:
         normalized_name = self._remove_prefix_sequences(
             normalized_name,
             prefix_sequences_to_remove,
+        )
+
+        normalized_name = self._remove_suffix_sequence(
+            normalized_name,
+            suffix_sequences_to_remove,
         )
 
         for pattern, replacement_value in prepared_replacements:
@@ -165,6 +185,18 @@ class MatchService:
             if index not in token_indexes_to_remove
         )
         return f"{kept_prefix} {normalized_name[first_digit_index:]}".strip()
+
+    @staticmethod
+    def _remove_suffix_sequence(
+        normalized_name: str,
+        suffix_sequences_to_remove: list[tuple[str, ...]],
+    ) -> str:
+        """Remove one complete end token sequence, checking longest suffixes first."""
+        tokens = normalized_name.split()
+        for suffix in suffix_sequences_to_remove:
+            if tuple(tokens[-len(suffix) :]) == suffix:
+                return " ".join(tokens[: -len(suffix)])
+        return normalized_name
 
     @staticmethod
     def _normalize_text(value: str) -> str:
