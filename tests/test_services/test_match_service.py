@@ -352,3 +352,85 @@ class TestMatchNames:
         assert len(results) == 1
         assert results[0].matches[0].score < LOW_CONFIDENCE_SCORE_THRESHOLD
         assert results[0].matches[0].confidence == "low"
+
+    @pytest.mark.parametrize(
+        ("source", "target", "suffix"),
+        [
+            ("30_9-B-21_C_GL", "30/9-B-21 C", "_GL"),
+            ("30/9-B-21 C", "30_9-B-21_C_GL", "_GL"),
+            ("30_9-B-21_C_GL", "30/9-B-21 C.gl", "gl"),
+            ("30_9-B-21_C-By1H/gl  ", "30/9-B-21 C", " _BY1H.GL "),
+        ],
+    )
+    def test_normalized_suffix_removal_produces_perfect_match(
+        self, match_service: MatchService, source: str, target: str, suffix: str
+    ) -> None:
+        """Test normalized suffix removal produces a perfect match."""
+        results = match_service.match_names(
+            [source], [target], suffixes_to_remove=[suffix]
+        )
+
+        assert results[0].source == source
+        assert results[0].matches[0].target == target
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+
+    @pytest.mark.parametrize(
+        ("source", "suffixes"),
+        [
+            ("30_9-B-21_C_AGL", ["_GL"]),
+            ("30_9-B-21_C_GL_EXTRA", ["_GL"]),
+            ("30_9-B-21_C_GL", ["_OTHER"]),
+            ("30_9-B-21_C_GL", ["_BY1H_GL"]),
+            ("30_9-B-21_C_GL", []),
+            ("30_9-B-21_C_GL", ["", "  ", "_.-/"]),
+        ],
+    )
+    def test_non_matching_suffixes_leave_comparison_unchanged(
+        self, match_service: MatchService, source: str, suffixes: list[str]
+    ) -> None:
+        """Test partial, non-terminal, and empty suffixes do not change scores."""
+        expected = match_service.match_names([source], ["30_9-B-21_C"])
+        results = match_service.match_names(
+            [source], ["30_9-B-21_C"], suffixes_to_remove=suffixes
+        )
+
+        assert results == expected
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
+    @pytest.mark.parametrize("suffixes", [["_GL", "_BY1H_GL"], ["_BY1H_GL", "_GL"]])
+    def test_longest_suffix_is_removed_in_any_request_order(
+        self, match_service: MatchService, suffixes: list[str]
+    ) -> None:
+        """Test the longest matching suffix is removed regardless of list order."""
+        results = match_service.match_names(
+            ["30_9-B-21_C_BY1H_GL"], ["30/9-B-21 C"], suffixes_to_remove=suffixes
+        )
+
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE
+
+    def test_suffix_removal_runs_once(self, match_service: MatchService) -> None:
+        """Test only one suffix is removed per name."""
+        results = match_service.match_names(
+            ["30_9-B-21_C_GL_GL"], ["30_9-B-21_C_GL"], suffixes_to_remove=["_GL"]
+        )
+        expected = match_service.match_names(["30_9-B-21_C_GL"], ["30_9-B-21_C"])
+
+        assert results[0].matches[0].score == expected[0].matches[0].score
+        assert results[0].matches[0].score < PERFECT_MATCH_SCORE
+
+    def test_prefix_and_suffix_removal_run_before_replacements(
+        self, match_service: MatchService
+    ) -> None:
+        """Test prefixes and suffixes are removed before replacements."""
+        results = match_service.match_names(
+            ["RFT_30_9-B-21_C_Fm_GL"],
+            ["NO 30/9-B-21 C Formation"],
+            [
+                MatchReplacementRule(original="Fm", replacement="Formation"),
+                MatchReplacementRule(original="GL", replacement="keep"),
+            ],
+            prefixes_to_remove=["RFT", "NO"],
+            suffixes_to_remove=["_GL"],
+        )
+
+        assert results[0].matches[0].score == PERFECT_MATCH_SCORE

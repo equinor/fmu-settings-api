@@ -57,21 +57,29 @@ class TestPostMatchEndpoint:
         assert response.status_code == status.HTTP_200_OK, response.json()
         assert response.json()[0]["matches"][0]["score"] == PERFECT_MATCH_SCORE
 
-    def test_prefixes_are_passed_to_match_service(self) -> None:
-        """Test the route passes selected prefixes to the match service."""
+    @pytest.mark.parametrize("prefixes_to_remove", [None, [], ["RFT", "NO"]])
+    @pytest.mark.parametrize("suffixes_to_remove", [None, [], ["GL"]])
+    def test_removal_options_are_passed_to_match_service(
+        self,
+        prefixes_to_remove: list[str] | None,
+        suffixes_to_remove: list[str] | None,
+    ) -> None:
+        """Test the route passes selected prefixes and suffixes to the service."""
         match_service = MagicMock(spec=MatchService)
         match_service.match_names.return_value = []
         app.dependency_overrides[get_match_service] = lambda: match_service
 
+        payload: dict[str, object] = {
+            "sources": ["RFT_33_5_1"],
+            "targets": ["NO 33/5-1"],
+        }
+        if prefixes_to_remove is not None:
+            payload["prefixes_to_remove"] = prefixes_to_remove
+        if suffixes_to_remove is not None:
+            payload["suffixes_to_remove"] = suffixes_to_remove
+
         with TestClient(app) as client:
-            response = client.post(
-                ROUTE,
-                json={
-                    "sources": ["RFT_33_5_1"],
-                    "targets": ["NO 33/5-1"],
-                    "prefixes_to_remove": ["RFT", "NO"],
-                },
-            )
+            response = client.post(ROUTE, json=payload)
 
         assert response.status_code == status.HTTP_200_OK, response.json()
         assert response.json() == []
@@ -79,7 +87,8 @@ class TestPostMatchEndpoint:
             ["RFT_33_5_1"],
             ["NO 33/5-1"],
             [],
-            prefixes_to_remove=["RFT", "NO"],
+            prefixes_to_remove=prefixes_to_remove or [],
+            suffixes_to_remove=suffixes_to_remove or [],
         )
 
     def test_empty_targets_returns_source_with_empty_matches(self) -> None:
@@ -129,3 +138,24 @@ class TestPostMatchEndpoint:
         assert "Original must include text after normalization" in error_message
         assert 'separators such as "_", ".", "-", and "/"' in error_message
         assert '"Fm" -> "Formation"' in error_message
+
+    @pytest.mark.parametrize("suffixes", ["_GL", [None], [123]])
+    def test_invalid_suffix_types_return_validation_error(
+        self, suffixes: object
+    ) -> None:
+        """Test suffix input must be a list of strings before calling the service."""
+        match_service = MagicMock(spec=MatchService)
+        app.dependency_overrides[get_match_service] = lambda: match_service
+
+        with TestClient(app) as client:
+            response = client.post(
+                ROUTE,
+                json={
+                    "sources": ["30_9-B-21_C_GL"],
+                    "targets": ["30_9-B-21_C"],
+                    "suffixes_to_remove": suffixes,
+                },
+            )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        match_service.match_names.assert_not_called()
