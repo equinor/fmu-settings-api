@@ -34,6 +34,7 @@ from .logging import get_logger, setup_logging, setup_telemetry
 from .middleware.logging import LoggingMiddleware
 from .models import HealthResponse
 from .models.common import MigrationErrorResponse
+from .services.ert import ert_validator
 from .session import ProjectSession, session_manager
 from .v1.main import api_v1_router
 
@@ -154,7 +155,8 @@ async def logging_request_validation_exception_handler(
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """App lifespan for startup/shutdown housekeeping.
 
-    On shutdown, cleans up RMS sessions, releases locks, and closes telemetry.
+    On shutdown, cleans up RMS sessions, releases locks, stops the ERT validator,
+    and closes telemetry.
     """
     logger.info(
         "starting_application",
@@ -181,6 +183,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if lock.is_acquired():
             with suppress(Exception):
                 lock.release()
+
+    await ert_validator.close()
 
     telemetry = getattr(app.state, "telemetry", None)
     if telemetry is not None:
