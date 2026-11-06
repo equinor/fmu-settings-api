@@ -6,11 +6,12 @@ from fmu_settings_api.deps import get_session, get_smda_session
 from fmu_settings_api.models import Ok
 from fmu_settings_api.v1.responses import GetSessionResponses
 
-from .routes import match, project, rms, session, sumo, user
+from .routes import ert, match, project, rms, session, sumo, user
 from .routes.smda import main as smda
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(project.router)
+api_v1_router.include_router(ert.router)
 api_v1_router.include_router(user.router, dependencies=[Depends(get_session)])
 api_v1_router.include_router(session.router)
 api_v1_router.include_router(rms.router, dependencies=[Depends(get_session)])
