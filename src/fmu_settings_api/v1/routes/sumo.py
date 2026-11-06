@@ -4,14 +4,14 @@ from typing import Final
 
 from fastapi import APIRouter, HTTPException
 
-from fmu_settings_api.deps import SumoForceRefreshDep, SumoServiceDep
+from fmu_settings_api.deps import SumoServiceDep
 from fmu_settings_api.interfaces import (
     SumoAuthenticationRequiredError,
     SumoInvalidResponseError,
     SumoUnavailableError,
 )
 from fmu_settings_api.models.common import Ok
-from fmu_settings_api.models.sumo import SumoAsset
+from fmu_settings_api.models.sumo import SumoAsset, SumoLoginRequest
 from fmu_settings_api.v1.responses import (
     GetSessionResponses,
     Responses,
@@ -77,18 +77,20 @@ def get_assets(sumo_service: SumoServiceDep) -> list[SumoAsset]:
     summary="Logs in to Sumo.",
     description=(
         "Starts an interactive Sumo login if no cached token is available. "
-        "Set force_refresh=true to invalidate cached Microsoft access tokens "
-        "before authentication."
+        "Set force_refresh to true in the request body to invalidate cached "
+        "Microsoft access tokens before authentication."
     ),
     responses={**GetSessionResponses, **SumoLoginResponses},
 )
 def post_login(
     sumo_service: SumoServiceDep,
-    force_refresh: SumoForceRefreshDep,
+    login_request: SumoLoginRequest | None = None,
 ) -> Ok:
     """Log in to Sumo interactively."""
     try:
-        sumo_service.login(force_refresh=force_refresh)
+        sumo_service.login(
+            force_refresh=login_request.force_refresh if login_request else False
+        )
         return Ok()
     except SumoAuthenticationRequiredError as e:
         raise HTTPException(status_code=424, detail=str(e)) from e

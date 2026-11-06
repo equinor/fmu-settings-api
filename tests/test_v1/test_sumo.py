@@ -88,15 +88,20 @@ async def test_get_sumo_assets_unavailable(
 
 
 @pytest.mark.parametrize(
-    ("query", "force_refresh"),
-    [("", False), ("?force_refresh=false", False), ("?force_refresh=true", True)],
+    ("body", "force_refresh"),
+    [
+        (None, False),
+        ({}, False),
+        ({"force_refresh": False}, False),
+        ({"force_refresh": True}, True),
+    ],
 )
 async def test_login_to_sumo_success(
-    client_with_session: TestClient, query: str, force_refresh: bool
+    client_with_session: TestClient, body: dict[str, bool] | None, force_refresh: bool
 ) -> None:
     """Tests that an interactive Sumo login returns success."""
     with patch("fmu_settings_api.services.sumo.SumoService.login") as login_mock:
-        response = client_with_session.post(f"{ROUTE}/login{query}")
+        response = client_with_session.post(f"{ROUTE}/login", json=body)
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "ok"}
@@ -136,7 +141,10 @@ async def test_login_to_sumo_rejects_invalid_refresh_option(
 ) -> None:
     """Tests that invalid refresh values are rejected before calling the service."""
     with patch("fmu_settings_api.services.sumo.SumoService.login") as login_mock:
-        response = client_with_session.post(f"{ROUTE}/login?force_refresh=invalid")
+        response = client_with_session.post(
+            f"{ROUTE}/login", json={"force_refresh": "invalid"}
+        )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json()["detail"][0]["loc"] == ["body", "force_refresh"]
     login_mock.assert_not_called()
