@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import httpx
 import pytest
@@ -170,17 +170,19 @@ def test_login_uses_interactive_production_client(
 
     client_class.assert_called_once_with(env="prod", interactive=True)
     client.authenticate.assert_called_once_with()
+    client.invalidate_access_tokens.assert_not_called()
 
 
+@pytest.mark.parametrize("force_refresh", [False, True])
 def test_login_reports_incomplete_login(
-    mock_sumo_client: tuple[MagicMock, MagicMock],
+    mock_sumo_client: tuple[MagicMock, MagicMock], force_refresh: bool
 ) -> None:
     """Tests that an incomplete interactive login is reported."""
     _, client = mock_sumo_client
     client.authenticate.return_value = None
 
     with pytest.raises(SumoAuthenticationRequiredError, match="not completed"):
-        SumoApi().login()
+        SumoApi().login(force_refresh=force_refresh)
 
 
 def test_login_reports_unavailable_sumo(
@@ -222,3 +224,35 @@ def test_login_reports_unavailable_for_unexpected_authentication_error(
         SumoApi().login()
 
     assert exc_info.value.__cause__ is authentication_error
+
+
+def test_login_refreshes_tokens_before_authentication(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that access tokens are invalidated before authentication."""
+    client_class, client = mock_sumo_client
+
+    SumoApi().login(force_refresh=True)
+
+    client_class.assert_called_once_with(env="prod", interactive=True)
+    assert client.mock_calls == [
+        call.invalidate_access_tokens(),
+        call.authenticate(),
+    ]
+
+
+def test_login_reports_token_invalidation_failure(
+    mock_sumo_client: tuple[MagicMock, MagicMock],
+) -> None:
+    """Tests that token invalidation errors prevent authentication."""
+    _, client = mock_sumo_client
+    refresh_error = RuntimeError("Token cache unavailable")
+    client.invalidate_access_tokens.side_effect = refresh_error
+
+    with pytest.raises(
+        SumoUnavailableError, match="Unable to authenticate"
+    ) as exc_info:
+        SumoApi().login(force_refresh=True)
+
+    assert exc_info.value.__cause__ is refresh_error
+    client.authenticate.assert_not_called()

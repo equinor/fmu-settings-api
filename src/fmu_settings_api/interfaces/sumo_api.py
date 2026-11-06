@@ -58,8 +58,8 @@ class SumoApi:
             if "write" in permissions
         ]
 
-    def login(self: Self) -> None:
-        """Start an interactive Sumo login when no cached token is available."""
+    def login(self: Self, *, force_refresh: bool = False) -> None:
+        """Authenticate with Sumo, optionally refreshing Microsoft access tokens."""
         try:
             sumo_client = SumoClient(env=self._environment, interactive=True)
         except Exception as e:  # noqa: BLE001
@@ -67,14 +67,16 @@ class SumoApi:
 
         try:
             with sumo_client as sumo:
-                self._get_access_token(sumo)
+                self._get_access_token(sumo, force_refresh=force_refresh)
         except httpx.HTTPError as e:
             raise SumoUnavailableError("Unable to connect to Sumo") from e
 
     @staticmethod
-    def _get_access_token(sumo: SumoClient) -> None:
+    def _get_access_token(sumo: SumoClient, *, force_refresh: bool = False) -> None:
         """Get a cached, refreshed, or interactively acquired access token."""
         try:
+            if force_refresh:
+                sumo.invalidate_access_tokens()
             token = sumo.authenticate()
         except Exception as e:  # noqa: BLE001
             if str(e) == "No valid authorization provider found.":

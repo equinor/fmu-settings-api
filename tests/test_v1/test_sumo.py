@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -86,16 +87,25 @@ async def test_get_sumo_assets_unavailable(
 # POST sumo/login #
 
 
+@pytest.mark.parametrize(
+    ("body", "force_refresh"),
+    [
+        (None, False),
+        ({}, False),
+        ({"force_refresh": False}, False),
+        ({"force_refresh": True}, True),
+    ],
+)
 async def test_login_to_sumo_success(
-    client_with_session: TestClient,
+    client_with_session: TestClient, body: dict[str, bool] | None, force_refresh: bool
 ) -> None:
     """Tests that an interactive Sumo login returns success."""
     with patch("fmu_settings_api.services.sumo.SumoService.login") as login_mock:
-        response = client_with_session.post(f"{ROUTE}/login")
+        response = client_with_session.post(f"{ROUTE}/login", json=body)
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "ok"}
-    login_mock.assert_called_once_with()
+    login_mock.assert_called_once_with(force_refresh=force_refresh)
 
 
 async def test_login_to_sumo_not_completed(
@@ -124,3 +134,17 @@ async def test_login_to_sumo_unavailable(
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.json() == {"detail": "Unable to connect to Sumo"}
+
+
+async def test_login_to_sumo_rejects_invalid_refresh_option(
+    client_with_session: TestClient,
+) -> None:
+    """Tests that invalid refresh values are rejected before calling the service."""
+    with patch("fmu_settings_api.services.sumo.SumoService.login") as login_mock:
+        response = client_with_session.post(
+            f"{ROUTE}/login", json={"force_refresh": "invalid"}
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert response.json()["detail"][0]["loc"] == ["body", "force_refresh"]
+    login_mock.assert_not_called()
