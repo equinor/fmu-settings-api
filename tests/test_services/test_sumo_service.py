@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from fmu_settings_api.models.sumo import SumoAsset
 from fmu_settings_api.services.sumo import SumoService
 
@@ -18,9 +20,10 @@ def test_get_assets() -> None:
     get_assets_mock.assert_called_once_with()
 
 
-def test_login() -> None:
-    """Delegate the interactive login to the Sumo interface."""
+@pytest.mark.parametrize("force_refresh", [False, True])
+def test_login(force_refresh: bool) -> None:
+    """Tests that login passes the refresh option to the Sumo interface."""
     with patch("fmu_settings_api.interfaces.sumo_api.SumoApi.login") as login_mock:
-        SumoService().login()
+        SumoService().login(force_refresh=force_refresh)
 
-    login_mock.assert_called_once_with()
+    login_mock.assert_called_once_with(force_refresh=force_refresh)

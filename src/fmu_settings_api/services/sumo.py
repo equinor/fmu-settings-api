@@ -11,6 +11,6 @@ class SumoService:
         """Get the Sumo assets to which the user has write access."""
         return SumoApi().get_assets()
 
-    def login(self) -> None:
-        """Start an interactive Sumo login."""
-        SumoApi().login()
+    def login(self, *, force_refresh: bool = False) -> None:
+        """Log in to Sumo, optionally refreshing Microsoft access tokens."""
+        SumoApi().login(force_refresh=force_refresh)

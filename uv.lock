@@ -739,7 +739,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "runrms", specifier = ">=0.7.3" },
     { name = "structlog" },
-    { name = "sumo-wrapper-python", specifier = ">=1.9.0" },
+    { name = "sumo-wrapper-python", specifier = ">=1.11.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "uvicorn" },
@@ -1916,7 +1916,7 @@ wheels = [
 
 [[package]]
 name = "sumo-wrapper-python"
-version = "1.10.0"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-identity" },
@@ -1926,9 +1926,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7e/1c/0dbe9a70ec31bb2750d6f20b9f5e07fe6b7d98d736bf62fa3c6127aa31da/sumo_wrapper_python-1.10.0.tar.gz", hash = "sha256:74351f09e3b67d4b9647c521811927b7a0ccdc84df8331288b91a36d44e27775", size = 86982, upload-time = "2026-09-18T07:21:57.461Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/1f/b1ddde40c707244aadca92a8fffddad384d0917f205a2ec459f33644dddd/sumo_wrapper_python-1.11.0.tar.gz", hash = "sha256:f63776f990222f9055053a936015abc59a079e2e45100aebd71e6a4ac4f718b4", size = 87636, upload-time = "2026-11-09T07:42:20.754Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/40/67f9390a7ec555e6d2806a4537196ea309a1f0054feac579cee6e5c00a8c/sumo_wrapper_python-1.10.0-py3-none-any.whl", hash = "sha256:20d67ebc30b9a0434d5bafe099b9a0100d1dae7e4cd86aba5a05f46707ba289f", size = 22622, upload-time = "2026-09-18T07:21:56.221Z" },
+    { url = "https://files.pythonhosted.org/packages/84/1a/8f96713bdb3b4a9f84767fc52a11aae9f080029d1e7c810a144c318a47eb/sumo_wrapper_python-1.11.0-py3-none-any.whl", hash = "sha256:1fa71250809d428196d535c1029ab02b49349fd281884e2f6fc8d7026cbb786b", size = 22755, upload-time = "2026-11-09T07:42:19.471Z" },
 ]
 
 [[package]]
