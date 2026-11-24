@@ -111,7 +111,11 @@ class SmdaAPI:
         _projection = "identifier,uuid" if columns is None else ",".join(columns)
         return await self.post(
             SmdaRoutes.DISCOVERIES_SEARCH,
-            json={"_projection": _projection, "field_identifier": field_identifiers},
+            json={
+                "_projection": _projection,
+                "field_identifier": field_identifiers,
+                "_items": 9999,
+            },
         )
 
     async def well_headers(
@@ -145,6 +149,7 @@ class SmdaAPI:
                 "_projection": _projection,
                 "strat_area_identifier": field_identifiers,
                 "strat_column_status": "official",
+                "_items": 9999,
             },
         )
 
@@ -161,6 +166,7 @@ class SmdaAPI:
                 "_projection": _projection,
                 "strat_column_identifier": strat_column_identifier,
                 "_sort": ["strat_unit_level", "top_age"],
+                "_items": 9999,
             },
         )
 
